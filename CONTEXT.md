@@ -15,9 +15,11 @@ The product has three distinct surfaces - keep them separate:
   feedback through the widget.
 - **Host app** - the customer's web app that the widget is embedded into. The
   widget runs inside the host's document.
-- **Widget** - the embeddable surface the end-user interacts with. Ships first as
-  a script-tag IIFE bundle, later as an npm package. Isolated from the host via
-  Shadow DOM.
+- **Widget** - the embeddable surface the end-user interacts with. Ships as a
+  script-tag IIFE bundle (`widget.js`) and as a library (`<BrainboxWidget />`
+  for React hosts, `mount()` for the rest). Isolated from the host via Shadow
+  DOM. It is a UI over the **engine**, `@brainbox/core`, which owns what gets
+  captured and sent and has no UI of its own (ADR 0005).
 - **Dashboard** - the SaaS we sell: where the customer signs up, gets their
   snippet, and reads incoming tickets. (Out of scope for the widget build.)
 - **Backend** - receives feedback from every customer's widget, stores it
@@ -32,8 +34,9 @@ The product has three distinct surfaces - keep them separate:
 - **Trigger** - whatever opens the widget. Two modes:
   - **Floating trigger** - the bottom-right button the widget renders itself
     (default).
-  - **Manual trigger** - the customer's own element, wired via
-    `window.Brainbox.open()` or a `[data-brainbox-trigger]` attribute.
+  - **Manual trigger** - the customer's own element. Script tag:
+    `data-mode="mount"` with `data-mount="<selector>"`, or
+    `window.Brainbox.open()`. React: `useBrainboxWidget().open()`.
 - **Project key** - a project's public identifier passed to the widget
   (`data-project`), scoping captured feedback to that project.
 
