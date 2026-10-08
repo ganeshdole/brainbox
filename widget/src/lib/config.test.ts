@@ -15,12 +15,12 @@ describe("readConfig", () => {
     expect(cfg).toMatchObject({
       projectKey: "pk_abc",
       endpoint: "http://x/ingest",
-      mode: "float",
+      trigger: "floating",
       position: "bottom-right",
     });
   });
 
-  it("honors mode, mount, and position", () => {
+  it("maps data-mode=\"mount\" to the manual trigger, with mount and position", () => {
     const cfg = readConfig(
       script({
         "data-project": "pk_a",
@@ -30,7 +30,7 @@ describe("readConfig", () => {
         "data-position": "top-left",
       }),
     );
-    expect(cfg?.mode).toBe("mount");
+    expect(cfg?.trigger).toBe("manual");
     expect(cfg?.mount).toBe("#trigger");
     expect(cfg?.position).toBe("top-left");
   });

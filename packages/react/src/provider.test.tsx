@@ -1,7 +1,7 @@
 import { StrictMode, act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Brainbox, Report, Transport } from "@brainbox/core";
+import { createBrainbox, type Brainbox, type Report, type Transport } from "@brainbox/core";
 import { BrainboxProvider, useBrainbox } from "./provider.tsx";
 
 const originalConsoleError = console.error;
@@ -88,6 +88,29 @@ describe("BrainboxProvider", () => {
     render("z@b.c");
     await act(() => bb!.draft().submit({ text: "two" }));
     expect(sent[1]?.metadata.identity).toEqual({ email: "z@b.c" });
+  });
+
+  it("provides a caller-owned instance as is and leaves its lifecycle alone", () => {
+    const own = createBrainbox({ transport });
+    const seen: (Brainbox | null)[] = [];
+    act(() => {
+      root.render(
+        <StrictMode>
+          <BrainboxProvider brainbox={own}>
+            <Probe onInstance={(bb) => seen.push(bb)} />
+          </BrainboxProvider>
+        </StrictMode>,
+      );
+    });
+    // StrictMode runs the probe's effect twice; both times it is our instance
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((bb) => bb === own)).toBe(true);
+
+    act(() => root.unmount());
+    // still alive: the caller destroys it, not the provider
+    expect(console.error).not.toBe(originalConsoleError);
+    own.destroy();
+    expect(console.error).toBe(originalConsoleError);
   });
 
   it("calls the latest onSubmitted without rebuilding the instance", async () => {

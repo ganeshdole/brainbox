@@ -1,26 +1,29 @@
-import { createElement } from "react";
-import { createRoot } from "react-dom/client";
-import { brainboxTransport, createBrainbox, type Identity, type ProjectKey } from "@brainbox/core";
-import { App } from "./App.tsx";
+import { brainboxTransport, type Identity, type ProjectKey } from "@brainbox/core";
 import { readConfig } from "./lib/config.ts";
-import { shadowCss } from "./lib/shadow-css.ts";
-import css from "./index.css?inline";
+import { mount, type WidgetHandle } from "./mount.tsx";
+
+// The script-tag bundle (`widget.js`). The one file in this package that runs
+// on load: it reads the <script> tag, mounts the widget, and publishes the
+// `window.Brainbox` API that pasted snippets rely on.
 
 // Captured at eval time - for a classic <script src> this is the embedding tag.
 // Module scripts (dev harness) leave it null, so we fall back to a query below.
 const currentScript = document.currentScript as HTMLScriptElement | null;
 
-// Window events for host pages: "brainbox:open" / "brainbox:close" (fired by the
-// api below) and "brainbox:submitted" ({ detail: { id } }) after a successful submit.
+/** Set once the DOM is ready. Calls that beat it are no-ops, not crashes. */
+let widget: WidgetHandle | null = null;
+
+// Public API for host pages. "brainbox:submitted" ({ detail: { id } }) fires
+// on window after a successful submit.
 const api = {
   identify(identity: Identity) {
-    brainbox?.identify(identity);
+    widget?.identify(identity);
   },
   open() {
-    window.dispatchEvent(new CustomEvent("brainbox:open"));
+    widget?.open();
   },
   close() {
-    window.dispatchEvent(new CustomEvent("brainbox:close"));
+    widget?.close();
   },
 };
 
@@ -31,10 +34,6 @@ declare global {
 }
 window.Brainbox = api;
 
-/** The engine behind this page's widget. Created in `mount()`, so an
- *  `identify()` call that beats DOMContentLoaded is a no-op rather than a crash. */
-let brainbox: ReturnType<typeof createBrainbox> | null = null;
-
 function findScript(): HTMLScriptElement | null {
   return (
     currentScript ??
@@ -42,51 +41,32 @@ function findScript(): HTMLScriptElement | null {
   );
 }
 
-function mount() {
+function boot() {
   const config = readConfig(findScript());
   if (!config) {
     console.error("[brainbox] missing data-project or data-endpoint on the script tag");
     return;
   }
 
-  brainbox = createBrainbox({
+  widget = mount({
     transport: brainboxTransport({
       endpoint: config.endpoint,
       projectKey: config.projectKey as ProjectKey,
     }),
+    trigger: config.trigger,
+    position: config.position,
     onSubmitted: ({ id }) =>
       window.dispatchEvent(new CustomEvent("brainbox:submitted", { detail: { id } })),
   });
 
-  const host = document.createElement("div");
-  host.id = "brainbox-widget";
-  // keep the widget's own UI out of rrweb session recordings (session.ts blockClass)
-  host.classList.add("rr-block");
-  host.style.position = "relative";
-  host.style.zIndex = "2147483647";
-  document.body.appendChild(host);
-
-  const shadow = host.attachShadow({ mode: "open" });
-
-  const style = document.createElement("style");
-  style.textContent = shadowCss(css);
-  shadow.appendChild(style);
-
-  const container = document.createElement("div");
-  container.className = "dark";
-  shadow.appendChild(container);
-
-  // "mount" mode: the host renders feedback through their own trigger.
-  if (config.mode === "mount" && config.mount) {
-    const target = document.querySelector(config.mount);
-    target?.addEventListener("click", () => api.open());
+  // "mount" mode: the host opens feedback from its own element.
+  if (config.trigger === "manual" && config.mount) {
+    document.querySelector(config.mount)?.addEventListener("click", () => api.open());
   }
-
-  createRoot(container).render(createElement(App, { brainbox, config, hostEl: host }));
 }
 
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", mount);
+  document.addEventListener("DOMContentLoaded", boot);
 } else {
-  mount();
+  boot();
 }

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { canSessionRecord, type Brainbox, type Mark, type Recording } from "@brainbox/core";
 import { useDraft } from "@brainbox/react";
-import type { WidgetConfig } from "./lib/config.ts";
+import type { TriggerMode } from "@brainbox/shared";
+import type { Position } from "./lib/position.ts";
+import { widgetStore } from "./lib/widget-store.ts";
 import { Launcher } from "./components/Launcher.tsx";
 import { Chooser } from "./components/Chooser.tsx";
 import { MarkupOverlay } from "./components/MarkupOverlay.tsx";
@@ -24,14 +26,20 @@ type Status =
 
 export function App({
   brainbox,
-  config,
   hostEl,
+  trigger,
+  position,
 }: {
   brainbox: Brainbox;
-  config: WidgetConfig;
+  /** The shadow host: hidden while screenshotting. */
   hostEl: HTMLElement;
+  trigger: TriggerMode;
+  position: Position;
 }) {
-  const [status, setStatus] = useState<Status>("idle");
+  // Open/closed is shared with the host (`useBrainboxWidget`, `mount().open()`),
+  // so it lives outside this component and the screen follows it.
+  const ui = useMemo(() => widgetStore(brainbox), [brainbox]);
+  const [status, setStatus] = useState<Status>(() => (ui.isOpen() ? "choosing" : "idle"));
   const [recording, setRecording] = useState<Recording | null>(null);
   const [error, setError] = useState("");
   const [issueId, setIssueId] = useState("");
@@ -46,18 +54,17 @@ export function App({
     setStatus("idle");
     setError("");
     setIssueId("");
-  }, [draft]);
+    ui.close();
+  }, [draft, ui]);
 
-  // window.Brainbox.open()/close() drive the widget programmatically.
-  useEffect(() => {
-    const open = () => setStatus((s) => (s === "idle" ? "choosing" : s));
-    window.addEventListener("brainbox:open", open);
-    window.addEventListener("brainbox:close", reset);
-    return () => {
-      window.removeEventListener("brainbox:open", open);
-      window.removeEventListener("brainbox:close", reset);
-    };
-  }, [reset]);
+  useEffect(
+    () =>
+      ui.subscribe(() => {
+        if (ui.isOpen()) setStatus((s) => (s === "idle" ? "choosing" : s));
+        else reset();
+      }),
+    [ui, reset],
+  );
 
   const startMarkup = useCallback(() => {
     draft.captureScreenshot();
@@ -113,12 +120,12 @@ export function App({
 
   return (
     <>
-      {config.mode === "float" && status === "idle" && (
-        <Launcher position={config.position} onClick={() => setStatus("choosing")} />
+      {trigger === "floating" && status === "idle" && (
+        <Launcher position={position} onClick={ui.open} />
       )}
       {status === "choosing" && (
         <Chooser
-          position={config.position}
+          position={position}
           canRecord={canSessionRecord()}
           onScreenshot={startMarkup}
           onRecord={startRecord}
@@ -149,17 +156,17 @@ export function App({
           voiceCaptured={report.hasVoice}
           capturePending={report.screenshotPending}
           captureFailed={report.screenshotFailed}
-          position={config.position}
+          position={position}
           onCancel={reset}
           onSubmit={onSubmit}
         />
       )}
-      {status === "submitting" && <Result kind="loading" position={config.position} />}
+      {status === "submitting" && <Result kind="loading" position={position} />}
       {status === "done" && (
-        <Result kind="success" id={issueId} position={config.position} onClose={reset} />
+        <Result kind="success" id={issueId} position={position} onClose={reset} />
       )}
       {status === "error" && (
-        <Result kind="error" message={error} position={config.position} onClose={reset} />
+        <Result kind="error" message={error} position={position} onClose={reset} />
       )}
     </>
   );

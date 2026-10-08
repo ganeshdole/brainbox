@@ -1,10 +1,13 @@
+import type { TriggerMode } from "@brainbox/shared";
 import type { Position } from "./position.ts";
 
+/** What the script tag asked for, read off its `data-*` attributes. */
 export interface WidgetConfig {
   projectKey: string;
   endpoint: string;
-  /** "float" = our own floating launcher; "mount" = host renders its own trigger. */
-  mode: "float" | "mount";
+  /** `data-mode="mount"` is the manual trigger: the host opens the widget from
+   *  its own element (`data-mount`) or `window.Brainbox.open()`. */
+  trigger: TriggerMode;
   mount?: string;
   position: Position;
 }
@@ -22,7 +25,7 @@ export function readConfig(script: HTMLScriptElement | null): WidgetConfig | nul
   return {
     projectKey,
     endpoint,
-    mode: ds.mode === "mount" ? "mount" : "float",
+    trigger: ds.mode === "mount" ? "manual" : "floating",
     mount: ds.mount,
     position: position && POSITIONS.includes(position) ? position : "bottom-right",
   };
