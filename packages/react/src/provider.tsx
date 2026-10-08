@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import {
   createBrainbox,
   type Brainbox,
+  type BrainboxOptions,
   type Identity,
   type SubmitResult,
   type Transport,
@@ -9,7 +10,7 @@ import {
 
 const BrainboxContext = createContext<Brainbox | null>(null);
 
-export interface BrainboxProviderProps {
+interface OwnedProps {
   /** Where finished reports go. Keep it stable (module-level or `useMemo`):
    *  a new transport means a new instance. */
   transport: Transport;
@@ -17,23 +18,45 @@ export interface BrainboxProviderProps {
   identity?: Identity;
   /** Called after every successful submit. May change between renders. */
   onSubmitted?: (result: SubmitResult) => void;
-  children?: ReactNode;
+  brainbox?: never;
 }
 
+interface GivenProps {
+  /** An instance the caller created and will `destroy()` itself. For shells
+   *  outside React, like the script-tag bundle, that need the instance before
+   *  anything renders. */
+  brainbox: Brainbox;
+  transport?: never;
+  identity?: never;
+  onSubmitted?: never;
+}
+
+export type BrainboxProviderProps = (OwnedProps | GivenProps) & { children?: ReactNode };
+
 /**
- * Owns one `Brainbox` for the tree below it.
+ * Makes one `Brainbox` available to the tree below it.
  *
- * The instance is created in an effect, not during render: creating it patches
- * `console.error`, which must not happen on the server and must happen exactly
- * once under StrictMode's mount-unmount-mount. The cost is one render where
- * `useBrainbox()` is still `null`.
+ * Given `transport`, it owns the instance: created in an effect, not during
+ * render, because creating it patches `console.error`, which must not happen
+ * on the server and must happen exactly once under StrictMode's
+ * mount-unmount-mount. The cost is one render where `useBrainbox()` is still
+ * `null`. Given `brainbox`, it only provides it.
  */
-export function BrainboxProvider({
+export function BrainboxProvider(props: BrainboxProviderProps) {
+  if (props.brainbox) {
+    return (
+      <BrainboxContext.Provider value={props.brainbox}>{props.children}</BrainboxContext.Provider>
+    );
+  }
+  return <OwnedProvider {...props} />;
+}
+
+function OwnedProvider({
   transport,
   identity,
   onSubmitted,
   children,
-}: BrainboxProviderProps) {
+}: OwnedProps & { children?: ReactNode }) {
   const [brainbox, setBrainbox] = useState<Brainbox | null>(null);
 
   // Read through refs so a new callback or identity does not rebuild the instance.
@@ -47,11 +70,12 @@ export function BrainboxProvider({
   }, [identity]);
 
   useEffect(() => {
-    const instance = createBrainbox({
+    const options: BrainboxOptions = {
       transport,
       identity: identityRef.current,
       onSubmitted: (result) => onSubmittedRef.current?.(result),
-    });
+    };
+    const instance = createBrainbox(options);
     setBrainbox(instance);
     return () => {
       instance.destroy();
