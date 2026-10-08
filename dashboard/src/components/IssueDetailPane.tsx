@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, ExternalLink, ZoomIn } from "lucide-react";
 import type { Issue } from "@brainbox/shared";
+import { SessionReplay } from "@brainbox/replay";
 
 import { api } from "../lib/api";
 import { issueTitle, pageLabel } from "../lib/issue";
 import { CopyButton } from "./CopyButton";
 import { Eyebrow } from "./Eyebrow";
 import { Lightbox } from "./Lightbox";
-import { SessionReplay } from "./SessionReplay";
 import { Skeleton } from "./ui/skeleton";
 
 function Figure({
@@ -163,6 +163,8 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
                 audioUrl={issue.audio?.url}
                 vw={m.viewport.width}
                 vh={m.viewport.height}
+                // local storage serves files behind the session cookie
+                credentials="include"
               />
             </Figure>
           )}

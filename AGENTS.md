@@ -12,7 +12,7 @@ domain vocabulary (Customer vs End-user, Host app, Capture flow, Project key, th
 Account → Project → Issue hierarchy) lives in `CONTEXT.md`. Read it before
 touching product logic - it is canon, describing how the system is meant to work.
 
-Eight surfaces, one workspace package each:
+Nine surfaces, one workspace package each:
 
 - `packages/core/` - the capture engine (`@brainbox/core`). Plain TypeScript, no
   React: screenshots, marks, session recording, console-error capture, and the
@@ -22,6 +22,8 @@ Eight surfaces, one workspace package each:
   owns one instance, `useBrainbox()` and `useDraft()` read it. No UI.
 - `widget/` - the embeddable capture UI (`@brainbox/widget`). React, shipped as an
   IIFE script-tag bundle, isolated from the host page via Shadow DOM.
+- `packages/replay/` - the session player (`@brainbox/replay`): `<SessionReplay />`
+  over `@rrweb/replay`, with its own plain stylesheet. The dashboard is one host.
 - `dashboard/` - the customer-facing SaaS (`@brainbox/dashboard`). React + Vite +
   React Router.
 - `packages/server/` - the receiving end of the wire format (`@brainbox/server`):

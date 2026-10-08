@@ -1,0 +1,91 @@
+/* @brainbox/replay - the player's own stylesheet. Plain CSS so a host does not
+   have to scan this package for utility classes. Theme by setting the
+   --bb-replay-* properties on .bb-replay. */
+@import "@rrweb/replay/dist/style.css";
+
+.bb-replay {
+  --bb-replay-bg: #0a0a0a;
+  --bb-replay-frame-bg: #000;
+  --bb-replay-border: #262626;
+  --bb-replay-fg: #e5e5e5;
+  --bb-replay-muted: #8a8a8a;
+  --bb-replay-accent: #fff;
+  --bb-replay-accent-hover: #d4d4d4;
+  --bb-replay-accent-fg: #000;
+  --bb-replay-error-bg: rgba(239, 68, 68, 0.1);
+  --bb-replay-error-border: rgba(239, 68, 68, 0.3);
+  --bb-replay-error-fg: #f87171;
+  --bb-replay-radius: 12px;
+
+  overflow: hidden;
+  border: 1px solid var(--bb-replay-border);
+  border-radius: var(--bb-replay-radius);
+  background: var(--bb-replay-bg);
+  color: var(--bb-replay-fg);
+}
+
+.bb-replay__frame {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bb-replay-frame-bg);
+}
+
+.bb-replay__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--bb-replay-border);
+}
+
+.bb-replay__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--bb-replay-muted);
+  padding: 6px;
+  cursor: pointer;
+  transition: color 120ms, background-color 120ms;
+}
+
+.bb-replay__btn:hover {
+  color: var(--bb-replay-fg);
+}
+
+.bb-replay__btn--primary {
+  padding: 8px;
+  background: var(--bb-replay-accent);
+  color: var(--bb-replay-accent-fg);
+}
+
+.bb-replay__btn--primary:hover {
+  background: var(--bb-replay-accent-hover);
+  color: var(--bb-replay-accent-fg);
+}
+
+.bb-replay__range {
+  width: 100%;
+  accent-color: var(--bb-replay-accent);
+}
+
+.bb-replay__clock {
+  flex-shrink: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--bb-replay-muted);
+}
+
+.bb-replay__error {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--bb-replay-error-border);
+  border-radius: 8px;
+  background: var(--bb-replay-error-bg);
+  color: var(--bb-replay-error-fg);
+  font-size: 12px;
+}
