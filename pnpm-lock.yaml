@@ -482,9 +482,6 @@ importers:
       '@radix-ui/colors':
         specifier: ^3.0.0
         version: 3.0.0
-      '@tailwindcss/vite':
-        specifier: ^4.3.0
-        version: 4.3.1(vite@8.1.0(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4))
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -494,22 +491,16 @@ importers:
       lucide-react:
         specifier: ^1.17.0
         version: 1.22.0(react@19.2.7)
-      react:
-        specifier: ^19.2.7
-        version: 19.2.7
-      react-dom:
-        specifier: ^19.2.7
-        version: 19.2.7(react@19.2.7)
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.6.0
-      tailwindcss:
-        specifier: ^4.3.0
-        version: 4.3.1
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.6.0(jiti@2.7.0))
+      '@tailwindcss/vite':
+        specifier: ^4.3.0
+        version: 4.3.1(vite@8.1.0(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4))
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.2
@@ -540,6 +531,15 @@ importers:
       puppeteer-core:
         specifier: ^25.1.0
         version: 25.2.1
+      react:
+        specifier: ^19.2.7
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.2.7
+        version: 19.2.7(react@19.2.7)
+      tailwindcss:
+        specifier: ^4.3.0
+        version: 4.3.1
       typescript:
         specifier: 'catalog:'
         version: 6.0.3

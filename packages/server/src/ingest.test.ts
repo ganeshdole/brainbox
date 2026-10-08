@@ -46,6 +46,19 @@ describe("parseIngest", () => {
     expect(result.files.video).toBeUndefined();
   });
 
+  it("hands back the form so a host can read parts the format does not define", async () => {
+    const req = upload(payload, { screenshot: png() });
+    // a host transport's own `context` part rides along untouched
+    const fd = new FormData();
+    fd.append("json", JSON.stringify(payload));
+    fd.append("screenshot", png());
+    fd.append("context", JSON.stringify({ clinicId: "c1" }));
+    const result = await parse(new Request(req.url, { method: "POST", body: fd }));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(JSON.parse(String(result.form.get("context")))).toEqual({ clinicId: "c1" });
+  });
+
   it("accepts a session recording with no screenshot", async () => {
     const session = new File([new Uint8Array([1, 2])], "session.json.gz", { type: "application/gzip" });
     const result = await parse(upload({ ...payload, region: undefined }, { session }));

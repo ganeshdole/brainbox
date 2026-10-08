@@ -26,15 +26,33 @@ export interface Transport {
   send(report: Report): Promise<SubmitResult>;
 }
 
+/** A value, or a function that produces it at send time: tokens expire and
+ *  the current clinic changes, so a static object would go stale. */
+type Lazy<T> = T | (() => T);
+const resolve = <T>(v: Lazy<T>): T => (typeof v === "function" ? (v as () => T)() : v);
+
+export interface BrainboxTransportOptions {
+  endpoint: string;
+  projectKey: ProjectKey;
+  /** Extra request headers, for a backend that wants a bearer token. */
+  headers?: Lazy<HeadersInit>;
+  /** Your own fields, sent as a `context` part (JSON) next to `json`. The
+   *  Brainbox backend ignores it; your own backend can read it. */
+  context?: Lazy<Record<string, unknown>>;
+  /** Passed to `fetch`. Default `"same-origin"`, which sends no cookies to a
+   *  Brainbox Cloud endpoint on another origin. */
+  credentials?: RequestCredentials;
+}
+
 /** The Brainbox backend's `/ingest` contract: a multipart POST with a `json`
  *  part (`FeedbackPayload`) plus one file part per attachment. */
 export function brainboxTransport({
   endpoint,
   projectKey,
-}: {
-  endpoint: string;
-  projectKey: ProjectKey;
-}): Transport {
+  headers,
+  context,
+  credentials = "same-origin",
+}: BrainboxTransportOptions): Transport {
   return {
     async send(report) {
       const payload: FeedbackPayload = {
@@ -45,6 +63,7 @@ export function brainboxTransport({
       };
       const fd = new FormData();
       fd.append("json", JSON.stringify(payload));
+      if (context) fd.append("context", JSON.stringify(resolve(context)));
       if (report.screenshot) fd.append("screenshot", report.screenshot, "screenshot.png");
       if (report.session) {
         const name = report.session.type.includes("gzip") ? "session.json.gz" : "session.json";
@@ -52,7 +71,13 @@ export function brainboxTransport({
       }
       if (report.audio) fd.append("audio", report.audio, "voice.webm");
 
-      const res = await fetch(endpoint, { method: "POST", body: fd, mode: "cors" });
+      const res = await fetch(endpoint, {
+        method: "POST",
+        body: fd,
+        mode: "cors",
+        credentials,
+        headers: headers ? resolve(headers) : undefined,
+      });
       if (!res.ok) {
         throw new Error(await errorMessage(res));
       }

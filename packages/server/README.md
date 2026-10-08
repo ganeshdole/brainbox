@@ -26,6 +26,14 @@ async function handle(request: Request): Promise<Response> {
 Everything else is yours: whether the project key exists, whether the
 request's `Origin` is allowed, where the files go.
 
+## Install
+
+Inside this monorepo the package is consumed from source (`workspace:*`).
+Outside the monorepo, `pnpm build` emits `dist/` (JS plus `.d.ts`) and
+`pnpm pack` produces a tarball whose `exports` point at it (`publishConfig`),
+so another app can `npm install` the `.tgz` files. Every `@brainbox/*`
+dependency of a package needs its own tarball installed alongside.
+
 ## The wire format
 
 This is what `brainboxTransport()` in `@brainbox/core` sends and what
