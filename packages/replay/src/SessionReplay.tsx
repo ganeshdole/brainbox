@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 import type { Replayer } from "@rrweb/replay";
-import "@rrweb/replay/dist/style.css";
 
-import { formatClock } from "../lib/issue";
-import { parseSessionPayload } from "../lib/session";
+import { formatClock } from "./format.ts";
+import { parseSessionPayload } from "./session.ts";
 
 type ReplayerEvents = ConstructorParameters<typeof Replayer>[0];
 
@@ -29,6 +28,30 @@ function syncVoice(a: HTMLAudioElement | null, replayMs: number, offsetMs: numbe
   }
 }
 
+/** Gzipped logs are named `.gz`; the check reads the path so a presigned URL's
+ *  query string does not hide the extension. */
+function isGzipUrl(url: string): boolean {
+  try {
+    return new URL(url, "http://localhost").pathname.endsWith(".gz");
+  } catch {
+    return url.endsWith(".gz");
+  }
+}
+
+export interface SessionReplayProps {
+  /** The rrweb log the widget uploaded as the `session` part. */
+  url: string;
+  /** The voice track, if the recording had one. */
+  audioUrl?: string;
+  /** The recorded viewport, from the report's metadata. */
+  vw: number;
+  vh: number;
+  /** Passed to `fetch` for the log. Use "include" when the file sits behind
+   *  a session cookie. */
+  credentials?: RequestCredentials;
+  className?: string;
+}
+
 // rrweb-player's shipped dist is broken (its Player never constructs a Replayer),
 // so we drive @rrweb/replay directly with our own play/seek controls.
 export function SessionReplay({
@@ -36,12 +59,9 @@ export function SessionReplay({
   audioUrl,
   vw,
   vh,
-}: {
-  url: string;
-  audioUrl?: string;
-  vw: number;
-  vh: number;
-}) {
+  credentials = "same-origin",
+  className,
+}: SessionReplayProps) {
   const frameRef = useRef<HTMLDivElement>(null);
   const replayerRef = useRef<Replayer | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -64,11 +84,11 @@ export function SessionReplay({
 
     (async () => {
       try {
-        const res = await fetch(url, { credentials: "include" });
+        const res = await fetch(url, { credentials });
         if (!res.ok) throw new Error(`Session fetch failed (${res.status})`);
         const buf = await res.arrayBuffer();
         let text: string;
-        if (url.endsWith(".gz") && typeof DecompressionStream !== "undefined") {
+        if (isGzipUrl(url) && typeof DecompressionStream !== "undefined") {
           const ds = new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"));
           text = await new Response(ds).text();
         } else {
@@ -131,7 +151,7 @@ export function SessionReplay({
       setPlaying(false);
       setTime(0);
     };
-  }, [url, audioUrl, vw, vh]);
+  }, [url, audioUrl, vw, vh, credentials]);
 
   // progress clock while playing; keeps the voice track glued to the replay
   useEffect(() => {
@@ -178,25 +198,23 @@ export function SessionReplay({
     [playing],
   );
 
+  const classes = className ? `bb-replay ${className}` : "bb-replay";
+
   if (error) {
-    return (
-      <p className="rounded-lg border border-error-subtle bg-error p-3 text-xs text-error">
-        {error}
-      </p>
-    );
+    return <p className="bb-replay__error">{error}</p>;
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-default bg-elevated">
-      <div ref={frameRef} className="relative w-full overflow-hidden bg-subtle" />
-      <div className="flex items-center gap-3 border-t border-default px-3 py-2">
+    <div className={classes}>
+      <div ref={frameRef} className="bb-replay__frame" />
+      <div className="bb-replay__bar">
         <button
           type="button"
           onClick={toggle}
           aria-label={playing ? "Pause" : "Play"}
-          className="rounded-full bg-brand p-2 text-on-brand transition hover:bg-brand-hover"
+          className="bb-replay__btn bb-replay__btn--primary"
         >
-          {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+          {playing ? <Pause size={14} /> : <Play size={14} />}
         </button>
         <input
           type="range"
@@ -204,9 +222,9 @@ export function SessionReplay({
           max={Math.max(total, 1)}
           value={Math.min(time, total)}
           onChange={(e) => seek(Number(e.target.value))}
-          className="w-full"
+          className="bb-replay__range"
         />
-        <span className="shrink-0 font-mono text-xs text-muted">
+        <span className="bb-replay__clock">
           {formatClock(time)} / {formatClock(total)}
         </span>
         {audioUrl && (
@@ -219,9 +237,9 @@ export function SessionReplay({
                 if (audioRef.current) audioRef.current.muted = next;
               }}
               aria-label={muted ? "Unmute voice" : "Mute voice"}
-              className="shrink-0 rounded-full p-1.5 text-muted transition hover:text-emphasis"
+              className="bb-replay__btn"
             >
-              {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+              {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
             </button>
             <audio ref={audioRef} src={audioUrl} preload="auto" muted={muted}>
               <track kind="captions" />

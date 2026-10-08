@@ -57,6 +57,22 @@
   }
 }
 
+/* @brainbox/replay draws from its own --bb-replay-* properties; point them
+   at our tokens so the player sits in the dashboard like everything else. */
+.bb-replay {
+  --bb-replay-bg: var(--bg-elevated);
+  --bb-replay-frame-bg: var(--bg-subtle);
+  --bb-replay-border: var(--border-default);
+  --bb-replay-fg: var(--text-emphasis);
+  --bb-replay-muted: var(--text-muted);
+  --bb-replay-accent: var(--bg-brand);
+  --bb-replay-accent-hover: var(--bg-brand-hover);
+  --bb-replay-accent-fg: var(--text-on-brand);
+  --bb-replay-error-bg: var(--bg-error);
+  --bb-replay-error-border: var(--border-error-subtle);
+  --bb-replay-error-fg: var(--text-error);
+}
+
 /* ============ Resend signatures ============ */
 
 /* heading gradient: linear-gradient(97deg, #fff 30%, rgba(255,255,255,.5)) */

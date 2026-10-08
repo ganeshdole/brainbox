@@ -4,7 +4,6 @@ import type { CapturedMetadata } from "@brainbox/shared";
 import type { Issue } from "@brainbox/shared";
 
 import {
-  formatClock,
   issueTitle,
   matchesIssue,
   newestFirst,
@@ -158,17 +157,5 @@ describe("matchesIssue", () => {
 
   it("survives a missing identity", () => {
     expect(matchesIssue({ metadata: meta() }, "billing")).toBe(true);
-  });
-});
-
-describe("formatClock", () => {
-  it("formats m:ss", () => {
-    expect(formatClock(0)).toBe("0:00");
-    expect(formatClock(83000)).toBe("1:23");
-    expect(formatClock(600000)).toBe("10:00");
-  });
-
-  it("clamps negatives to zero", () => {
-    expect(formatClock(-500)).toBe("0:00");
   });
 });

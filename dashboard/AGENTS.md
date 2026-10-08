@@ -13,6 +13,12 @@ Root rules in `/AGENTS.md` apply.
 - API base URL comes from `src/lib/authConfig.ts`. Auth is a session cookie sent
   with `credentials: "include"`; there's no token to thread through the UI.
 
+## The replay player is not here
+
+Session playback is `<SessionReplay />` from `@brainbox/replay`, themed through
+the `.bb-replay` block in `src/index.css`. Changes to how a recording plays go
+in `packages/replay`; `IssueDetailPane` only places it.
+
 ## Types are shared
 
 Issue/Project shapes come from `@brainbox/shared`, the same types the backend
