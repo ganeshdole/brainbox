@@ -258,8 +258,11 @@ Scope this PR after PR 5; it is the least certain of the six.
   backend in another language can accept reports.
 - More packages to version. Inside the monorepo they are consumed from source
   with `workspace:*`, so this costs nothing until publishing.
-- Publishing is out of scope here. The packages stay `private: true` and emit
-  nothing (`noEmit`, `allowImportingTsExtensions`). A host outside the
-  monorepo needs a build step and an `exports` map, which is its own ADR.
+- Inside the monorepo the packages are consumed from source. For a host
+  outside it, each library package has a `tsconfig.build.json` that emits
+  `dist/` (`rewriteRelativeImportExtensions` turns the `.ts` imports into
+  `.js`) and a `publishConfig` that `pnpm pack` applies, so a tarball's
+  `exports` point at `dist/`. Publishing to a registry is still a separate
+  decision; the packages stay `private: true`.
 - ADR 0003's plan of `import { Brainbox } from '@brainbox/widget/react'` is
   replaced by the three-package split above.

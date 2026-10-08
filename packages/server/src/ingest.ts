@@ -35,7 +35,17 @@ export interface IngestRejection {
   body: { error: string; issues?: z.core.$ZodIssue[] };
 }
 
-export type IngestResult = { ok: true; payload: FeedbackPayload; files: IngestFiles } | IngestRejection;
+export type IngestResult =
+  | {
+      ok: true;
+      payload: FeedbackPayload;
+      files: IngestFiles;
+      /** The whole multipart body, for parts the format does not define, such
+       *  as the `context` part a host's own transport adds. The request body
+       *  can only be read once, so it is handed back here. */
+      form: FormData;
+    }
+  | IngestRejection;
 
 /**
  * Read a widget upload off a web-standard `Request`: the multipart body, the
@@ -90,7 +100,7 @@ export async function parseIngest(request: Request, limits: IngestLimits): Promi
     if (audio.size > limits.audioBytes) return reject(413, "audio too large");
   }
 
-  return { ok: true, payload: result.data, files: { screenshot, video, session, audio } };
+  return { ok: true, payload: result.data, files: { screenshot, video, session, audio }, form };
 }
 
 function file(form: FormData, name: string): File | undefined {

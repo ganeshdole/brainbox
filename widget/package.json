@@ -11,9 +11,23 @@
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && vite build --mode lib",
+    "build": "tsc -b && vite build && vite build --mode lib && tsc -p tsconfig.build.json",
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc -b",
@@ -24,17 +38,18 @@
     "@brainbox/react": "workspace:*",
     "@brainbox/shared": "workspace:*",
     "@radix-ui/colors": "^3.0.0",
-    "@tailwindcss/vite": "^4.3.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.17.0",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "tailwind-merge": "^3.6.0",
-    "tailwindcss": "^4.3.0"
+    "tailwind-merge": "^3.6.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@tailwindcss/vite": "^4.3.0",
     "@types/node": "catalog:",
     "@types/react": "^19.2.16",
     "@types/react-dom": "^19.2.3",
@@ -45,6 +60,9 @@
     "globals": "^17.6.0",
     "jsdom": "catalog:",
     "puppeteer-core": "^25.1.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "tailwindcss": "^4.3.0",
     "typescript": "catalog:",
     "typescript-eslint": "^8.60.1",
     "vite": "^8.0.16",

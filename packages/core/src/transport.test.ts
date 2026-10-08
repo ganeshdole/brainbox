@@ -19,17 +19,19 @@ const report: Report = {
 
 const transport = brainboxTransport({ endpoint: "http://x/ingest", projectKey: "pk_x" });
 
-/** Stub fetch to answer `res` and hand back the body it was sent. */
+/** Stub fetch to answer `res` and hand back the body and init it was sent. */
 function stubFetch(res: Response) {
   let body: FormData | undefined;
+  let sentInit: RequestInit | undefined;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (_url: string, init: RequestInit) => {
       body = init.body as FormData;
+      sentInit = init;
       return res;
     }),
   );
-  return () => body;
+  return Object.assign(() => body, { init: () => sentInit });
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -65,6 +67,35 @@ describe("brainboxTransport", () => {
     const body = sent();
     expect((body?.get("session") as File).name).toBe("session.json.gz");
     expect(body?.get("audio")).toBeInstanceOf(File);
+  });
+
+  it("sends no cookies and no context or headers unless asked", async () => {
+    const sent = stubFetch(new Response(JSON.stringify({ id: "a" }), { status: 201 }));
+    await transport.send(report);
+    expect(sent.init()?.credentials).toBe("same-origin");
+    expect(sent.init()?.headers).toBeUndefined();
+    expect(sent()?.get("context")).toBeNull();
+  });
+
+  it("adds headers and a context part for a host's own backend, read at send time", async () => {
+    let token = "t1";
+    let clinic = "c1";
+    const own = brainboxTransport({
+      endpoint: "/api/feedback",
+      projectKey: "pk_own",
+      headers: () => ({ Authorization: `Bearer ${token}` }),
+      context: () => ({ clinicId: clinic }),
+      credentials: "include",
+    });
+    const sent = stubFetch(new Response(JSON.stringify({ id: "a" }), { status: 201 }));
+
+    token = "t2";
+    clinic = "c2";
+    await own.send(report);
+
+    expect(sent.init()?.headers).toEqual({ Authorization: "Bearer t2" });
+    expect(sent.init()?.credentials).toBe("include");
+    expect(JSON.parse(String(sent()?.get("context")))).toEqual({ clinicId: "c2" });
   });
 
   it("throws the server error message on a non-2xx JSON response", async () => {

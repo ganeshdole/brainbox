@@ -48,6 +48,14 @@ Everything visual is a custom property on `.bb-replay`, with dark defaults:
 `parseSessionPayload(text)` reads the log's `{ v, events, audioOffsetMs? }`
 and tolerates older logs without an offset. `formatClock(ms)` gives `m:ss`.
 
+## Install
+
+Inside this monorepo the package is consumed from source (`workspace:*`).
+Outside the monorepo, `pnpm build` emits `dist/` (JS plus `.d.ts`) and
+`pnpm pack` produces a tarball whose `exports` point at it (`publishConfig`),
+so another app can `npm install` the `.tgz` files. Every `@brainbox/*`
+dependency of a package needs its own tarball installed alongside.
+
 ## Peer dependencies
 
 `react` and `react-dom` 19+. `@rrweb/replay` is bundled with the package.
