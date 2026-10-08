@@ -14,6 +14,14 @@ The API (`@brainbox/backend`): Hono + Drizzle + Postgres. Root rules in
 - Env is read once through `src/env.ts`. Add new vars there with an explicit
   required/optional decision, not ad-hoc `process.env` reads elsewhere.
 
+## The wire format is not here
+
+`/ingest` parses its upload with `parseIngest()` from `@brainbox/server`: the
+multipart parts, the zod schema, file types and size caps. The route owns what
+comes after - project lookup, origin allowlist, storage keys, the insert,
+transcription. A change to what the widget sends goes in `packages/server`
+(and `packages/shared`); a change to what we do with it goes here.
+
 ## Auth boundary
 
 `app.ts` gates routes in order: `/health` and `/ingest` are public; everything

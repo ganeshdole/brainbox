@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { parseIngest } from "@brainbox/server";
 
 import { db } from "../db/client.ts";
 import { issues, projects } from "../db/schema/index.ts";
@@ -8,7 +9,6 @@ import { env } from "../env.ts";
 import { cropRegion } from "../lib/crop.ts";
 import { transcribeAudio, transcriptionEnabled } from "../lib/transcription.ts";
 import { getStorage } from "../storage/index.ts";
-import { feedbackSchema } from "../validation/feedback.ts";
 
 const AUDIO_EXT: Record<string, string> = {
   "audio/webm": "webm",
@@ -30,24 +30,17 @@ export const ingest = new Hono();
 ingest.use("*", cors({ origin: (origin) => origin ?? "*", credentials: false }));
 
 ingest.post("/", async (c) => {
-  const body = await c.req.parseBody();
-
-  // --- structured json part ---
-  const jsonRaw = body["json"];
-  if (typeof jsonRaw !== "string") {
-    return c.json({ error: "Missing json part" }, 400);
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(jsonRaw);
-  } catch {
-    return c.json({ error: "Invalid json" }, 400);
-  }
-  const result = feedbackSchema.safeParse(parsed);
-  if (!result.success) {
-    return c.json({ error: "Invalid payload", issues: result.error.issues }, 400);
-  }
-  const feedback = result.data;
+  // The wire format itself (parts, schema, types, sizes) is @brainbox/server's
+  // job; from here on it is ours: which project, where files go, what we store.
+  const parsed = await parseIngest(c.req.raw, {
+    screenshotBytes: env.MAX_SCREENSHOT_BYTES,
+    videoBytes: env.MAX_VIDEO_BYTES,
+    sessionBytes: env.MAX_SESSION_BYTES,
+    audioBytes: env.MAX_AUDIO_BYTES,
+  });
+  if (!parsed.ok) return c.json(parsed.body, parsed.status);
+  const feedback = parsed.payload;
+  const { screenshot, video, session, audio } = parsed.files;
 
   // --- project key ---
   const [project] = await db
@@ -65,52 +58,6 @@ ingest.post("/", async (c) => {
     !project.allowedOrigins.includes(origin)
   ) {
     return c.json({ error: "Origin not allowed" }, 403);
-  }
-
-  // --- capture: a screenshot OR a screen recording (video) ---
-  const screenshotField = body["screenshot"];
-  const screenshot = screenshotField instanceof File ? screenshotField : undefined;
-  if (screenshot) {
-    if (!screenshot.type.startsWith("image/")) {
-      return c.json({ error: "screenshot must be an image" }, 400);
-    }
-    if (screenshot.size > env.MAX_SCREENSHOT_BYTES) {
-      return c.json({ error: "screenshot too large" }, 413);
-    }
-  }
-
-  const videoField = body["video"];
-  const video = videoField instanceof File ? videoField : undefined;
-  if (video) {
-    if (!video.type.startsWith("video/")) {
-      return c.json({ error: "video must be a video file" }, 400);
-    }
-    if (video.size > env.MAX_VIDEO_BYTES) {
-      return c.json({ error: "video too large" }, 413);
-    }
-  }
-
-  // Session replay: a gzipped rrweb event log (application/gzip or application/json).
-  const sessionField = body["session"];
-  const session = sessionField instanceof File ? sessionField : undefined;
-  if (session && session.size > env.MAX_SESSION_BYTES) {
-    return c.json({ error: "session too large" }, 413);
-  }
-
-  if (!screenshot && !video && !session) {
-    return c.json({ error: "Missing screenshot, video or session" }, 400);
-  }
-
-  // --- audio (optional) ---
-  const audioField = body["audio"];
-  const audio = audioField instanceof File ? audioField : undefined;
-  if (audio) {
-    if (!audio.type.startsWith("audio/")) {
-      return c.json({ error: "audio must be an audio file" }, 400);
-    }
-    if (audio.size > env.MAX_AUDIO_BYTES) {
-      return c.json({ error: "audio too large" }, 413);
-    }
   }
 
   // --- store + persist ---
