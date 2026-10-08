@@ -18,8 +18,19 @@ const SVG_NS = "http://www.w3.org/2000/svg";
  *  property - leaves the document as the containing block. */
 const POSITIONED = new Set(["relative", "absolute", "fixed", "sticky"]);
 
-/** Marks currently on the page, oldest first. */
-const live: SVGSVGElement[] = [];
+/** Marks drawn into the host page during a recording. One set per recording,
+ *  so cancelling one cannot wipe another's and nothing outlives `clear()`. */
+export interface Annotations {
+  /** Put a mark on the page. */
+  show(m: Mark): void;
+  /** Remove the most recent mark. Returns whether there was one to remove. */
+  undo(): boolean;
+  /** How many marks are currently on the page. */
+  count(): number;
+  /** Remove every mark immediately (cleared by the user, or the recording
+   *  stopped or was cancelled). */
+  clear(): void;
+}
 
 /** One mark as SVG built with the DOM API rather than React.
  *  It has to live in the host document (see `showMark`), which React isn't
@@ -95,7 +106,7 @@ function shapeFor(m: Mark): SVGElement {
 }
 
 /**
- * Put a mark on the host page itself (NOT the shadow DOM).
+ * Marks go on the host page itself (NOT the shadow DOM).
  *
  * The shadow host is `rr-block`ed so the widget's own chrome stays out of
  * recordings; putting the mark in the host document instead means rrweb sees
@@ -111,26 +122,43 @@ function shapeFor(m: Mark): SVGElement {
  * protect against, and the user gets to keep an annotation on screen for as
  * long as they're still talking about it.
  */
-export function showMark(m: Mark): void {
-  const svg = document.createElementNS(SVG_NS, "svg");
-  svg.setAttribute("data-brainbox-highlight", "");
-  svg.setAttribute("aria-hidden", "true");
-  // Zero-sized with overflow visible: the shapes carry absolute document
-  // coordinates, so the container only has to establish the origin.
-  svg.setAttribute(
-    "style",
-    "position:absolute;left:0;top:0;width:0;height:0;overflow:visible;" +
-      "pointer-events:none;z-index:2147483646;",
-  );
-  document.body.appendChild(svg);
+export function createAnnotations(): Annotations {
+  /** Marks currently on the page, oldest first. */
+  const live: SVGSVGElement[] = [];
 
-  // Measured while the container is still childless, so what comes back is its
-  // own 0x0 box rather than the ink bounds of a shape overflowing it.
-  const origin = originOffset(svg);
-  svg.appendChild(
-    shapeFor(translateMark(m, window.scrollX - origin.x, window.scrollY - origin.y)),
-  );
-  live.push(svg);
+  return {
+    show(m) {
+      const svg = document.createElementNS(SVG_NS, "svg");
+      svg.setAttribute("data-brainbox-highlight", "");
+      svg.setAttribute("aria-hidden", "true");
+      // Zero-sized with overflow visible: the shapes carry absolute document
+      // coordinates, so the container only has to establish the origin.
+      svg.setAttribute(
+        "style",
+        "position:absolute;left:0;top:0;width:0;height:0;overflow:visible;" +
+          "pointer-events:none;z-index:2147483646;",
+      );
+      document.body.appendChild(svg);
+
+      // Measured while the container is still childless, so what comes back is
+      // its own 0x0 box rather than the ink bounds of a shape overflowing it.
+      const origin = originOffset(svg);
+      svg.appendChild(
+        shapeFor(translateMark(m, window.scrollX - origin.x, window.scrollY - origin.y)),
+      );
+      live.push(svg);
+    },
+    undo() {
+      const last = live.pop();
+      last?.remove();
+      return !!last;
+    },
+    count: () => live.length,
+    clear() {
+      for (const el of live) el.remove();
+      live.length = 0;
+    },
+  };
 }
 
 /**
@@ -152,23 +180,4 @@ function originOffset(container: Element): Point {
   if (!POSITIONED.has(getComputedStyle(document.body).position)) return { x: 0, y: 0 };
   const r = container.getBoundingClientRect();
   return { x: r.left + window.scrollX, y: r.top + window.scrollY };
-}
-
-/** How many marks are currently on the page. */
-export function liveMarkCount(): number {
-  return live.length;
-}
-
-/** Remove the most recent mark. Returns whether there was one to remove. */
-export function undoLastMark(): boolean {
-  const last = live.pop();
-  last?.remove();
-  return !!last;
-}
-
-/** Remove every mark immediately (cleared by the user, or the recording
- *  stopped or was cancelled). */
-export function clearHighlights(): void {
-  for (const el of live) el.remove();
-  live.length = 0;
 }

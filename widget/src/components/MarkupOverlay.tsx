@@ -8,7 +8,7 @@ import {
   nextColor,
   type Mark,
   type Tool,
-} from "../lib/marks.ts";
+} from "@brainbox/core";
 import { isDragTool, nextMarkId, useDrawing } from "../lib/use-drawing.ts";
 import { MarkShape, MarkTextInput } from "./MarkShape.tsx";
 import { MarkupToolbar } from "./MarkupToolbar.tsx";

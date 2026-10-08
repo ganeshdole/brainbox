@@ -7,7 +7,7 @@ const track = () => ({ enabled: true, stop: vi.fn() });
 const tracks = [track()];
 
 vi.mock("./audio.ts", () => ({
-  startRecording: () =>
+  startAudioRecording: () =>
     Promise.resolve({
       stream: { getAudioTracks: () => tracks, getTracks: () => tracks },
       stop: () => Promise.resolve(new Blob()),

@@ -296,6 +296,40 @@ importers:
         specifier: 'catalog:'
         version: 3.2.6(@types/node@24.13.2)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)(tsx@4.22.4)
 
+  packages/core:
+    dependencies:
+      '@brainbox/shared':
+        specifier: workspace:*
+        version: link:../shared
+      modern-screenshot:
+        specifier: ^4.6.0
+        version: 4.7.0
+      rrweb:
+        specifier: ^2.1.0
+        version: 2.1.0
+    devDependencies:
+      '@eslint/js':
+        specifier: ^10.0.1
+        version: 10.0.1(eslint@10.6.0(jiti@2.7.0))
+      eslint:
+        specifier: ^10.4.1
+        version: 10.6.0(jiti@2.7.0)
+      globals:
+        specifier: ^17.6.0
+        version: 17.7.0
+      jsdom:
+        specifier: 'catalog:'
+        version: 26.1.0
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      typescript-eslint:
+        specifier: ^8.60.1
+        version: 8.62.0(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3)
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.6(@types/node@24.13.2)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)(tsx@4.22.4)
+
   packages/shared:
     devDependencies:
       '@eslint/js':
@@ -313,15 +347,15 @@ importers:
 
   widget:
     dependencies:
+      '@brainbox/core':
+        specifier: workspace:*
+        version: link:../packages/core
       '@brainbox/shared':
         specifier: workspace:*
         version: link:../packages/shared
       '@radix-ui/colors':
         specifier: ^3.0.0
         version: 3.0.0
-      '@rrweb/types':
-        specifier: ^2.1.0
-        version: 2.1.0
       '@tailwindcss/vite':
         specifier: ^4.3.0
         version: 4.3.1(vite@8.1.0(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4))
@@ -334,18 +368,12 @@ importers:
       lucide-react:
         specifier: ^1.17.0
         version: 1.22.0(react@19.2.7)
-      modern-screenshot:
-        specifier: ^4.6.0
-        version: 4.7.0
       react:
         specifier: ^19.2.7
         version: 19.2.7
       react-dom:
         specifier: ^19.2.7
         version: 19.2.7(react@19.2.7)
-      rrweb:
-        specifier: ^2.1.0
-        version: 2.1.0
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.6.0

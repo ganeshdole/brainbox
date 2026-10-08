@@ -1,5 +1,5 @@
 import { record } from "rrweb";
-import { startRecording, type Recorder } from "./audio.ts";
+import { startAudioRecording, type AudioRecorder } from "./audio.ts";
 
 export interface SessionCapture {
   session: Blob;
@@ -46,14 +46,14 @@ export function startSessionRecording(onAutoStop: () => void, maxMs = 60_000): S
     collectFonts: false,
   });
 
-  let mic: Recorder | null = null;
+  let mic: AudioRecorder | null = null;
   let micStartedAt: number | null = null;
   let stopped = false;
   let muted = false;
   const applyMute = () => {
     mic?.stream.getAudioTracks().forEach((t) => (t.enabled = !muted));
   };
-  const micReady = startRecording()
+  const micReady = startAudioRecording()
     .then((r) => {
       // permission granted after Stop was already pressed - release the mic
       if (stopped) void r.stop();

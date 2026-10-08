@@ -61,14 +61,29 @@ export function keepForViewport(
   return r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw;
 }
 
-/** Render the current viewport to a canvas. The whole shadow host is hidden
- *  during capture so widget chrome never appears in the shot (ADR 0001). */
-async function viewportCanvas(hostEl: HTMLElement): Promise<HTMLCanvasElement> {
-  const prev = hostEl.style.visibility;
-  hostEl.style.visibility = "hidden";
-  let full: HTMLCanvasElement;
+/** What to leave out of a screenshot. */
+export interface CaptureOptions {
+  /** Hidden for the duration of the capture - the UI's own host element, so
+   *  its chrome never appears in the shot (ADR 0001). */
+  exclude?: HTMLElement;
+}
+
+/** Run `fn` with `el` invisible, then put it back however it was. */
+async function whileHidden<T>(el: HTMLElement | undefined, fn: () => Promise<T>): Promise<T> {
+  if (!el) return fn();
+  const prev = el.style.visibility;
+  el.style.visibility = "hidden";
   try {
-    full = await domToCanvas(document.documentElement, {
+    return await fn();
+  } finally {
+    el.style.visibility = prev;
+  }
+}
+
+/** Render the current viewport to a canvas. */
+async function viewportCanvas({ exclude }: CaptureOptions): Promise<HTMLCanvasElement> {
+  const full = await whileHidden(exclude, () =>
+    domToCanvas(document.documentElement, {
       scale: 1,
       timeout: ASSET_TIMEOUT_MS,
       filter: viewportFilter(),
@@ -78,10 +93,8 @@ async function viewportCanvas(hostEl: HTMLElement): Promise<HTMLCanvasElement> {
       // in the shot, which is an acceptable trade for a bug screenshot.
       font: { preferredFormat: "woff2" },
       features: { copyScrollbar: false },
-    });
-  } finally {
-    hostEl.style.visibility = prev;
-  }
+    }),
+  );
 
   const vw = window.innerWidth;
   const vh = window.innerHeight;
@@ -99,8 +112,8 @@ async function viewportCanvas(hostEl: HTMLElement): Promise<HTMLCanvasElement> {
 
 /** Plain viewport shot - the frozen page the user marks up, and the
  *  thumbnail/last-frame of a session recording. */
-export async function captureViewport(hostEl: HTMLElement): Promise<Blob> {
-  return toBlob(await viewportCanvas(hostEl));
+export async function captureViewport(options: CaptureOptions = {}): Promise<Blob> {
+  return toBlob(await viewportCanvas(options));
 }
 
 /**

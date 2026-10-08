@@ -1,9 +1,11 @@
-/** Hide our shadow host, read the host-page element under a point, then restore. */
-export function elementAt(x: number, y: number, hostEl: HTMLElement): Element | null {
-  const prev = hostEl.style.visibility;
-  hostEl.style.visibility = "hidden";
+/** The host-page element under a point. `exclude` (the UI's own host element)
+ *  is hidden for the lookup so the answer is never the widget itself. */
+export function elementAt(x: number, y: number, exclude?: HTMLElement): Element | null {
+  if (!exclude) return document.elementFromPoint(x, y);
+  const prev = exclude.style.visibility;
+  exclude.style.visibility = "hidden";
   const el = document.elementFromPoint(x, y);
-  hostEl.style.visibility = prev;
+  exclude.style.visibility = prev;
   return el;
 }
 

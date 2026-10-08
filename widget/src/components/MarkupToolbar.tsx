@@ -9,7 +9,7 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import { MARK_COLORS, type Tool } from "../lib/marks.ts";
+import { MARK_COLORS, type Tool } from "@brainbox/core";
 
 /** Single-key shortcuts, the way every markup tool does it. Shown in the
  *  tooltip so they're discoverable without a legend. */

@@ -10,8 +10,7 @@ import {
   Type,
   Undo2,
 } from "lucide-react";
-import { clearHighlights, liveMarkCount, showMark, undoLastMark } from "../lib/annotate.ts";
-import { DEFAULT_COLOR, nextColor, type Mark, type Tool } from "../lib/marks.ts";
+import { DEFAULT_COLOR, nextColor, type Annotations, type Mark, type Tool } from "@brainbox/core";
 import { isDragTool, nextMarkId, useDrawing } from "../lib/use-drawing.ts";
 import { fmtDuration } from "../lib/time.ts";
 import { MarkShape, MarkTextInput } from "./MarkShape.tsx";
@@ -28,10 +27,13 @@ const TOOLS: { tool: Exclude<RecordTool, null | "select">; label: string; Icon: 
 ];
 
 export function RecordOverlay({
+  annotations,
   onStop,
   micActive,
   onMuteChange,
 }: {
+  /** The recording's marks on the host page - drawn here, cleared by core. */
+  annotations: Annotations;
   onStop: () => void;
   micActive: () => boolean;
   onMuteChange: (muted: boolean) => void;
@@ -43,8 +45,8 @@ export function RecordOverlay({
   const [micOn, setMicOn] = useState(false);
   const [muted, setMuted] = useState(false);
   /** Marks left on the page. They persist now, so the user needs a way back.
-   *  Mirrors `annotate`'s list rather than counting separately - App clears it
-   *  too, and two tallies of the same thing drift. */
+   *  Mirrors the recording's own list rather than counting separately - core
+   *  clears it too, and two tallies of the same thing drift. */
   const [onPage, setOnPage] = useState(0);
   // App passes inline arrows - keep them out of the effects' deps via refs.
   const micRef = useRef(micActive);
@@ -73,20 +75,23 @@ export function RecordOverlay({
   // A finished mark goes straight to the host page, where rrweb records it as
   // ordinary mutations. It stays there until the user takes it away, so the
   // count below is only here to know whether undo/clear have anything to do.
-  const commit = useCallback((m: Mark) => {
-    showMark(m);
-    setOnPage(liveMarkCount());
-  }, []);
+  const commit = useCallback(
+    (m: Mark) => {
+      annotations.show(m);
+      setOnPage(annotations.count());
+    },
+    [annotations],
+  );
 
   const undo = useCallback(() => {
-    undoLastMark();
-    setOnPage(liveMarkCount());
-  }, []);
+    annotations.undo();
+    setOnPage(annotations.count());
+  }, [annotations]);
 
   const clearAll = useCallback(() => {
-    clearHighlights();
-    setOnPage(liveMarkCount());
-  }, []);
+    annotations.clear();
+    setOnPage(annotations.count());
+  }, [annotations]);
 
   const { draft, begin, extend, finish } = useDrawing({ color, onCommit: commit });
 
@@ -95,10 +100,10 @@ export function RecordOverlay({
     const text = typing.value.trim();
     setTyping(null);
     if (text) {
-      showMark({ kind: "text", id: nextMarkId(), color, x: typing.x, y: typing.y, text });
-      setOnPage(liveMarkCount());
+      annotations.show({ kind: "text", id: nextMarkId(), color, x: typing.x, y: typing.y, text });
+      setOnPage(annotations.count());
     }
-  }, [color, typing]);
+  }, [annotations, color, typing]);
 
   // Esc backs out of drawing rather than stopping the recording - stopping is a
   // deliberate act and shouldn't share a key with "put the pen down".

@@ -1,0 +1,33 @@
+{
+  "name": "@brainbox/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@brainbox/shared": "workspace:*",
+    "modern-screenshot": "^4.6.0",
+    "rrweb": "^2.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.4.1",
+    "globals": "^17.6.0",
+    "jsdom": "catalog:",
+    "typescript": "catalog:",
+    "typescript-eslint": "^8.60.1",
+    "vitest": "catalog:"
+  }
+}
