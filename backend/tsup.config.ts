@@ -5,7 +5,7 @@ export default defineConfig({
   format: ["esm"],
   target: "node22",
   clean: true,
-  // @brainbox/shared ships as TS source with no build output, so it must be
-  // bundled in rather than left as an external runtime import.
-  noExternal: ["@brainbox/shared"],
+  // @brainbox/shared and @brainbox/server ship as TS source with no build
+  // output, so they must be bundled in rather than left as external imports.
+  noExternal: ["@brainbox/shared", "@brainbox/server"],
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { feedbackSchema } from "./feedback.ts";
+import { feedbackSchema } from "./schema.ts";
 
 const valid = {
   projectKey: "pk_abc",

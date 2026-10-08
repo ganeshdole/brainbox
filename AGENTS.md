@@ -12,7 +12,7 @@ domain vocabulary (Customer vs End-user, Host app, Capture flow, Project key, th
 Account → Project → Issue hierarchy) lives in `CONTEXT.md`. Read it before
 touching product logic - it is canon, describing how the system is meant to work.
 
-Seven surfaces, one workspace package each:
+Eight surfaces, one workspace package each:
 
 - `packages/core/` - the capture engine (`@brainbox/core`). Plain TypeScript, no
   React: screenshots, marks, session recording, console-error capture, and the
@@ -24,7 +24,11 @@ Seven surfaces, one workspace package each:
   IIFE script-tag bundle, isolated from the host page via Shadow DOM.
 - `dashboard/` - the customer-facing SaaS (`@brainbox/dashboard`). React + Vite +
   React Router.
-- `backend/` - the API (`@brainbox/backend`). Hono + Drizzle + Postgres.
+- `packages/server/` - the receiving end of the wire format (`@brainbox/server`):
+  `parseIngest(request, limits)` over a web-standard `Request`, zod only. Its
+  README is the written-down upload format.
+- `backend/` - the API (`@brainbox/backend`). Hono + Drizzle + Postgres. Uses
+  `@brainbox/server` for `/ingest`.
 - `marketing/` - the landing page (`brainbox-landing`). React + Vite.
 - `packages/shared/` - cross-surface types (`@brainbox/shared`). Pure types, no
   runtime.
