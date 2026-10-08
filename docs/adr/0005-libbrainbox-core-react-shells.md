@@ -4,9 +4,10 @@ Date: 2026-10-08
 
 ## Status
 
-Proposed. Supersedes the npm phase of ADR 0003: the npm package is no longer a
+Accepted. Supersedes the npm phase of ADR 0003: the npm package is no longer a
 second entry into `widget/`, it is a stack of smaller packages that `widget/`
-itself is built on.
+itself is built on. The plan below is the order the work landed in; the code
+and the nested `AGENTS.md` files are canon for what exists.
 
 ## Context
 

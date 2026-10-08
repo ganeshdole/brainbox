@@ -2,7 +2,8 @@
 export type ProjectKey = `pk_${string}`;
 
 /** How the widget is opened. `floating` renders our FAB; `manual` is the
- *  customer's own element via `Brainbox.open()` or `[data-brainbox-trigger]`. */
+ *  customer's own element (`data-mount`, `window.Brainbox.open()`, or
+ *  `useBrainboxWidget().open()` in React). */
 export type TriggerMode = "floating" | "manual";
 
 /** A customer's project as rendered in the dashboard. */
