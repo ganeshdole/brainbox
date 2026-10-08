@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { isDegenerate, normalizeBox, shouldKeepPoint, type Mark, type Point } from "./marks.ts";
+import { isDegenerate, normalizeBox, shouldKeepPoint, type Mark, type Point } from "@brainbox/core";
 
 /** Tools that are drawn by dragging. `select` and `text` are stateful in ways
  *  that belong to the surface using them, so they stay out of here. */

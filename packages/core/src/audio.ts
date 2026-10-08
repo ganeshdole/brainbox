@@ -1,14 +1,14 @@
-export interface Recorder {
+export interface AudioRecorder {
   stop: () => Promise<Blob>;
-  /** The live mic stream, for the level meter. Analysed by
-   *  `useMultibandVolume` rather than re-opening the mic a second time. */
+  /** The live mic stream, for a level meter. Analyse this rather than opening
+   *  the mic a second time. */
   stream: MediaStream;
 }
 
 const MIME = "audio/webm";
 
 /** Start recording from the mic; resolve a handle whose stop() yields the Blob. */
-export async function startRecording(): Promise<Recorder> {
+export async function startAudioRecording(): Promise<AudioRecorder> {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   const supported = MediaRecorder.isTypeSupported(MIME);
   const rec = new MediaRecorder(stream, supported ? { mimeType: MIME } : undefined);

@@ -1,9 +1,8 @@
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
-import type { Identity } from "@brainbox/shared";
+import { brainboxTransport, createBrainbox, type Identity, type ProjectKey } from "@brainbox/core";
 import { App } from "./App.tsx";
 import { readConfig } from "./lib/config.ts";
-import { installCapture, setIdentity } from "./lib/metadata.ts";
 import { shadowCss } from "./lib/shadow-css.ts";
 import css from "./index.css?inline";
 
@@ -15,7 +14,7 @@ const currentScript = document.currentScript as HTMLScriptElement | null;
 // api below) and "brainbox:submitted" ({ detail: { id } }) after a successful submit.
 const api = {
   identify(identity: Identity) {
-    setIdentity(identity);
+    brainbox?.identify(identity);
   },
   open() {
     window.dispatchEvent(new CustomEvent("brainbox:open"));
@@ -32,6 +31,10 @@ declare global {
 }
 window.Brainbox = api;
 
+/** The engine behind this page's widget. Created in `mount()`, so an
+ *  `identify()` call that beats DOMContentLoaded is a no-op rather than a crash. */
+let brainbox: ReturnType<typeof createBrainbox> | null = null;
+
 function findScript(): HTMLScriptElement | null {
   return (
     currentScript ??
@@ -46,7 +49,14 @@ function mount() {
     return;
   }
 
-  installCapture();
+  brainbox = createBrainbox({
+    transport: brainboxTransport({
+      endpoint: config.endpoint,
+      projectKey: config.projectKey as ProjectKey,
+    }),
+    onSubmitted: ({ id }) =>
+      window.dispatchEvent(new CustomEvent("brainbox:submitted", { detail: { id } })),
+  });
 
   const host = document.createElement("div");
   host.id = "brainbox-widget";
@@ -72,7 +82,7 @@ function mount() {
     target?.addEventListener("click", () => api.open());
   }
 
-  createRoot(container).render(createElement(App, { config, hostEl: host }));
+  createRoot(container).render(createElement(App, { brainbox, config, hostEl: host }));
 }
 
 if (document.readyState === "loading") {
