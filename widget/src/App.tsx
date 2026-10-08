@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { canSessionRecord, type Brainbox, type Mark, type Recording } from "@brainbox/core";
+import { useDraft } from "@brainbox/react";
 import type { WidgetConfig } from "./lib/config.ts";
 import { Launcher } from "./components/Launcher.tsx";
 import { Chooser } from "./components/Chooser.tsx";
@@ -37,7 +38,7 @@ export function App({
 
   // One draft for the lifetime of the widget; `cancel()` resets it between runs.
   const draft = useMemo(() => brainbox.draft({ exclude: hostEl }), [brainbox, hostEl]);
-  const report = useSyncExternalStore(draft.subscribe, draft.getState, draft.getState);
+  const report = useDraft(draft);
 
   const reset = useCallback(() => {
     draft.cancel();

@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@brainbox/core": "workspace:*",
+    "@brainbox/react": "workspace:*",
     "@brainbox/shared": "workspace:*",
     "@radix-ui/colors": "^3.0.0",
     "@tailwindcss/vite": "^4.3.0",
