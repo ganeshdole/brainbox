@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { micOffsetMs, startSessionRecording } from "./session.ts";
 
-vi.mock("rrweb", () => ({ record: () => () => {} }));
+const stopRecorder = vi.fn();
+const record = vi.fn(() => stopRecorder);
+/** Hold the rrweb load open to race a Stop against it. */
+let recorderGate: Promise<void> = Promise.resolve();
+vi.mock("./lazy.ts", () => ({
+  loadRecorder: () => recorderGate.then(() => ({ record })),
+}));
 
 const track = () => ({ enabled: true, stop: vi.fn() });
 const tracks = [track()];
@@ -65,5 +71,29 @@ describe("setMicMuted", () => {
     await micUp();
     expect(tracks[0]?.enabled).toBe(false);
     await rec.stop();
+  });
+});
+
+describe("loading rrweb", () => {
+  it("starts the recorder once rrweb arrives and stops it on Stop", async () => {
+    record.mockClear();
+    stopRecorder.mockClear();
+    const rec = startSessionRecording(() => {});
+    await micUp();
+    expect(record).toHaveBeenCalledOnce();
+    await rec.stop();
+    expect(stopRecorder).toHaveBeenCalledOnce();
+  });
+
+  it("never starts the recorder when Stop beats the load", async () => {
+    record.mockClear();
+    let release = () => {};
+    recorderGate = new Promise((r) => (release = r));
+    const rec = startSessionRecording(() => {});
+    const stopped = rec.stop();
+    release();
+    await stopped;
+    expect(record).not.toHaveBeenCalled();
+    recorderGate = Promise.resolve();
   });
 });

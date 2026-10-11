@@ -1,6 +1,7 @@
 // Dev only (`pnpm dev`) - production loads https://app.brainbox.sh/widget.js,
 // the same tag customers paste, so the build no longer needs a bundled copy.
-// This puts a locally built widget at /widget.js so you can iterate on it by
+// This puts a locally built widget at /widget.js (and the widget-capture.js it
+// loads on first capture beside it) so you can iterate on it by
 // setting VITE_DEMO_WIDGET_SRC=/widget.js. If you rebuild the widget
 // mid-session, re-run this (or restart `pnpm dev`) - Vite serves public/ from
 // disk.
@@ -22,3 +23,4 @@ if (!existsSync(src)) {
   process.exit(1)
 }
 copyFileSync(src, dest)
+copyFileSync(src.replace(/widget\.js$/, "widget-capture.js"), dest.replace(/widget\.js$/, "widget-capture.js"))

@@ -73,8 +73,10 @@ Brainbox Cloud; see `@brainbox/core` for pointing one at your own backend.
 
 ## Build
 
-`pnpm build` emits `dist/widget.js` (the script-tag IIFE, everything bundled),
-`dist/index.js` (an ES module of the library entry with React, `lucide-react`
+`pnpm build` emits `dist/widget.js` (the script-tag IIFE, everything bundled
+except the capture libraries), `dist/widget-capture.js` (rrweb and
+modern-screenshot, which `widget.js` loads from beside itself the first time the
+widget opens - serve the two files from the same folder), `dist/index.js` (an ES module of the library entry with React, `lucide-react`
 and the other `@brainbox/*` packages external) and the `.d.ts` files. Inside
 the monorepo the package is consumed from source; `pnpm pack` produces a
 tarball whose `exports` point at `dist/` for apps outside it. `react` and

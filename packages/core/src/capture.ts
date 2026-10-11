@@ -1,4 +1,4 @@
-import { domToCanvas } from "modern-screenshot";
+import { loadRasteriser } from "./lazy.ts";
 import { paintMarks, type Mark } from "./marks.ts";
 
 /** Never rendered, so never worth cloning or serialising - big inline <script>
@@ -134,6 +134,7 @@ export async function withReadableFonts<T>(
 
 /** Render the current viewport to a canvas. */
 async function viewportCanvas({ exclude }: CaptureOptions): Promise<HTMLCanvasElement> {
+  const { domToCanvas } = await loadRasteriser();
   await afterPaint();
   const box = document.documentElement.getBoundingClientRect();
   const scale = captureScale(window.devicePixelRatio, box.width * box.height);

@@ -1,5 +1,5 @@
-import { record } from "rrweb";
 import { startAudioRecording, type AudioRecorder } from "./audio.ts";
+import { loadRecorder } from "./lazy.ts";
 
 export interface SessionCapture {
   session: Blob;
@@ -32,23 +32,29 @@ export function startSessionRecording(onAutoStop: () => void, maxMs = 60_000): S
   const events: unknown[] = [];
   const startedAt = Date.now();
 
-  const stopFn = record({
-    emit(event) {
-      events.push(event);
-    },
-    // privacy: never let typed values (passwords, emails, PII) leave as plaintext
-    maskAllInputs: true,
-    maskInputOptions: { password: true, email: true, tel: true },
-    blockClass: "rr-block",
-    ignoreClass: "rr-ignore",
-    maskTextClass: "rr-mask",
-    recordCanvas: false,
-    collectFonts: false,
-  });
+  let stopped = false;
+  // rrweb loads on first use (lazy.ts). A Stop that beats the load never
+  // starts the recorder at all.
+  const recorder = loadRecorder().then(({ record }) =>
+    stopped
+      ? undefined
+      : record({
+          emit(event) {
+            events.push(event);
+          },
+          // privacy: never let typed values (passwords, emails, PII) leave as plaintext
+          maskAllInputs: true,
+          maskInputOptions: { password: true, email: true, tel: true },
+          blockClass: "rr-block",
+          ignoreClass: "rr-ignore",
+          maskTextClass: "rr-mask",
+          recordCanvas: false,
+          collectFonts: false,
+        }),
+  );
 
   let mic: AudioRecorder | null = null;
   let micStartedAt: number | null = null;
-  let stopped = false;
   let muted = false;
   const applyMute = () => {
     mic?.stream.getAudioTracks().forEach((t) => (t.enabled = !muted));
@@ -86,7 +92,7 @@ export function startSessionRecording(onAutoStop: () => void, maxMs = 60_000): S
       clearTimeout(timer);
       settling = true;
       stopped = true;
-      stopFn?.();
+      (await recorder)?.();
       // don't block the upload on a permission dialog the user never answered
       await Promise.race([micReady, new Promise((r) => setTimeout(r, 150))]);
       const audio = mic ? await mic.stop() : null;
