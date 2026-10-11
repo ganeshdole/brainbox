@@ -128,22 +128,35 @@ describe("unreadableSheetImports", () => {
 });
 
 describe("captureScale", () => {
+  const page = 1440 * 2000;
+
   it("matches a Retina display", () => {
-    expect(captureScale(2)).toBe(2);
-    expect(captureScale(1.5)).toBe(1.5);
+    expect(captureScale(2, page)).toBe(2);
+    expect(captureScale(1.5, page)).toBe(1.5);
   });
 
   it("caps very dense displays at 2x", () => {
-    expect(captureScale(3)).toBe(2);
+    expect(captureScale(3, page)).toBe(2);
   });
 
   it("never drops below 1x, even zoomed out", () => {
-    expect(captureScale(1)).toBe(1);
-    expect(captureScale(0.5)).toBe(1);
+    expect(captureScale(1, page)).toBe(1);
+    expect(captureScale(0.5, page)).toBe(1);
   });
 
   it("falls back to 1x for a missing ratio", () => {
-    expect(captureScale(Number.NaN)).toBe(1);
+    expect(captureScale(Number.NaN, page)).toBe(1);
+  });
+
+  it("scales down on a long page so the document canvas stays in bounds", () => {
+    const long = 1440 * 8000;
+    const scale = captureScale(2, long);
+    expect(scale).toBeLessThan(2);
+    expect(long * scale * scale).toBeLessThanOrEqual(16_777_216);
+  });
+
+  it("stays at 1x for a page too big even for that", () => {
+    expect(captureScale(2, 1440 * 20000)).toBe(1);
   });
 });
 

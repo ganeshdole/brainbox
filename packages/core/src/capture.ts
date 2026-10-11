@@ -11,12 +11,17 @@ const ASSET_TIMEOUT_MS = 6000;
 
 const MAX_SCALE = 2;
 
+/** The whole document is rasterised before the viewport crop; keep that canvas
+ *  under the smallest browser limit (Safari's 16.7M pixels). */
+const MAX_CANVAS_PIXELS = 16_777_216;
+
 /** `@brainbox/server`'s default screenshot cap. */
 export const SCREENSHOT_BUDGET_BYTES = 5 * 1024 * 1024;
 
-export function captureScale(devicePixelRatio: number): number {
+export function captureScale(devicePixelRatio: number, documentPixels: number): number {
   if (!Number.isFinite(devicePixelRatio)) return 1;
-  return Math.min(Math.max(devicePixelRatio, 1), MAX_SCALE);
+  const fit = Math.sqrt(MAX_CANVAS_PIXELS / Math.max(documentPixels, 1));
+  return Math.max(1, Math.min(devicePixelRatio, MAX_SCALE, fit));
 }
 
 export function overBudget(bytes: number, pixelWidth: number, cssWidth: number): boolean {
@@ -115,6 +120,7 @@ async function withReadableFonts<T>(fn: () => Promise<T>): Promise<T> {
   const css = unreadableSheetImports(Array.from(document.styleSheets));
   if (!css) return fn();
   const style = document.createElement("style");
+  style.media = "not all";
   style.textContent = css;
   document.head.appendChild(style);
   try {
@@ -126,7 +132,8 @@ async function withReadableFonts<T>(fn: () => Promise<T>): Promise<T> {
 
 /** Render the current viewport to a canvas. */
 async function viewportCanvas({ exclude }: CaptureOptions): Promise<HTMLCanvasElement> {
-  const scale = captureScale(window.devicePixelRatio);
+  const root = document.documentElement;
+  const scale = captureScale(window.devicePixelRatio, root.scrollWidth * root.scrollHeight);
   const full = await whileHidden(exclude, () => withReadableFonts(() =>
     domToCanvas(document.documentElement, {
       scale,
