@@ -24,6 +24,14 @@ vi.mock("./audio.ts", () => ({
 // no-CompressionStream path rather than reimplementing the browser here.
 vi.stubGlobal("CompressionStream", undefined);
 
+/** jsdom's Blob has no text(). */
+const readText = (blob: Blob) =>
+  new Promise<string>((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.readAsText(blob);
+  });
+
 /** Let the mic promise settle - it's started eagerly inside the constructor. */
 const micUp = () => new Promise((r) => setTimeout(r, 0));
 
@@ -94,6 +102,45 @@ describe("loading rrweb", () => {
     release();
     await stopped;
     expect(record).not.toHaveBeenCalled();
+    recorderGate = Promise.resolve();
+  });
+
+  it("starts the mic and the clock only once rrweb is recording", async () => {
+    let release = () => {};
+    recorderGate = new Promise((r) => (release = r));
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
+    const rec = startSessionRecording(() => {});
+    await micUp();
+    // the capture chunk is still loading - nothing is being recorded yet
+    expect(rec.micActive()).toBe(false);
+
+    now.mockReturnValue(5_000);
+    release();
+    await micUp();
+    expect(rec.micActive()).toBe(true);
+
+    const { session } = await rec.stop();
+    const payload = JSON.parse(await readText(session)) as { audioOffsetMs?: number };
+    // measured from rrweb's start, not from the click that began loading it
+    expect(payload.audioOffsetMs).toBe(0);
+    now.mockRestore();
+    recorderGate = Promise.resolve();
+  });
+
+  it("starts the duration cap with the recorder", async () => {
+    vi.useFakeTimers();
+    let release = () => {};
+    recorderGate = new Promise((r) => (release = r));
+    const onAutoStop = vi.fn();
+    const rec = startSessionRecording(onAutoStop, 1_000);
+    await vi.advanceTimersByTimeAsync(900);
+    release();
+    await vi.advanceTimersByTimeAsync(900);
+    expect(onAutoStop).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(200);
+    expect(onAutoStop).toHaveBeenCalledOnce();
+    vi.useRealTimers();
+    await rec.stop();
     recorderGate = Promise.resolve();
   });
 });
