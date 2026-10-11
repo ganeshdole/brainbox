@@ -6,8 +6,9 @@ import type { Region } from "./region.ts";
  *  The screenshot / video / audio travel as separate binary file parts and are
  *  intentionally NOT in this type.
  *
- *  A submission is either a **screenshot** (with a highlighted `region`) or a
- *  **screen recording** (a video, no region) - so `region` is optional. */
+ *  `region` is the area the end-user's marks cover, so it is optional: a
+ *  report with no marks (a plain note, or a recording with nothing drawn in
+ *  view when it stopped) has none. */
 export interface FeedbackPayload {
   projectKey: ProjectKey;
   region?: Region;

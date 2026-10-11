@@ -55,7 +55,8 @@ The `json` part:
 {
   "projectKey": "pk_...",            // required, must start with "pk_"
   "text": "the button does nothing", // optional, up to 10000 chars
-  "region": {                        // optional, screenshot reports only
+  "region": {                        // optional, only when marks were drawn: on the
+                                     // screenshot, or in view when a recording stopped
     "x": 100, "y": 150, "width": 200, "height": 100,
     "selector": "main > form > button"   // optional, CSS path under the marks
   },

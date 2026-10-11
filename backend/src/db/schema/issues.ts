@@ -23,7 +23,8 @@ export const issues = pgTable("issues", {
     .defaultNow(),
   text: text("text"),
   // A submission is a screenshot OR a screen recording - so screenshot_key,
-  // crop_key and region are all nullable (recordings have none of them).
+  // crop_key and region are all nullable (a recording has a last-frame
+  // screenshot, and a region only if marks were in view when it stopped).
   screenshotKey: text("screenshot_key"),
   // Auto-generated crop of the highlighted region (null if cropping failed).
   cropKey: text("crop_key"),

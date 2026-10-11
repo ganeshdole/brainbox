@@ -164,4 +164,16 @@ describe("annotate", () => {
     expect(marks.count()).toBe(1);
     expect(other.count()).toBe(0);
   });
+
+  it("reports the marks in view in viewport coordinates", () => {
+    window.scrollTo = () => {};
+    Object.assign(window, { scrollY: 100 });
+    marks.show(box);
+    Object.assign(window, { scrollY: 150 });
+    // the page moved up 50px under the mark since it was drawn
+    expect(marks.inView()).toEqual([{ ...box, y: -30 }]);
+    Object.assign(window, { scrollY: 1000 });
+    expect(marks.inView()).toEqual([]);
+    Object.assign(window, { scrollY: 0 });
+  });
 });

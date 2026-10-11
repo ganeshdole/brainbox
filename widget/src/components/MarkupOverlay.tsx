@@ -9,6 +9,7 @@ import {
   type Mark,
   type Tool,
 } from "@brainbox/core";
+import { lockScroll } from "../lib/scroll-lock.ts";
 import { isDragTool, nextMarkId, useDrawing } from "../lib/use-drawing.ts";
 import { MarkShape, MarkTextInput } from "./MarkShape.tsx";
 import { MarkupToolbar } from "./MarkupToolbar.tsx";
@@ -88,6 +89,9 @@ export function MarkupOverlay({
     setTyping(null);
     if (!isDegenerate(mark)) commit([...marks, mark]);
   }, [color, commit, marks, typing]);
+
+  // The page under the frozen shot must not move while the user draws on it.
+  useEffect(() => lockScroll(), []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
