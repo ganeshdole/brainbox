@@ -5,6 +5,7 @@ import type { Project } from "@brainbox/shared";
 import { CopyButton } from "../components/CopyButton";
 import { DomainsEditor } from "../components/DomainsEditor";
 import { Eyebrow } from "../components/Eyebrow";
+import { GithubDestination } from "../components/GithubDestination";
 import { InstallSnippet } from "../components/InstallSnippet";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -131,7 +132,7 @@ export function Settings() {
       <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-10">
         <h1 className="text-lg font-semibold tracking-tight text-emphasis">Settings</h1>
         <p className="mt-1 text-sm text-muted">
-          Install, key, and allowed domains for {project.name}.
+          Install, key, domains and integrations for {project.name}.
         </p>
 
         <div className="mt-8">
@@ -159,6 +160,10 @@ export function Settings() {
                 onChange={(allowedOrigins) => setProject({ ...project, allowedOrigins })}
               />
             </div>
+          </Section>
+
+          <Section label="GitHub" hint="Open an issue in a repository for each new report.">
+            <GithubDestination projectId={project.id} />
           </Section>
 
           <Section label="Danger zone" hint="This can't be undone.">

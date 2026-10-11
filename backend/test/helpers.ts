@@ -2,7 +2,14 @@ import { encode } from "@auth/core/jwt";
 import type { BillingPeriod, PlanId, SubscriptionStatus } from "@brainbox/shared";
 
 import { db } from "../src/db/client.ts";
-import { issues, projects, subscriptions, users } from "../src/db/schema/index.ts";
+import {
+  integrationConnections,
+  issues,
+  projectDestinations,
+  projects,
+  subscriptions,
+  users,
+} from "../src/db/schema/index.ts";
 import { generateProjectKey } from "../src/lib/projectKey.ts";
 import { testEnv } from "./env.ts";
 
@@ -90,4 +97,30 @@ export async function makeIssue(
     })
     .returning();
   return i!;
+}
+
+export async function makeConnection(ownerId: string, externalId = "4242", label = "acme") {
+  const [c] = await db
+    .insert(integrationConnections)
+    .values({ ownerId, provider: "github", externalId, label })
+    .returning();
+  return c!;
+}
+
+export async function makeDestination(
+  projectId: string,
+  connectionId: string,
+  over: Partial<typeof projectDestinations.$inferInsert> = {},
+) {
+  const [d] = await db
+    .insert(projectDestinations)
+    .values({
+      projectId,
+      connectionId,
+      provider: "github",
+      config: { owner: "acme", repo: "web", labels: [] },
+      ...over,
+    })
+    .returning();
+  return d!;
 }

@@ -8,6 +8,7 @@ import { api } from "../lib/api";
 import { issueTitle, pageLabel } from "../lib/issue";
 import { CopyButton } from "./CopyButton";
 import { Eyebrow } from "./Eyebrow";
+import { IssueDeliveries } from "./IssueDeliveries";
 import { Lightbox } from "./Lightbox";
 import { Skeleton } from "./ui/skeleton";
 
@@ -83,7 +84,8 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
   useEffect(() => {
     const pending =
       issue?.audio?.transcriptStatus === "pending" ||
-      issue?.video?.transcriptStatus === "pending";
+      issue?.video?.transcriptStatus === "pending" ||
+      issue?.deliveries?.some((d) => d.status === "pending");
     if (!pending) return;
     const t = setTimeout(() => {
       api
@@ -152,6 +154,12 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
           </a>
           {m.identity?.email && <span className="truncate">{m.identity.email}</span>}
         </div>
+        <IssueDeliveries
+          issueId={issue.id}
+          projectId={projectId}
+          deliveries={issue.deliveries ?? []}
+          onChange={(deliveries) => setIssue({ ...issue, deliveries })}
+        />
       </header>
 
       <div className="mt-6 grid gap-8 border-t border-default p-4 pt-6 sm:p-6 lg:grid-cols-[minmax(0,1.75fr)_minmax(260px,1fr)]">

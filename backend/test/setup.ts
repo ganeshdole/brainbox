@@ -7,7 +7,7 @@ import { db } from "../src/db/client.ts";
 beforeEach(async () => {
   await db.execute(
     sql.raw(
-      `truncate table waitlist_signups, issues, projects, accounts, sessions, "verificationTokens", users restart identity cascade`,
+      `truncate table waitlist_signups, deliveries, project_destinations, integration_connections, issues, projects, accounts, sessions, "verificationTokens", users restart identity cascade`,
     ),
   );
 });

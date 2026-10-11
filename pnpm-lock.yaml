@@ -43,6 +43,9 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.1075.0
         version: 3.1075.0
+      '@brainbox/integrations':
+        specifier: workspace:*
+        version: link:../packages/integrations
       '@brainbox/server':
         specifier: workspace:*
         version: link:../packages/server
@@ -323,6 +326,34 @@ importers:
       jsdom:
         specifier: 'catalog:'
         version: 26.1.0
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      typescript-eslint:
+        specifier: ^8.60.1
+        version: 8.62.0(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3)
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.6(@types/node@24.13.2)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)(tsx@4.22.4)
+
+  packages/integrations:
+    dependencies:
+      '@brainbox/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@eslint/js':
+        specifier: ^10.0.1
+        version: 10.0.1(eslint@10.6.0(jiti@2.7.0))
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.2
+      eslint:
+        specifier: ^10.4.1
+        version: 10.6.0(jiti@2.7.0)
+      globals:
+        specifier: ^17.6.0
+        version: 17.7.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3

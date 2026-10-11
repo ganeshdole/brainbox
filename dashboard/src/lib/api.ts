@@ -1,4 +1,16 @@
-import type { BillingPeriod, BillingState, Issue, PlanId, Project } from "@brainbox/shared";
+import type {
+  BillingPeriod,
+  BillingState,
+  Delivery,
+  DestinationConfig,
+  IntegrationProvider,
+  IntegrationRepo,
+  IntegrationsState,
+  Issue,
+  PlanId,
+  Project,
+  ProjectDestination,
+} from "@brainbox/shared";
 
 import { API_URL } from "./authConfig";
 
@@ -72,6 +84,34 @@ export const api = {
   deleteProject: (id: string) => req<{ ok: boolean }>(`/api/projects/${id}`, { method: "DELETE" }),
   listIssues: (id: string) => req<Issue[]>(`/api/projects/${id}/issues`),
   getIssue: (id: string) => req<Issue>(`/api/issues/${id}`),
+  sendIssue: (id: string) => req<Delivery[]>(`/api/issues/${id}/deliveries`, { method: "POST" }),
+
+  getIntegrations: () => req<IntegrationsState>("/api/integrations"),
+  /** Returns the GitHub App install url to send the browser to. */
+  startGithubInstall: (projectId: string) =>
+    req<{ url: string }>("/api/integrations/github/install", {
+      method: "POST",
+      body: JSON.stringify({ projectId }),
+    }),
+  listRepos: (connectionId: string) =>
+    req<IntegrationRepo[]>(`/api/integrations/connections/${connectionId}/repos`),
+  deleteConnection: (connectionId: string) =>
+    req<{ ok: boolean }>(`/api/integrations/connections/${connectionId}`, { method: "DELETE" }),
+  listDestinations: (projectId: string) =>
+    req<ProjectDestination[]>(`/api/projects/${projectId}/destinations`),
+  saveDestination: (
+    projectId: string,
+    provider: IntegrationProvider,
+    body: { connectionId: string; config: DestinationConfig; enabled: boolean },
+  ) =>
+    req<ProjectDestination>(`/api/projects/${projectId}/destinations/${provider}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  deleteDestination: (projectId: string, provider: IntegrationProvider) =>
+    req<{ ok: boolean }>(`/api/projects/${projectId}/destinations/${provider}`, {
+      method: "DELETE",
+    }),
 
   getBillingState: () => req<BillingState>("/api/billing/subscription"),
   /** Returns the hosted Dodo checkout url to send the browser to. */

@@ -71,6 +71,13 @@
       "when": 1785218716902,
       "tag": "0009_long_la_nuit",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791708393415,
+      "tag": "0010_careless_karnak",
+      "breakpoints": true
     }
   ]
 }

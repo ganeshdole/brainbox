@@ -22,9 +22,20 @@ comes after - project lookup, origin allowlist, storage keys, the insert,
 transcription. A change to what the widget sends goes in `packages/server`
 (and `packages/shared`); a change to what we do with it goes here.
 
+## Integrations
+
+`src/integrations/registry.ts` turns a stored destination into a `Destination`
+from `@brainbox/integrations`; `dispatch.ts` (`deliverIssue`) sends an issue and
+writes its `deliveries` row. A change to what a ticket says, or a new tracker,
+goes in `packages/integrations`; which project sends where, and when, is here.
+The GitHub App env (`GITHUB_APP_*`) is optional; `integrationsConfigured()`
+gates the routes with a 503. Tests stub `fetch` with `test/github-fake.ts`, and
+`test/env.ts` generates a throwaway app key per run.
+
 ## Auth boundary
 
-`app.ts` gates routes in order: `/health` and `/ingest` are public; everything
+`app.ts` gates routes in order: `/health`, `/ingest`, `/f` (signed public file
+links for external tickets) and `/webhooks` are public; everything
 under `/api/*` (except `/api/auth/*`) requires a valid Auth.js session. `/ingest`
 is the widget's public endpoint - it authenticates by project key + origin
 allowlist, never a session. Put new authenticated endpoints after the

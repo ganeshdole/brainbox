@@ -1,3 +1,4 @@
+import type { Delivery } from "./integrations.ts";
 import type { CapturedMetadata } from "./metadata.ts";
 import type { Region } from "./region.ts";
 
@@ -43,4 +44,6 @@ export interface Issue {
   /** The highlighted area - only for screenshot submissions. */
   region?: Region;
   metadata: CapturedMetadata;
+  /** Where this issue was sent (GitHub, ...). Only on the single-issue endpoint. */
+  deliveries?: Delivery[];
 }

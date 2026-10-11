@@ -85,6 +85,16 @@ export const env = {
   DODO_PRODUCT_BUSINESS_MONTHLY: process.env.DODO_PRODUCT_BUSINESS_MONTHLY ?? "",
   DODO_PRODUCT_BUSINESS_ANNUAL: process.env.DODO_PRODUCT_BUSINESS_ANNUAL ?? "",
 
+  // GitHub App. All optional: unset = the GitHub section answers 503. The key
+  // is PKCS#8 PEM, raw or base64 (`openssl pkcs8 -topk8 -nocrypt -in app.pem | base64`).
+  GITHUB_APP_ID: process.env.GITHUB_APP_ID ?? "",
+  GITHUB_APP_SLUG: process.env.GITHUB_APP_SLUG ?? "",
+  GITHUB_APP_PRIVATE_KEY: process.env.GITHUB_APP_PRIVATE_KEY ?? "",
+  // OAuth client of the same app: proves the installing user owns the install.
+  GITHUB_APP_CLIENT_ID: process.env.GITHUB_APP_CLIENT_ID ?? "",
+  GITHUB_APP_CLIENT_SECRET: process.env.GITHUB_APP_CLIENT_SECRET ?? "",
+  GITHUB_WEBHOOK_SECRET: process.env.GITHUB_WEBHOOK_SECRET ?? "",
+
   // Accounts allowed past the paywall without a subscription (ours). Kept in
   // env rather than the codebase so access can be granted or revoked without a
   // deploy, and so no personal address is committed.
