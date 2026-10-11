@@ -38,8 +38,11 @@ It runs inside a **host app you don't control**, so isolation is the whole game:
 
 ## Build
 
-`pnpm build` emits two things from one source: `dist/widget.js`, the
-self-contained IIFE with React bundled, and `dist/index.js`, an ES module of
+`pnpm build` emits three things from one source: `dist/widget.js`, the
+IIFE with React bundled; `dist/widget-capture.js`, rrweb and modern-screenshot
+as a second IIFE that `widget.js` injects on first open (core's `lazy.ts` is
+swapped for `src/lib/load-capture.ts` in that build - keep the two in step);
+and `dist/index.js`, an ES module of
 the library entry with React and the other `@brainbox/*` packages external.
 Inside the monorepo the package is consumed from source (`src/index.ts`).
 

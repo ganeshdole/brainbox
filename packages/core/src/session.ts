@@ -1,5 +1,5 @@
-import { record } from "rrweb";
 import { startAudioRecording, type AudioRecorder } from "./audio.ts";
+import { loadRecorder } from "./lazy.ts";
 
 export interface SessionCapture {
   session: Blob;
@@ -30,31 +30,49 @@ export function canSessionRecord(): boolean {
  *  `onAutoStop` fires at the max-duration cap so the caller finalizes via stop(). */
 export function startSessionRecording(onAutoStop: () => void, maxMs = 60_000): SessionRecording {
   const events: unknown[] = [];
-  const startedAt = Date.now();
+  let startedAt = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
-  const stopFn = record({
-    emit(event) {
-      events.push(event);
-    },
-    // privacy: never let typed values (passwords, emails, PII) leave as plaintext
-    maskAllInputs: true,
-    maskInputOptions: { password: true, email: true, tel: true },
-    blockClass: "rr-block",
-    ignoreClass: "rr-ignore",
-    maskTextClass: "rr-mask",
-    recordCanvas: false,
-    collectFonts: false,
+  let settling = false;
+  const fire = () => {
+    if (settling) return;
+    settling = true;
+    onAutoStop();
+  };
+  let stopped = false;
+  // rrweb loads on first use (lazy.ts). The session's clock, the mic and the
+  // duration cap all start with the recorder, not before it: the replay's
+  // timeline begins at rrweb's first event, and `audioOffsetMs` is measured
+  // against it. A Stop that beats the load never starts the recorder at all.
+  const recorder = loadRecorder().then(({ record }) => {
+    if (stopped) return undefined;
+    startedAt = Date.now();
+    timer = setTimeout(fire, maxMs);
+    return record({
+      emit(event) {
+        events.push(event);
+      },
+      // privacy: never let typed values (passwords, emails, PII) leave as plaintext
+      maskAllInputs: true,
+      maskInputOptions: { password: true, email: true, tel: true },
+      blockClass: "rr-block",
+      ignoreClass: "rr-ignore",
+      maskTextClass: "rr-mask",
+      recordCanvas: false,
+      collectFonts: false,
+    });
   });
 
   let mic: AudioRecorder | null = null;
   let micStartedAt: number | null = null;
-  let stopped = false;
   let muted = false;
   const applyMute = () => {
     mic?.stream.getAudioTracks().forEach((t) => (t.enabled = !muted));
   };
-  const micReady = startAudioRecording()
+  const micReady = recorder
+    .then((started) => (started ? startAudioRecording() : null))
     .then((r) => {
+      if (!r) return;
       // permission granted after Stop was already pressed - release the mic
       if (stopped) void r.stop();
       else {
@@ -68,14 +86,6 @@ export function startSessionRecording(onAutoStop: () => void, maxMs = 60_000): S
       /* denied or no mic - session recording continues without voice */
     });
 
-  let settling = false;
-  const fire = () => {
-    if (settling) return;
-    settling = true;
-    onAutoStop();
-  };
-  const timer = setTimeout(fire, maxMs);
-
   return {
     micActive: () => mic !== null,
     setMicMuted: (next: boolean) => {
@@ -86,7 +96,7 @@ export function startSessionRecording(onAutoStop: () => void, maxMs = 60_000): S
       clearTimeout(timer);
       settling = true;
       stopped = true;
-      stopFn?.();
+      (await recorder)?.();
       // don't block the upload on a permission dialog the user never answered
       await Promise.race([micReady, new Promise((r) => setTimeout(r, 150))]);
       const audio = mic ? await mic.stop() : null;

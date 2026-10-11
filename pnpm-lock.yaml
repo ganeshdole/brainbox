@@ -522,6 +522,12 @@ importers:
       lucide-react:
         specifier: ^1.17.0
         version: 1.22.0(react@19.2.7)
+      modern-screenshot:
+        specifier: ^4.6.0
+        version: 4.7.0
+      rrweb:
+        specifier: ^2.1.0
+        version: 2.1.0
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.6.0

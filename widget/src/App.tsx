@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { canSessionRecord, type Brainbox, type Mark, type Recording } from "@brainbox/core";
+import { canSessionRecord, preloadCapture, type Brainbox, type Mark, type Recording } from "@brainbox/core";
 import { useDraft } from "@brainbox/react";
 import type { TriggerMode } from "@brainbox/shared";
 import type { Position } from "./lib/position.ts";
@@ -65,6 +65,13 @@ export function App({
       }),
     [ui, reset],
   );
+
+  // Fetch the capture libraries while the user is still choosing, so the
+  // screenshot or recording they pick isn't waiting on the network.
+  const open = status !== "idle";
+  useEffect(() => {
+    if (open) preloadCapture();
+  }, [open]);
 
   const startMarkup = useCallback(() => {
     draft.captureScreenshot();

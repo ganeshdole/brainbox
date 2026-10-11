@@ -31,7 +31,9 @@ dist-ssr
 *.sln
 *.sw?
 dashboard/public/widget.js
+dashboard/public/widget-capture.js
 marketing/public/widget.js
+marketing/public/widget-capture.js
 .vercel/
 
 # Local widget UI screenshots (scripts/shoot.mjs)

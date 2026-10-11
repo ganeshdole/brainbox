@@ -16,6 +16,8 @@
     "src/**/*.test.ts",
     "src/**/*.test.tsx",
     "src/test-setup.ts",
-    "src/embed.ts"
+    "src/embed.ts",
+    "src/capture-entry.ts",
+    "src/lib/load-capture.ts"
   ]
 }

@@ -34,9 +34,11 @@ echo ">> deploy $PREV_SHA -> $TARGET_SHA"
 build_backend() { pnpm -F @brainbox/backend build; }
 
 publish_static() {
-  # dashboard/dist has index.html + assets/ (NOT widget.js). --exclude keeps the
-  # existing widget.js from being deleted, then we overwrite it explicitly.
-  rsync -a --delete --exclude widget.js dashboard/dist/ "$WEB"/
+  # dashboard/dist has index.html + assets/ (NOT the widget). --exclude keeps the
+  # existing widget files from being deleted, then we overwrite them explicitly.
+  # widget-capture.js goes first: a widget.js that can't find it can't capture.
+  rsync -a --delete --exclude widget.js --exclude widget-capture.js dashboard/dist/ "$WEB"/
+  cp -f widget/dist/widget-capture.js "$WEB"/widget-capture.js
   cp -f widget/dist/widget.js "$WEB"/widget.js
   # Marketing, served from this box since we left Vercel. It loads the widget
   # from app.brainbox.sh, so it needs no widget.js of its own.

@@ -27,7 +27,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && vite build --mode lib && tsc -p tsconfig.build.json",
+    "build": "tsc -b && vite build && vite build --mode capture && vite build --mode lib && tsc -p tsconfig.build.json",
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc -b",
@@ -41,6 +41,8 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.17.0",
+    "modern-screenshot": "^4.6.0",
+    "rrweb": "^2.1.0",
     "tailwind-merge": "^3.6.0"
   },
   "peerDependencies": {
