@@ -31,7 +31,7 @@ export function App({
   position,
 }: {
   brainbox: Brainbox;
-  /** The shadow host: hidden while screenshotting. */
+  /** The shadow host: left out of screenshots. */
   hostEl: HTMLElement;
   trigger: TriggerMode;
   position: Position;

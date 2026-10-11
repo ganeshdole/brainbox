@@ -6,6 +6,7 @@ import {
   pickScreenshot,
   SCREENSHOT_BUDGET_BYTES,
   unreadableSheetImports,
+  viewportFilter,
   withReadableFonts,
 } from "./capture.ts";
 
@@ -205,5 +206,33 @@ describe("withReadableFonts", () => {
   it("adds nothing when every sheet is readable", async () => {
     const during = await withReadableFonts(async () => injected(), [{ href: null, cssRules: [] }]);
     expect(during).toBeNull();
+  });
+});
+
+describe("viewportFilter", () => {
+  it("drops the excluded UI host and its subtree, keeps the page", () => {
+    const host = document.createElement("div");
+    const page = document.createElement("main");
+    document.body.append(host, page);
+    try {
+      const filter = viewportFilter(host);
+      expect(filter(host)).toBe(false);
+      expect(filter(page)).toBe(true);
+      expect(filter(document.createElement("script"))).toBe(false);
+      expect(filter(document.createTextNode("x"))).toBe(true);
+    } finally {
+      host.remove();
+      page.remove();
+    }
+  });
+
+  it("keeps everything visible when nothing is excluded", () => {
+    const page = document.createElement("main");
+    document.body.append(page);
+    try {
+      expect(viewportFilter()(page)).toBe(true);
+    } finally {
+      page.remove();
+    }
   });
 });
