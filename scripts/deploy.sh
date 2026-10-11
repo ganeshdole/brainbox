@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #
-# Production deploy for brainbox — runs ON the EC2 box, invoked by the GitHub
-# Actions pipeline (.github/workflows/ci.yml) over SSH:
+# Production deploy for brainbox — runs ON the EC2 box, invoked over SSH:
 #
 #   git show <sha>:scripts/deploy.sh | bash -s -- <sha>
 #
