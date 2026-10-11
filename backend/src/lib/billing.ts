@@ -22,9 +22,11 @@ function grantsAccess(status: SubscriptionStatus): boolean {
   return status === "active";
 }
 
-/** Accounts allowed past the paywall without paying (ours). Case-insensitive:
- *  the address from the OAuth profile need not match the env var's casing. */
+/** Accounts allowed past the paywall without paying: ours, or everyone while
+ *  BILLING_DISABLED is on. Case-insensitive: the address from the OAuth
+ *  profile need not match the env var's casing. */
 export function isExempt(email: string | null | undefined): boolean {
+  if (env.BILLING_DISABLED) return true;
   if (!email) return false;
   return env.BILLING_EXEMPT_EMAILS.includes(email.toLowerCase());
 }
