@@ -75,8 +75,10 @@ export function MarkupOverlay({
     setSelected(null);
   }, [commit, marks, selected]);
 
-  const commitTyping = useCallback(() => {
-    if (!typing) return;
+  /** The note still open in the text box, as a mark - null if there's nothing
+   *  in it worth keeping. */
+  const typedMark = useCallback((): Mark | null => {
+    if (!typing) return null;
     const mark: Mark = {
       kind: "text",
       id: nextMarkId(),
@@ -85,9 +87,14 @@ export function MarkupOverlay({
       y: typing.y,
       text: typing.value,
     };
+    return isDegenerate(mark) ? null : mark;
+  }, [color, typing]);
+
+  const commitTyping = useCallback(() => {
+    const mark = typedMark();
     setTyping(null);
-    if (!isDegenerate(mark)) commit([...marks, mark]);
-  }, [color, commit, marks, typing]);
+    if (mark) commit([...marks, mark]);
+  }, [commit, marks, typedMark]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -254,7 +261,14 @@ export function MarkupOverlay({
         onUndo={undo}
         onDelete={removeSelected}
         onCancel={onCancel}
-        onDone={() => onDone(marks)}
+        // The toolbar swallows its own pointerdowns, so pressing Next never
+        // reaches the surface handler that closes the text box - the note
+        // still being typed has to be folded in here or it's silently dropped.
+        onDone={() => {
+          const mark = typedMark();
+          setTyping(null);
+          onDone(mark ? [...marks, mark] : marks);
+        }}
       />
     </div>
   );
