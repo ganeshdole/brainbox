@@ -12,7 +12,7 @@ domain vocabulary (Customer vs End-user, Host app, Capture flow, Project key, th
 Account → Project → Issue hierarchy) lives in `CONTEXT.md`. Read it before
 touching product logic - it is canon, describing how the system is meant to work.
 
-Nine surfaces, one workspace package each:
+Ten surfaces, one workspace package each:
 
 - `packages/core/` - the capture engine (`@brainbox/core`). Plain TypeScript, no
   React: screenshots, marks, session recording, console-error capture, and the
@@ -29,8 +29,12 @@ Nine surfaces, one workspace package each:
 - `packages/server/` - the receiving end of the wire format (`@brainbox/server`):
   `parseIngest(request, limits)` over a web-standard `Request`, zod only. Its
   README is the written-down upload format.
+- `packages/integrations/` - where a report goes next (`@brainbox/integrations`):
+  the `Destination` interface, `renderTicket()`, and `githubIssues()` plus the
+  GitHub App helpers. `fetch` and WebCrypto only. The backend decides which
+  project has which destination and when to deliver.
 - `backend/` - the API (`@brainbox/backend`). Hono + Drizzle + Postgres. Uses
-  `@brainbox/server` for `/ingest`.
+  `@brainbox/server` for `/ingest` and `@brainbox/integrations` to deliver.
 - `marketing/` - the landing page (`brainbox-landing`). React + Vite.
 - `packages/shared/` - cross-surface types (`@brainbox/shared`). Pure types, no
   runtime.
