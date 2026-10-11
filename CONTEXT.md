@@ -23,7 +23,8 @@ The product has three distinct surfaces - keep them separate:
 - **Dashboard** - the SaaS we sell: where the customer signs up, gets their
   snippet, and reads incoming tickets. (Out of scope for the widget build.)
 - **Backend** - receives feedback from every customer's widget, stores it
-  per-account, feeds the dashboard, routes to integrations. (Built later.)
+  per-account, feeds the dashboard, and delivers each issue to the project's
+  destinations.
 - **Capture flow** - the end-user's sequence: open → mark up the frozen page →
   compose (talk/type) → submit. Marking up is optional; the screenshot
   rasterises in the background from the moment that step opens and the marks are
@@ -39,11 +40,20 @@ The product has three distinct surfaces - keep them separate:
     `window.Brainbox.open()`. React: `useBrainboxWidget().open()`.
 - **Project key** - a project's public identifier passed to the widget
   (`data-project`), scoping captured feedback to that project.
+- **Connection** - an Account's link to an external tool: for GitHub, one
+  installation of the Brainbox GitHub App on an org or user. Shared by all of
+  the Account's projects.
+- **Destination** - where one project's issues go: a Connection plus settings
+  (for GitHub, the repo and labels). Can be paused.
+- **Delivery** - one issue sent to one destination: pending, sent (with the
+  GitHub issue number and link) or failed (with the reason, and a retry).
 
 ## Data hierarchy
 
 ```
-Account ──< Project ──< Issue
+Account ──< Project ──< Issue ──< Delivery
+   │            │                    │
+   └──< Connection ──< Destination ──┘
 ```
 
 - **Account** - a customer's login (email/password). Owns many projects.
