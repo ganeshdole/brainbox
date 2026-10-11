@@ -4,7 +4,8 @@ import type { CapturedMetadata, FeedbackPayload, ProjectKey, Region } from "@bra
  *  project keys or endpoints; those belong to whichever transport sends it. */
 export interface Report {
   text?: string;
-  /** The area the user's marks cover - only for screenshot reports. */
+  /** The area the user's marks cover - from the markup step, or the marks
+   *  still in view when a recording stopped. */
   region?: Region;
   metadata: CapturedMetadata;
   screenshot?: Blob;

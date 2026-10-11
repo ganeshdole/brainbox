@@ -187,9 +187,13 @@ describe("Draft recordings", () => {
     rec.annotations.show(box);
     expect(document.querySelectorAll("[data-brainbox-highlight]")).toHaveLength(1);
 
+    const baked = blob("baked");
+    capture.bakeMarks.mockResolvedValue(baked);
     await rec.stop();
 
     expect(document.querySelectorAll("[data-brainbox-highlight]")).toHaveLength(0);
+    // the marks in view are painted onto the last frame, not left to the DOM
+    expect(capture.bakeMarks).toHaveBeenCalledWith(thumb, [box]);
     expect(draft.getState()).toMatchObject({
       hasSession: true,
       hasVoice: true,
@@ -198,7 +202,32 @@ describe("Draft recordings", () => {
     await draft.submit({});
     expect(sent[0]?.session).toBe(events);
     expect(sent[0]?.audio).toBe(voice);
-    expect(sent[0]?.screenshot).toBe(thumb);
+    expect(sent[0]?.screenshot).toBe(baked);
+    // the marks in view are the report's region, as on a screenshot
+    expect(sent[0]?.region).toMatchObject({ x: 10, y: 20, width: 100, height: 50 });
+  });
+
+  it("leaves the region out when nothing drawn is in view", async () => {
+    recorder.stop.mockResolvedValue({ session: blob("events"), audio: null });
+    capture.captureViewport.mockResolvedValue(blob("thumb"));
+    const draft = bb.draft();
+
+    const rec = draft.startRecording();
+    rec.annotations.show({ ...box, y: window.innerHeight + 100 });
+    await rec.stop();
+
+    await draft.submit({});
+    expect(sent[0]?.region).toBeUndefined();
+  });
+
+  it("clears its marks even when the recording is rejected", async () => {
+    recorder.stop.mockResolvedValue({ session: new Blob([new Uint8Array(16 * 1024 * 1024)]), audio: null });
+    const draft = bb.draft();
+    const rec = draft.startRecording();
+    rec.annotations.show(box);
+
+    await expect(rec.stop()).rejects.toThrow("too large");
+    expect(document.querySelectorAll("[data-brainbox-highlight]")).toHaveLength(0);
   });
 
   it("rejects a recording over the size cap", async () => {

@@ -1,5 +1,6 @@
 import {
   arrowHead,
+  boundsOf,
   penPath,
   translateMark,
   FONT_STACK,
@@ -27,6 +28,9 @@ export interface Annotations {
   undo(): boolean;
   /** How many marks are currently on the page. */
   count(): number;
+  /** The marks at least partly in view, oldest first, in viewport
+   *  coordinates - what a screenshot taken right now would show. */
+  inView(): Mark[];
   /** Remove every mark immediately (cleared by the user, or the recording
    *  stopped or was cancelled). */
   clear(): void;
@@ -123,8 +127,9 @@ function shapeFor(m: Mark): SVGElement {
  * long as they're still talking about it.
  */
 export function createAnnotations(): Annotations {
-  /** Marks currently on the page, oldest first. */
-  const live: SVGSVGElement[] = [];
+  /** Marks currently on the page, oldest first, each with the element that
+   *  draws it and the mark itself in document coordinates. */
+  const live: { el: SVGSVGElement; mark: Mark }[] = [];
 
   return {
     show(m) {
@@ -146,16 +151,26 @@ export function createAnnotations(): Annotations {
       svg.appendChild(
         shapeFor(translateMark(m, window.scrollX - origin.x, window.scrollY - origin.y)),
       );
-      live.push(svg);
+      live.push({ el: svg, mark: translateMark(m, window.scrollX, window.scrollY) });
     },
     undo() {
       const last = live.pop();
-      last?.remove();
+      last?.el.remove();
       return !!last;
     },
     count: () => live.length,
+    inView() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      return live
+        .map(({ mark }) => translateMark(mark, -window.scrollX, -window.scrollY))
+        .filter((m) => {
+          const b = boundsOf(m);
+          return b.x < w && b.y < h && b.x + b.width > 0 && b.y + b.height > 0;
+        });
+    },
     clear() {
-      for (const el of live) el.remove();
+      for (const { el } of live) el.remove();
       live.length = 0;
     },
   };

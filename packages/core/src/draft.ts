@@ -4,7 +4,11 @@ import { bakeMarks, captureViewport, pickScreenshot } from "./capture.ts";
 import { unionBounds, type Mark } from "./marks.ts";
 import { captureMetadata } from "./metadata.ts";
 import { cssPath, elementAt } from "./selector.ts";
-import { startSessionRecording, type SessionRecording } from "./session.ts";
+import {
+  startSessionRecording,
+  type SessionCapture,
+  type SessionRecording,
+} from "./session.ts";
 import type { Report, SubmitResult, Transport } from "./transport.ts";
 
 const MAX_SESSION_BYTES = 15 * 1024 * 1024;
@@ -35,7 +39,9 @@ const EMPTY: DraftState = {
 /** A session recording in progress. */
 export interface Recording {
   /** Marks drawn into the host page while recording. rrweb records them as
-   *  ordinary mutations, so they show up in the replay. */
+   *  ordinary mutations, so they show up in the replay. The ones still in view
+   *  at `stop()` also become the report's region and are baked onto its
+   *  last-frame thumbnail. */
   annotations: Annotations;
   /** Whether the mic came up (the permission prompt can take a while). */
   micActive(): boolean;
@@ -108,6 +114,16 @@ export function createDraft(ctx: DraftContext, { exclude }: DraftOptions = {}): 
    *  recorder behind it, which `cancel()` has to stop directly. */
   let recording: { handle: Recording; raw: SessionRecording } | null = null;
 
+  /** The area `marks` cover (viewport coordinates) and the element under
+   *  its middle, or null when there are none. */
+  const regionOf = (marks: Mark[]): Region | null => {
+    const bounds = unionBounds(marks);
+    if (!bounds) return null;
+    const cx = bounds.x + bounds.width / 2;
+    const cy = bounds.y + bounds.height / 2;
+    return { ...bounds, selector: cssPath(elementAt(cx, cy, exclude)) };
+  };
+
   const setShot = (blob: Blob) => {
     shot = blob;
     if (state.screenshotUrl) URL.revokeObjectURL(state.screenshotUrl);
@@ -151,12 +167,7 @@ export function createDraft(ctx: DraftContext, { exclude }: DraftOptions = {}): 
     markUp(marks) {
       // What the user drew *is* the region, so the issue still records where
       // on the page it happened.
-      const bounds = unionBounds(marks);
-      if (bounds) {
-        const cx = bounds.x + bounds.width / 2;
-        const cy = bounds.y + bounds.height / 2;
-        region = { ...bounds, selector: cssPath(elementAt(cx, cy, exclude)) };
-      }
+      region = regionOf(marks) ?? region;
       const frozen = pending;
       if (!frozen || marks.length === 0) return;
       // If the bake fails the plain shot is already attached, so the report
@@ -179,21 +190,34 @@ export function createDraft(ctx: DraftContext, { exclude }: DraftOptions = {}): 
         async stop() {
           if (recording?.handle !== handle) return;
           recording = null;
-          // clear before stop() so the removal lands inside the recording
-          annotations.clear();
-          const { session: blob, audio } = await rec.stop();
+          // The marks come off the page only after the recorder has stopped,
+          // so the replay ends with them on screen. The ones in view are the
+          // report's annotations, as the markup step's are for a screenshot:
+          // they bound its region and are baked onto its last frame.
+          let marks: Mark[];
+          let captured: SessionCapture;
+          try {
+            captured = await rec.stop();
+          } finally {
+            marks = annotations.inView();
+            annotations.clear();
+          }
           if (run !== r) return;
+          const { session: blob, audio } = captured;
           if (blob.size > MAX_SESSION_BYTES) {
             throw new Error("Recording too large - try a shorter clip");
           }
           session = blob;
           voice = audio;
+          region = regionOf(marks);
           set({ hasSession: true, hasVoice: audio !== null });
           // Last-frame thumbnail: shown in the composer and uploaded as the
-          // report's screenshot so a list view gets a real preview. Best-effort.
+          // report's screenshot so a list view gets a real preview. Best-effort,
+          // and a failed bake still leaves the plain frame.
           try {
             const thumb = await captureViewport({ exclude });
-            if (run === r) setShot(thumb);
+            const baked = await bakeMarks(thumb, marks).catch(() => thumb);
+            if (run === r) setShot(baked);
           } catch {
             /* the composer falls back to a text note */
           }
