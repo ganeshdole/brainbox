@@ -16,11 +16,15 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm fetch --frozen-lockfile
 COPY . .
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --offline
-# Unset by default so the committed .env.production files apply; pass a build
-# arg to point the frontends somewhere else.
+# Unset by default so the committed .env.production files and built-in
+# defaults apply; compose.yaml passes them through to point the frontends at
+# another host.
 ARG VITE_API_URL
 ARG VITE_API_BASE_URL
 ARG VITE_DASHBOARD_URL
+ARG VITE_DEMO_WIDGET_SRC
+ARG VITE_DEMO_ENDPOINT
+ARG VITE_DEMO_PROJECT_KEY
 RUN pnpm -r build
 # Production-only node_modules for the API. dist is gitignored, so pnpm deploy
 # would skip it - it is copied from the build output separately below.
