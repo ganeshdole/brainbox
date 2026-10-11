@@ -12,10 +12,14 @@ const SCROLL_KEYS = new Set([
 ]);
 
 /** Whether `key` pressed on `target` would scroll the page. In a text field the
- *  same keys move the caret, so they are left alone. */
+ *  same keys move the caret, and Space on a button presses it (the toolbar's,
+ *  for keyboard users), so those are left alone. */
 export function isScrollKey(key: string, target: EventTarget | null): boolean {
   if (!SCROLL_KEYS.has(key)) return false;
   if (!(target instanceof HTMLElement)) return true;
+  if (key === " " && (target instanceof HTMLButtonElement || target.getAttribute("role") === "button")) {
+    return false;
+  }
   return !(
     target.isContentEditable ||
     target instanceof HTMLInputElement ||

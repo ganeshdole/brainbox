@@ -17,6 +17,12 @@ describe("isScrollKey", () => {
     expect(isScrollKey(" ", document.createElement("input"))).toBe(false);
     expect(isScrollKey("ArrowLeft", document.createElement("textarea"))).toBe(false);
   });
+
+  it("lets Space press a focused button, but still stops arrows scrolling from it", () => {
+    const button = document.createElement("button");
+    expect(isScrollKey(" ", button)).toBe(false);
+    expect(isScrollKey("ArrowDown", button)).toBe(true);
+  });
 });
 
 describe("lockScroll", () => {
