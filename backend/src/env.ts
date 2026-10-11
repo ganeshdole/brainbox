@@ -102,4 +102,8 @@ export const env = {
     .split(",")
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean),
+  // Kill switch for the paywall: "true" treats every Account as exempt, so
+  // nobody is asked to pay. For running before payments are live; checkout
+  // and webhooks still work, they are just never required.
+  BILLING_DISABLED: process.env.BILLING_DISABLED === "true",
 } as const;

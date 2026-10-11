@@ -160,6 +160,23 @@ describe("exempt accounts", () => {
     }
   });
 
+  it("covers everyone while BILLING_DISABLED is on", async () => {
+    const me = await unpaidUser("anyone@brainbox.test");
+    Object.assign(env, { BILLING_DISABLED: true });
+    try {
+      const res = await app.request("/api/projects", {
+        headers: { cookie: await authCookie(me.id, "anyone@brainbox.test") },
+      });
+      expect(res.status).toBe(200);
+      const state = await app.request("/api/billing/subscription", {
+        headers: { cookie: await authCookie(me.id, "anyone@brainbox.test") },
+      });
+      expect(await state.json()).toMatchObject({ exempt: true, hasAccess: true });
+    } finally {
+      Object.assign(env, { BILLING_DISABLED: false });
+    }
+  });
+
   it("matches case-insensitively - OAuth casing need not match the env var", async () => {
     const me = await unpaidUser("Mixed@Brainbox.test");
     env.BILLING_EXEMPT_EMAILS.push("mixed@brainbox.test");
