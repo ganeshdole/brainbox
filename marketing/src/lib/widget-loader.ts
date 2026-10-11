@@ -13,7 +13,7 @@ export interface WidgetEnv {
 // The landing page's own demo inbox. Project keys are public by design -
 // they ship in every customer's HTML. Env vars override for local testing
 // against a seeded backend (pk_test_local / http://localhost:8787/ingest).
-const DEMO_PROJECT_KEY = "pk_yWR707i0q2UwsCMc0WOkRL1A";
+const DEMO_PROJECT_KEY = "pk_oAbjipcitHOfqopWviwemeh9";
 const DEMO_ENDPOINT = "https://app.brainbox.sh/ingest";
 
 // The same URL customers paste (dashboard/src/lib/snippet.ts). Loading it
