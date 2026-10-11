@@ -131,3 +131,56 @@ describe("ordinary failures", () => {
     expect(isAuthRedirect(err)).toBe(false);
   });
 });
+
+describe("integration requests", () => {
+  function recordingFetch(body: unknown) {
+    return vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async () =>
+      new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+  }
+
+  it("starts a GitHub install for a project", async () => {
+    const fetch = recordingFetch({ url: "https://github.com/apps/x/installations/new?state=s" });
+    vi.stubGlobal("fetch", fetch);
+    const { api } = await freshApi();
+
+    expect(await api.startGithubInstall("p1")).toEqual({
+      url: "https://github.com/apps/x/installations/new?state=s",
+    });
+    const [url, init] = fetch.mock.calls[0]!;
+    expect(url).toMatch(/\/api\/integrations\/github\/install$/);
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toEqual({ projectId: "p1" });
+  });
+
+  it("saves a destination with PUT under the project and provider", async () => {
+    const fetch = recordingFetch({});
+    vi.stubGlobal("fetch", fetch);
+    const { api } = await freshApi();
+
+    await api.saveDestination("p1", "github", {
+      connectionId: "c1",
+      config: { owner: "acme", repo: "web", labels: ["bug"] },
+      enabled: true,
+    });
+    const [url, init] = fetch.mock.calls[0]!;
+    expect(url).toMatch(/\/api\/projects\/p1\/destinations\/github$/);
+    expect(init?.method).toBe("PUT");
+    expect(JSON.parse(String(init?.body))).toEqual({
+      connectionId: "c1",
+      config: { owner: "acme", repo: "web", labels: ["bug"] },
+      enabled: true,
+    });
+  });
+
+  it("sends an issue with POST to its deliveries", async () => {
+    const fetch = recordingFetch([]);
+    vi.stubGlobal("fetch", fetch);
+    const { api } = await freshApi();
+
+    await api.sendIssue("i1");
+    const [url, init] = fetch.mock.calls[0]!;
+    expect(url).toMatch(/\/api\/issues\/i1\/deliveries$/);
+    expect(init?.method).toBe("POST");
+  });
+});
