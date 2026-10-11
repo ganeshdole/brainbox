@@ -52,8 +52,8 @@ export interface Recording {
 }
 
 export interface DraftOptions {
-  /** The UI's own host element, hidden while screenshotting and when reading
-   *  which page element sits under the user's marks. */
+  /** The UI's own host element, left out of screenshots and hidden when
+   *  reading which page element sits under the user's marks. */
   exclude?: HTMLElement;
 }
 

@@ -45,8 +45,11 @@ const ESCAPES = new Set(["absolute", "fixed", "sticky"]);
  * out against an ancestor, so pruning a parent by its own box could drop a child
  * that was actually on screen. Ancestors of any escaping element are kept whole
  * and everything else is judged on its own box.
+ *
+ * `exclude` (the UI's own host) is dropped from the clone outright, which is
+ * what keeps its chrome out of the shot - the live page never has to hide it.
  */
-function viewportFilter(): (node: Node) => boolean {
+export function viewportFilter(exclude?: HTMLElement): (node: Node) => boolean {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
 
@@ -61,6 +64,7 @@ function viewportFilter(): (node: Node) => boolean {
 
   return (node) => {
     if (!(node instanceof Element)) return true;
+    if (node === exclude) return false;
     if (INVISIBLE.has(node.tagName)) return false;
     if (keepWhole.has(node)) return true;
     return keepForViewport(node.getBoundingClientRect(), vw, vh);
@@ -82,21 +86,16 @@ export function keepForViewport(
 
 /** What to leave out of a screenshot. */
 export interface CaptureOptions {
-  /** Hidden for the duration of the capture - the UI's own host element, so
-   *  its chrome never appears in the shot (ADR 0001). */
+  /** Left out of the cloned page, so the UI's own chrome never appears in the
+   *  shot (ADR 0001). It stays visible on the live page throughout: hiding it
+   *  would blank the UI for the seconds a capture takes. */
   exclude?: HTMLElement;
 }
 
-/** Run `fn` with `el` invisible, then put it back however it was. */
-async function whileHidden<T>(el: HTMLElement | undefined, fn: () => Promise<T>): Promise<T> {
-  if (!el) return fn();
-  const prev = el.style.visibility;
-  el.style.visibility = "hidden";
-  try {
-    return await fn();
-  } finally {
-    el.style.visibility = prev;
-  }
+/** Resolve after the next frame has painted, so UI shown just before a capture
+ *  is on screen before the capture's synchronous work blocks the main thread. */
+function afterPaint(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
 }
 
 /** modern-screenshot skips cross-origin sheets it can't read (e.g. Google Fonts)
@@ -135,13 +134,14 @@ export async function withReadableFonts<T>(
 
 /** Render the current viewport to a canvas. */
 async function viewportCanvas({ exclude }: CaptureOptions): Promise<HTMLCanvasElement> {
+  await afterPaint();
   const box = document.documentElement.getBoundingClientRect();
   const scale = captureScale(window.devicePixelRatio, box.width * box.height);
-  const full = await whileHidden(exclude, () => withReadableFonts(() =>
+  const full = await withReadableFonts(() =>
     domToCanvas(document.documentElement, {
       scale,
       timeout: ASSET_TIMEOUT_MS,
-      filter: viewportFilter(),
+      filter: viewportFilter(exclude),
       // Every @font-face in the host's CSS is fetched and inlined; on a
       // font-heavy page that dominates capture time. One modern format is
       // enough - a host serving only legacy formats falls back to system fonts
@@ -149,7 +149,7 @@ async function viewportCanvas({ exclude }: CaptureOptions): Promise<HTMLCanvasEl
       font: { preferredFormat: "woff2" },
       features: { copyScrollbar: false },
     }),
-  ));
+  );
 
   const vw = window.innerWidth;
   const vh = window.innerHeight;

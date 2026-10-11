@@ -34,8 +34,8 @@ const brainbox = createBrainbox({
   onSubmitted: ({ id }) => console.log("filed", id),
 });
 
-// One report in progress. `exclude` is your own UI's root element, hidden
-// while the page is screenshotted.
+// One report in progress. `exclude` is your own UI's root element, left out
+// of the screenshot.
 const draft = brainbox.draft({ exclude: panelEl });
 draft.subscribe(() => render(draft.getState()));
 
