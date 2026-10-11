@@ -6,6 +6,7 @@ import {
   pickScreenshot,
   SCREENSHOT_BUDGET_BYTES,
   unreadableSheetImports,
+  withReadableFonts,
 } from "./capture.ts";
 
 const VW = 1000;
@@ -128,22 +129,35 @@ describe("unreadableSheetImports", () => {
 });
 
 describe("captureScale", () => {
+  const page = 1440 * 2000;
+
   it("matches a Retina display", () => {
-    expect(captureScale(2)).toBe(2);
-    expect(captureScale(1.5)).toBe(1.5);
+    expect(captureScale(2, page)).toBe(2);
+    expect(captureScale(1.5, page)).toBe(1.5);
   });
 
   it("caps very dense displays at 2x", () => {
-    expect(captureScale(3)).toBe(2);
+    expect(captureScale(3, page)).toBe(2);
   });
 
   it("never drops below 1x, even zoomed out", () => {
-    expect(captureScale(1)).toBe(1);
-    expect(captureScale(0.5)).toBe(1);
+    expect(captureScale(1, page)).toBe(1);
+    expect(captureScale(0.5, page)).toBe(1);
   });
 
   it("falls back to 1x for a missing ratio", () => {
-    expect(captureScale(Number.NaN)).toBe(1);
+    expect(captureScale(Number.NaN, page)).toBe(1);
+  });
+
+  it("scales down on a long page so the document canvas stays in bounds", () => {
+    const long = 1440 * 8000;
+    const scale = captureScale(2, long);
+    expect(scale).toBeLessThan(2);
+    expect(long * scale * scale).toBeLessThanOrEqual(16_777_216);
+  });
+
+  it("stays at 1x for a page too big even for that", () => {
+    expect(captureScale(2, 1440 * 20000)).toBe(1);
   });
 });
 
@@ -160,5 +174,36 @@ describe("overBudget", () => {
 
   it("leaves a 1x shot alone - there is no resolution left to give up", () => {
     expect(overBudget(over, 1000, 1000)).toBe(false);
+  });
+});
+
+describe("withReadableFonts", () => {
+  const crossOrigin = {
+    href: "https://fonts.googleapis.com/css2?family=Inter",
+    get cssRules(): unknown {
+      throw new DOMException("Cannot access rules", "SecurityError");
+    },
+  };
+  const injected = () => document.head.querySelector<HTMLStyleElement>("style");
+
+  it("adds the imports inert, so the live page never applies them", async () => {
+    const during = await withReadableFonts(async () => {
+      const style = injected();
+      return { media: style?.media, css: style?.textContent };
+    }, [crossOrigin]);
+    expect(during.media).toBe("not all");
+    expect(during.css).toBe(`@import url("${crossOrigin.href}");`);
+  });
+
+  it("removes the stylesheet afterwards, even when the capture throws", async () => {
+    await expect(
+      withReadableFonts(() => Promise.reject(new Error("capture failed")), [crossOrigin]),
+    ).rejects.toThrow("capture failed");
+    expect(injected()).toBeNull();
+  });
+
+  it("adds nothing when every sheet is readable", async () => {
+    const during = await withReadableFonts(async () => injected(), [{ href: null, cssRules: [] }]);
+    expect(during).toBeNull();
   });
 });
