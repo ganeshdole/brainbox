@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -21,6 +22,10 @@ function fromEnvTest(): Record<string, string> {
 
 const file = fromEnvTest();
 
+// A fresh GitHub App key per run, so the real JWT path runs against a stubbed fetch.
+const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const githubAppKey = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+
 export const testEnv: Record<string, string> = {
   DATABASE_URL:
     file.DATABASE_URL ?? "postgres://brainbox:brainbox@localhost:5432/brainbox_test",
@@ -41,4 +46,11 @@ export const testEnv: Record<string, string> = {
   DODO_PRODUCT_PRO_ANNUAL: "pdt_test_pro_annual",
   DODO_PRODUCT_BUSINESS_MONTHLY: "pdt_test_business_monthly",
   DODO_PRODUCT_BUSINESS_ANNUAL: "pdt_test_business_annual",
+
+  GITHUB_APP_ID: "1",
+  GITHUB_APP_SLUG: "brainbox-test",
+  GITHUB_APP_PRIVATE_KEY: Buffer.from(githubAppKey).toString("base64"),
+  GITHUB_APP_CLIENT_ID: "Iv1.test",
+  GITHUB_APP_CLIENT_SECRET: "gh-client-secret-test",
+  GITHUB_WEBHOOK_SECRET: "gh-webhook-test-secret",
 };

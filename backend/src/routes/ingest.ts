@@ -6,6 +6,7 @@ import { parseIngest } from "@brainbox/server";
 import { db } from "../db/client.ts";
 import { issues, projects } from "../db/schema/index.ts";
 import { env } from "../env.ts";
+import { deliverIssue } from "../integrations/dispatch.ts";
 import { cropRegion } from "../lib/crop.ts";
 import { transcribeAudio, transcriptionEnabled } from "../lib/transcription.ts";
 import { getStorage } from "../storage/index.ts";
@@ -140,12 +141,17 @@ ingest.post("/", async (c) => {
   });
 
   // Fire-and-forget: transcription must never delay or fail the submission.
+  // Delivery waits for it so the ticket carries the transcript.
+  const transcriptions: Promise<void>[] = [];
   if (audioBytes && willTranscribeAudio) {
-    void transcribeAndStore(issueId, audioBytes, "audio");
+    transcriptions.push(transcribeAndStore(issueId, audioBytes, "audio"));
   }
   if (videoBytes && willTranscribeVideo) {
-    void transcribeAndStore(issueId, videoBytes, "video");
+    transcriptions.push(transcribeAndStore(issueId, videoBytes, "video"));
   }
+  void Promise.allSettled(transcriptions)
+    .then(() => deliverIssue(issueId))
+    .catch((err: unknown) => console.error(`[ingest] delivery failed for ${issueId}:`, err));
 
   return c.json({ id: issueId }, 201);
 });

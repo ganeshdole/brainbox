@@ -10,9 +10,11 @@ import { billing } from "./routes/billing.ts";
 import { filesRoute } from "./routes/files.ts";
 import { health } from "./routes/health.ts";
 import { ingest } from "./routes/ingest.ts";
+import { integrationsRoute } from "./routes/integrations.ts";
 import { issuesRoute } from "./routes/issues.ts";
 import { me } from "./routes/me.ts";
 import { projectsRoute } from "./routes/projects.ts";
+import { publicFiles } from "./routes/public-files.ts";
 import { waitlist } from "./routes/waitlist.ts";
 import { webhooks } from "./routes/webhooks.ts";
 import type { AppEnv } from "./types.ts";
@@ -32,6 +34,8 @@ app.route("/health", health);
 app.use("/api/auth/*", authHandler());
 // Public widget ingest - auth is project key + origin allowlist, not a session.
 app.route("/ingest", ingest);
+// Public signed file links, embedded in external tickets (GitHub issue bodies).
+app.route("/f", publicFiles);
 // Public marketing waitlist capture - CORS-scoped to the marketing origins.
 app.route("/waitlist", waitlist);
 // Public payment webhooks - authenticated by Standard Webhooks signature, not
@@ -56,3 +60,4 @@ app.use("/api/*", requireSubscription);
 app.route("/api/projects", projectsRoute);
 app.route("/api/issues", issuesRoute);
 app.route("/api/files", filesRoute);
+app.route("/api/integrations", integrationsRoute);

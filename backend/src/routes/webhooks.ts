@@ -1,10 +1,11 @@
-import { eq } from "drizzle-orm";
+import { verifyGithubSignature } from "@brainbox/integrations";
+import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { Webhook } from "standardwebhooks";
 import type { SubscriptionStatus } from "@brainbox/shared";
 
 import { db } from "../db/client.ts";
-import { subscriptions, webhookEvents } from "../db/schema/index.ts";
+import { integrationConnections, subscriptions, webhookEvents } from "../db/schema/index.ts";
 import { env } from "../env.ts";
 import { planForProductId } from "../lib/dodo.ts";
 
@@ -87,6 +88,59 @@ webhooks.post("/dodo", async (c) => {
   } catch (err) {
     // 500 so Dodo retries; the transaction has already undone the claim.
     console.error(`[webhooks] failed to apply ${type}:`, err);
+    return c.json({ error: "Processing failed" }, 500);
+  }
+});
+
+// GitHub App events. Only an uninstall changes anything: its connections go,
+// and their destinations with them.
+webhooks.post("/github", async (c) => {
+  if (!env.GITHUB_WEBHOOK_SECRET) {
+    console.error("[webhooks] GITHUB_WEBHOOK_SECRET is not set - rejecting");
+    return c.json({ error: "Webhooks not configured" }, 500);
+  }
+  const raw = await c.req.text();
+  const ok = await verifyGithubSignature(
+    raw,
+    c.req.header("x-hub-signature-256"),
+    env.GITHUB_WEBHOOK_SECRET,
+  );
+  const deliveryId = c.req.header("x-github-delivery");
+  if (!ok || !deliveryId) return c.json({ error: "Invalid signature" }, 400);
+
+  const type = c.req.header("x-github-event") ?? "";
+  let payload: { action?: string; installation?: { id?: number } };
+  try {
+    payload = JSON.parse(raw) as typeof payload;
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+  const installationId = payload.installation?.id;
+
+  try {
+    const applied = await db.transaction(async (tx) => {
+      const claimed = await tx
+        .insert(webhookEvents)
+        .values({ id: `github:${deliveryId}`, type: `${type}.${payload.action ?? ""}` })
+        .onConflictDoNothing()
+        .returning({ id: webhookEvents.id });
+      if (claimed.length === 0) return false;
+
+      if (type === "installation" && payload.action === "deleted" && installationId !== undefined) {
+        await tx
+          .delete(integrationConnections)
+          .where(
+            and(
+              eq(integrationConnections.provider, "github"),
+              eq(integrationConnections.externalId, String(installationId)),
+            ),
+          );
+      }
+      return true;
+    });
+    return c.json(applied ? { received: true } : { received: true, duplicate: true });
+  } catch (err) {
+    console.error(`[webhooks] failed to apply github ${type}:`, err);
     return c.json({ error: "Processing failed" }, 500);
   }
 });

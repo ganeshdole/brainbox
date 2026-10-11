@@ -3,3 +3,4 @@ export * from "./projects.ts";
 export * from "./issues.ts";
 export * from "./waitlist.ts";
 export * from "./subscriptions.ts";
+export * from "./integrations.ts";
