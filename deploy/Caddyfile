@@ -1,0 +1,35 @@
+# APP_HOST serves the dashboard SPA + widget.js and proxies the API on the same
+# origin (the dashboard's VITE_API_URL is the app host itself). WWW_HOST serves
+# marketing. Real hostnames get automatic Let's Encrypt certs; the *.localhost
+# defaults get Caddy's internal CA for local runs. Behind another proxy, set
+# http:// hosts (see compose.behind-proxy.yaml).
+
+{
+	# Behind an edge proxy, keep its X-Forwarded-* (the original https scheme
+	# and client IP) instead of overwriting them with this hop's.
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+{$APP_HOST:app.localhost} {
+	encode zstd gzip
+
+	@api path /api/* /ingest /ingest/* /health /health/* /waitlist /waitlist/* /webhooks/* /f/*
+	handle @api {
+		reverse_proxy api:8787
+	}
+
+	handle {
+		root * /srv/app
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+{$WWW_HOST:localhost} {
+	encode zstd gzip
+	root * /srv/www
+	try_files {path} /index.html
+	file_server
+}

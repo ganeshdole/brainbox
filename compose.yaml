@@ -1,0 +1,65 @@
+# Full production stack: `docker compose up -d --build` from the repo root.
+# App config comes from backend/.env (see backend/.env.example); DATABASE_URL
+# and PORT are overridden here to point at the db and Caddy's proxy target.
+# Set APP_HOST / WWW_HOST / POSTGRES_PASSWORD in a root .env or the shell.
+# Local dev keeps using backend/docker-compose.yml (Postgres only).
+
+x-app-env: &app-env
+  env_file: backend/.env
+  environment:
+    DATABASE_URL: postgres://brainbox:${POSTGRES_PASSWORD:-brainbox}@db:5432/brainbox
+    PORT: "8787"
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: brainbox
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-brainbox}
+      POSTGRES_DB: brainbox
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U brainbox -d brainbox"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    build: { context: ., target: migrate }
+    <<: *app-env
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+
+  api:
+    build: { context: ., target: api }
+    <<: *app-env
+    restart: unless-stopped
+    volumes:
+      - storage:/app/.storage
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  web:
+    build: { context: ., target: web }
+    restart: unless-stopped
+    environment:
+      APP_HOST: ${APP_HOST:-app.localhost}
+      WWW_HOST: ${WWW_HOST:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api: { condition: service_healthy }
+
+volumes:
+  pgdata:
+  storage:
+  caddy_data:
+  caddy_config:

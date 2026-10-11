@@ -16,8 +16,8 @@ services:
       timeout: 5s
       retries: 5
 
-  # The API service slots in here at deploy time (Dockerfile + this service),
-  # depending on `db` healthy. Dev runs the API on the host via `pnpm dev`.
+  # Dev only: the API runs on the host via `pnpm dev`. The containerized
+  # production stack (api + migrations + Caddy) is /compose.yaml.
 
 volumes:
   brainbox_pgdata:
