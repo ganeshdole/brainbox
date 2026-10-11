@@ -9,6 +9,20 @@ const INVISIBLE = new Set(["SCRIPT", "NOSCRIPT", "TEMPLATE"]);
 /** A stalled asset must not hold the report hostage - well under the 30s default. */
 const ASSET_TIMEOUT_MS = 6000;
 
+const MAX_SCALE = 2;
+
+/** `@brainbox/server`'s default screenshot cap. */
+export const SCREENSHOT_BUDGET_BYTES = 5 * 1024 * 1024;
+
+export function captureScale(devicePixelRatio: number): number {
+  if (!Number.isFinite(devicePixelRatio)) return 1;
+  return Math.min(Math.max(devicePixelRatio, 1), MAX_SCALE);
+}
+
+export function overBudget(bytes: number, pixelWidth: number, cssWidth: number): boolean {
+  return bytes > SCREENSHOT_BUDGET_BYTES && pixelWidth > cssWidth;
+}
+
 /** Positions that lay a box out against an ancestor rather than its parent, so a
  *  descendant can paint far outside the subtree it lives in. */
 const ESCAPES = new Set(["absolute", "fixed", "sticky"]);
@@ -80,11 +94,42 @@ async function whileHidden<T>(el: HTMLElement | undefined, fn: () => Promise<T>)
   }
 }
 
+/** modern-screenshot skips cross-origin sheets it can't read (e.g. Google Fonts)
+ *  but fetches `@import`s, so re-declare them as imports to keep their fonts. */
+export function unreadableSheetImports(
+  sheets: Iterable<{ href: string | null; readonly cssRules: unknown }>,
+): string {
+  const imports: string[] = [];
+  for (const sheet of sheets) {
+    if (!sheet.href) continue;
+    try {
+      void sheet.cssRules;
+    } catch {
+      imports.push(`@import url(${JSON.stringify(sheet.href)});`);
+    }
+  }
+  return imports.join("\n");
+}
+
+async function withReadableFonts<T>(fn: () => Promise<T>): Promise<T> {
+  const css = unreadableSheetImports(Array.from(document.styleSheets));
+  if (!css) return fn();
+  const style = document.createElement("style");
+  style.textContent = css;
+  document.head.appendChild(style);
+  try {
+    return await fn();
+  } finally {
+    style.remove();
+  }
+}
+
 /** Render the current viewport to a canvas. */
 async function viewportCanvas({ exclude }: CaptureOptions): Promise<HTMLCanvasElement> {
-  const full = await whileHidden(exclude, () =>
+  const scale = captureScale(window.devicePixelRatio);
+  const full = await whileHidden(exclude, () => withReadableFonts(() =>
     domToCanvas(document.documentElement, {
-      scale: 1,
+      scale,
       timeout: ASSET_TIMEOUT_MS,
       filter: viewportFilter(),
       // Every @font-face in the host's CSS is fetched and inlined; on a
@@ -94,26 +139,36 @@ async function viewportCanvas({ exclude }: CaptureOptions): Promise<HTMLCanvasEl
       font: { preferredFormat: "woff2" },
       features: { copyScrollbar: false },
     }),
-  );
+  ));
 
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const out = document.createElement("canvas");
-  out.width = vw;
-  out.height = vh;
+  out.width = Math.round(vw * scale);
+  out.height = Math.round(vh * scale);
 
   const ctx = out.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D context unavailable");
 
   // modern-screenshot renders the element from its origin; crop to the viewport.
-  ctx.drawImage(full, window.scrollX, window.scrollY, vw, vh, 0, 0, vw, vh);
+  ctx.drawImage(
+    full,
+    window.scrollX * scale,
+    window.scrollY * scale,
+    out.width,
+    out.height,
+    0,
+    0,
+    out.width,
+    out.height,
+  );
   return out;
 }
 
 /** Plain viewport shot - the frozen page the user marks up, and the
  *  thumbnail/last-frame of a session recording. */
 export async function captureViewport(options: CaptureOptions = {}): Promise<Blob> {
-  return toBlob(await viewportCanvas(options));
+  return encodeWithinBudget(await viewportCanvas(options));
 }
 
 /**
@@ -122,8 +177,7 @@ export async function captureViewport(options: CaptureOptions = {}): Promise<Blo
  * This runs once, on the way out of the markup step, rather than on every
  * stroke: the marks are vectors until here, so drawing stays instant and
  * undoable and nothing has to re-rasterise the page. Mark coordinates are
- * viewport CSS pixels and the shot is a viewport crop at scale 1, so the two
- * spaces line up with no transform.
+ * viewport CSS pixels, scaled to the shot's resolution.
  */
 export async function bakeMarks(shot: Blob, marks: Mark[]): Promise<Blob> {
   if (marks.length === 0) return shot;
@@ -141,8 +195,10 @@ export async function bakeMarks(shot: Blob, marks: Mark[]): Promise<Blob> {
   ctx.drawImage(bitmap, 0, 0);
   bitmap.close();
 
+  const scale = out.width / window.innerWidth;
+  ctx.scale(scale, scale);
   paintMarks(ctx, marks);
-  return toBlob(out);
+  return encodeWithinBudget(out);
 }
 
 /**
@@ -163,6 +219,20 @@ export async function pickScreenshot(
 ): Promise<Blob | null> {
   if (!pending) return settled;
   return (await pending.catch(() => null)) ?? settled;
+}
+
+async function encodeWithinBudget(canvas: HTMLCanvasElement): Promise<Blob> {
+  const blob = await toBlob(canvas);
+  const cssWidth = window.innerWidth;
+  if (!overBudget(blob.size, canvas.width, cssWidth)) return blob;
+
+  const small = document.createElement("canvas");
+  small.width = cssWidth;
+  small.height = Math.round((canvas.height * cssWidth) / canvas.width);
+  const ctx = small.getContext("2d");
+  if (!ctx) return blob;
+  ctx.drawImage(canvas, 0, 0, small.width, small.height);
+  return toBlob(small);
 }
 
 function toBlob(canvas: HTMLCanvasElement): Promise<Blob> {

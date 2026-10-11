@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { keepForViewport, pickScreenshot } from "./capture.ts";
+import {
+  captureScale,
+  keepForViewport,
+  overBudget,
+  pickScreenshot,
+  SCREENSHOT_BUDGET_BYTES,
+  unreadableSheetImports,
+} from "./capture.ts";
 
 const VW = 1000;
 const VH = 800;
@@ -89,5 +96,69 @@ describe("pickScreenshot", () => {
 
   it("resolves to the promise's blob even with nothing settled yet", async () => {
     expect(await pickScreenshot(Promise.resolve(baked), null)).toBe(baked);
+  });
+});
+
+describe("unreadableSheetImports", () => {
+  const readable = (href: string | null) => ({ href, cssRules: [] });
+  const crossOrigin = (href: string) => ({
+    href,
+    get cssRules(): unknown {
+      throw new DOMException("Cannot access rules", "SecurityError");
+    },
+  });
+
+  it("re-declares a cross-origin sheet the page can't read as an import", () => {
+    const href = "https://fonts.googleapis.com/css2?family=Inter&display=swap";
+    expect(unreadableSheetImports([crossOrigin(href)])).toBe(`@import url("${href}");`);
+  });
+
+  it("leaves readable sheets and inline <style> to modern-screenshot", () => {
+    expect(unreadableSheetImports([readable("https://host.test/app.css"), readable(null)])).toBe("");
+  });
+
+  it("imports every unreadable sheet, one rule each", () => {
+    const css = unreadableSheetImports([
+      crossOrigin("https://a.test/a.css"),
+      readable("https://host.test/app.css"),
+      crossOrigin("https://b.test/b.css"),
+    ]);
+    expect(css).toBe('@import url("https://a.test/a.css");\n@import url("https://b.test/b.css");');
+  });
+});
+
+describe("captureScale", () => {
+  it("matches a Retina display", () => {
+    expect(captureScale(2)).toBe(2);
+    expect(captureScale(1.5)).toBe(1.5);
+  });
+
+  it("caps very dense displays at 2x", () => {
+    expect(captureScale(3)).toBe(2);
+  });
+
+  it("never drops below 1x, even zoomed out", () => {
+    expect(captureScale(1)).toBe(1);
+    expect(captureScale(0.5)).toBe(1);
+  });
+
+  it("falls back to 1x for a missing ratio", () => {
+    expect(captureScale(Number.NaN)).toBe(1);
+  });
+});
+
+describe("overBudget", () => {
+  const over = SCREENSHOT_BUDGET_BYTES + 1;
+
+  it("keeps a sharp shot that fits the upload cap", () => {
+    expect(overBudget(SCREENSHOT_BUDGET_BYTES, 2000, 1000)).toBe(false);
+  });
+
+  it("redoes a sharp shot that would be rejected", () => {
+    expect(overBudget(over, 2000, 1000)).toBe(true);
+  });
+
+  it("leaves a 1x shot alone - there is no resolution left to give up", () => {
+    expect(overBudget(over, 1000, 1000)).toBe(false);
   });
 });

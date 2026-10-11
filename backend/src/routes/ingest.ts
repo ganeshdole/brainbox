@@ -74,7 +74,11 @@ ingest.post("/", async (c) => {
     // Auto-crop the highlighted region into a second image (best-effort).
     if (feedback.region) {
       try {
-        const cropBytes = await cropRegion(screenshotBytes, feedback.region);
+        const cropBytes = await cropRegion(
+          screenshotBytes,
+          feedback.region,
+          feedback.metadata.viewport.width,
+        );
         if (cropBytes) {
           cropKey = `${project.id}/${issueId}/crop.png`;
           await storage.put(cropKey, cropBytes, "image/png");
