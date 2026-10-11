@@ -5,7 +5,7 @@ export default defineConfig({
   format: ["esm"],
   target: "node22",
   clean: true,
-  // @brainbox/shared and @brainbox/server ship as TS source with no build
-  // output, so they must be bundled in rather than left as external imports.
-  noExternal: ["@brainbox/shared", "@brainbox/server"],
+  // The workspace packages resolve to TS source inside the monorepo, so they
+  // must be bundled in rather than left as external imports.
+  noExternal: ["@brainbox/shared", "@brainbox/server", "@brainbox/integrations"],
 });
