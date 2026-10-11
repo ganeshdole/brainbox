@@ -6,6 +6,7 @@ import {
   pickScreenshot,
   SCREENSHOT_BUDGET_BYTES,
   unreadableSheetImports,
+  withReadableFonts,
 } from "./capture.ts";
 
 const VW = 1000;
@@ -173,5 +174,36 @@ describe("overBudget", () => {
 
   it("leaves a 1x shot alone - there is no resolution left to give up", () => {
     expect(overBudget(over, 1000, 1000)).toBe(false);
+  });
+});
+
+describe("withReadableFonts", () => {
+  const crossOrigin = {
+    href: "https://fonts.googleapis.com/css2?family=Inter",
+    get cssRules(): unknown {
+      throw new DOMException("Cannot access rules", "SecurityError");
+    },
+  };
+  const injected = () => document.head.querySelector<HTMLStyleElement>("style");
+
+  it("adds the imports inert, so the live page never applies them", async () => {
+    const during = await withReadableFonts(async () => {
+      const style = injected();
+      return { media: style?.media, css: style?.textContent };
+    }, [crossOrigin]);
+    expect(during.media).toBe("not all");
+    expect(during.css).toBe(`@import url("${crossOrigin.href}");`);
+  });
+
+  it("removes the stylesheet afterwards, even when the capture throws", async () => {
+    await expect(
+      withReadableFonts(() => Promise.reject(new Error("capture failed")), [crossOrigin]),
+    ).rejects.toThrow("capture failed");
+    expect(injected()).toBeNull();
+  });
+
+  it("adds nothing when every sheet is readable", async () => {
+    const during = await withReadableFonts(async () => injected(), [{ href: null, cssRules: [] }]);
+    expect(during).toBeNull();
   });
 });

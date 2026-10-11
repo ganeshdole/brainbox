@@ -116,8 +116,11 @@ export function unreadableSheetImports(
   return imports.join("\n");
 }
 
-async function withReadableFonts<T>(fn: () => Promise<T>): Promise<T> {
-  const css = unreadableSheetImports(Array.from(document.styleSheets));
+export async function withReadableFonts<T>(
+  fn: () => Promise<T>,
+  sheets: Iterable<{ href: string | null; readonly cssRules: unknown }> = Array.from(document.styleSheets),
+): Promise<T> {
+  const css = unreadableSheetImports(sheets);
   if (!css) return fn();
   const style = document.createElement("style");
   style.media = "not all";
@@ -132,8 +135,8 @@ async function withReadableFonts<T>(fn: () => Promise<T>): Promise<T> {
 
 /** Render the current viewport to a canvas. */
 async function viewportCanvas({ exclude }: CaptureOptions): Promise<HTMLCanvasElement> {
-  const root = document.documentElement;
-  const scale = captureScale(window.devicePixelRatio, root.scrollWidth * root.scrollHeight);
+  const box = document.documentElement.getBoundingClientRect();
+  const scale = captureScale(window.devicePixelRatio, box.width * box.height);
   const full = await whileHidden(exclude, () => withReadableFonts(() =>
     domToCanvas(document.documentElement, {
       scale,
