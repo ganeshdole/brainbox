@@ -78,7 +78,8 @@ function Panel({ draft }: { draft: Draft }) {
   under StrictMode's mount-unmount-mount. The cost is one render in which
   `useBrainbox()` is `null`.
 - `identity` changes call `identify()`, and `fields` changes call
-  `setFields()`, on the live instance. `onSubmitted`
+  `setFields()`, on the live instance. The `fields` prop owns the instance's
+  fields: dropping it clears them. `onSubmitted`
   may change freely. Only a new `transport` rebuilds the instance.
 - `<BrainboxProvider brainbox={instance}>` provides an instance you created
   and own. Shells outside React (the script-tag bundle) use this.
