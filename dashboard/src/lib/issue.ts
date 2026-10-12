@@ -37,9 +37,9 @@ export function newestFirst<T extends Pick<Issue, "createdAt">>(issues: T[]): T[
   return [...issues].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-/** Case-insensitive search across the title/note, the page, the reporter and
- *  the app's own field values (so a clinic name finds its reports). An empty
- *  query matches everything. */
+/** Case-insensitive search across the title/note, the page, the reporter
+ *  (name, email, phone) and the app's own field values, so a clinic name finds
+ *  its reports. An empty query matches everything. */
 export function matchesIssue(issue: Pick<Issue, "text" | "metadata">, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
@@ -49,6 +49,7 @@ export function matchesIssue(issue: Pick<Issue, "text" | "metadata">, query: str
     pageLabel(issue.metadata.url),
     identity?.name ?? "",
     identity?.email ?? "",
+    identity?.phone ?? "",
     ...(fields ?? []).map((field) => field.value),
   ]
     .join("\n")

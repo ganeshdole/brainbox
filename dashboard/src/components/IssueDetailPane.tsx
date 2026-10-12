@@ -9,7 +9,7 @@ import { issueTitle, pageLabel } from "../lib/issue";
 import { CopyButton } from "./CopyButton";
 import { Eyebrow } from "./Eyebrow";
 import { IssueDeliveries } from "./IssueDeliveries";
-import { AppFields, ReporterCard } from "./IssueReporter";
+import { ReporterCard } from "./IssueReporter";
 import { Lightbox } from "./Lightbox";
 import { Skeleton } from "./ui/skeleton";
 
@@ -221,8 +221,7 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
         </div>
 
         <aside className="min-w-0">
-          <ReporterCard identity={m.identity} />
-          <AppFields fields={m.fields} />
+          <ReporterCard identity={m.identity} fields={m.fields} />
 
           {/* status is only set when transcription ran; "done" implies text */}
           {transcript && (

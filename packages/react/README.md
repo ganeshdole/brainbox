@@ -47,10 +47,11 @@ export function Root() {
 }
 ```
 
-`identity` is who is reporting; the dashboard shows it as "Reported by".
-`fields` are your app's own details, whatever you want next to every report:
-the dashboard lists them under "From the app" with your labels, in your order,
-so adding one needs no change in Brainbox. `type` is optional: `email`,
+`identity` is who is reporting, and `fields` are your app's own details,
+whatever you want next to every report. The dashboard shows both in the
+report's "Reported by" card: the person's name, email and phone, then your
+fields with your labels, in your order. Adding one needs no change in
+Brainbox. `type` is optional: `email`,
 `phone` and `url` become links, `id` shows in monospace, anything else is
 text. Up to 30 fields, labels up to 60 characters, values up to 500.
 
