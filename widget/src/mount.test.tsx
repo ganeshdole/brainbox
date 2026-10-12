@@ -49,4 +49,15 @@ describe("mount", () => {
     act(() => widget?.close());
     expect(labels()).toEqual([]);
   });
+
+  it("honours a start() made before the widget has rendered", async () => {
+    await act(async () => {
+      widget = mount({ transport, trigger: "manual" });
+      widget.start("screenshot");
+    });
+
+    // The markup toolbar, not the chooser.
+    expect(labels()).toContain("Next");
+    expect(labels().some((l) => l.startsWith("Screenshot"))).toBe(false);
+  });
 });

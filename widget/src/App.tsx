@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canSessionRecord, preloadCapture, type Brainbox, type Mark, type Recording } from "@ganeshdole/brainbox-core";
 import { useDraft } from "@ganeshdole/brainbox-react";
 import type { TriggerMode } from "@ganeshdole/brainbox-shared";
@@ -57,15 +57,6 @@ export function App({
     ui.close();
   }, [draft, ui]);
 
-  useEffect(
-    () =>
-      ui.subscribe(() => {
-        if (ui.isOpen()) setStatus((s) => (s === "idle" ? "choosing" : s));
-        else reset();
-      }),
-    [ui, reset],
-  );
-
   // Fetch the capture libraries while the user is still choosing, so the
   // screenshot or recording they pick isn't waiting on the network.
   const open = status !== "idle";
@@ -109,6 +100,38 @@ export function App({
       setStatus("choosing");
     }
   }, [draft, finishRecording]);
+
+  // Read by the store listener below, which must not restart a run under way.
+  const statusRef = useRef(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  // The screen follows the shared open state. `open()` lands on the chooser;
+  // a host's `start(mode)` goes straight into a screenshot or a recording.
+  useEffect(() => {
+    const sync = () => {
+      if (!ui.isOpen()) return reset();
+      const mode = ui.takeStart();
+      if (!mode) return setStatus((s) => (s === "idle" ? "choosing" : s));
+      if (statusRef.current !== "idle" && statusRef.current !== "choosing") return;
+      if (mode === "screenshot") startMarkup();
+      else if (canSessionRecord()) startRecord();
+      else setStatus("choosing");
+    };
+    const unsubscribe = ui.subscribe(sync);
+    // A start() made before this subscription, e.g. `mount()` then `start()`
+    // in one tick, notified no one. Pick it up once, as a store notification
+    // would: deferred, and skipped if this effect was torn down meanwhile.
+    let live = true;
+    queueMicrotask(() => {
+      if (live && ui.isOpen()) sync();
+    });
+    return () => {
+      live = false;
+      unsubscribe();
+    };
+  }, [ui, reset, startMarkup, startRecord]);
 
   const onSubmit = useCallback(
     async (text: string, audio: Blob | null) => {

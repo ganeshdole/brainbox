@@ -93,6 +93,62 @@ describe("BrainboxWidget", () => {
     expect(buttons()).toEqual([]);
   });
 
+  it("starts a screenshot straight from a host's own control, skipping the chooser", () => {
+    function HostScreenshot() {
+      const { start } = useBrainboxWidget();
+      return <button onClick={() => start("screenshot")}>Screenshot it</button>;
+    }
+    act(() => {
+      root.render(
+        <BrainboxProvider transport={transport}>
+          <HostControls />
+          <HostScreenshot />
+          <BrainboxWidget trigger="manual" />
+        </BrainboxProvider>,
+      );
+    });
+
+    act(() => hostClick("Screenshot it"));
+    expect(hostSees()).toBe("open");
+    // The markup toolbar, not the chooser's two options.
+    expect(buttons()).toContain("Select");
+    expect(buttons()).toContain("Next");
+    expect(buttons().some((b) => b.startsWith("Screenshot"))).toBe(false);
+  });
+
+  it("keeps its clicks from the host page, so the host's open menus stay open", () => {
+    let outsideClicks = 0;
+    const closeMenusOnOutsideClick = () => {
+      outsideClicks += 1;
+    };
+    document.addEventListener("mousedown", closeMenusOnOutsideClick);
+    try {
+      act(() => {
+        root.render(
+          <BrainboxProvider transport={transport}>
+            <HostControls />
+            <BrainboxWidget trigger="manual" />
+          </BrainboxProvider>,
+        );
+      });
+      act(() => hostClick("Report a problem"));
+
+      const close = shadow()?.querySelector<HTMLButtonElement>('[aria-label="Close"]');
+      act(() => {
+        close?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, composed: true }));
+      });
+      expect(outsideClicks).toBe(0);
+
+      // The widget's own buttons still work, and the host page still hears its own clicks.
+      act(() => close?.click());
+      expect(hostSees()).toBe("closed");
+      container.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      expect(outsideClicks).toBe(1);
+    } finally {
+      document.removeEventListener("mousedown", closeMenusOnOutsideClick);
+    }
+  });
+
   it("reports open when the user opens it from our launcher", () => {
     act(() => {
       root.render(

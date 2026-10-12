@@ -1,6 +1,6 @@
 {
   "name": "@ganeshdole/brainbox-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The Brainbox capture engine: screenshots, marks, session recording, console errors and a Transport that sends the report. No React, no UI.",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://www.brainbox.sh",

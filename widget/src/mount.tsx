@@ -3,7 +3,7 @@ import { createBrainbox, type BrainboxOptions, type Identity } from "@ganeshdole
 import { BrainboxProvider } from "@ganeshdole/brainbox-react";
 import type { TriggerMode } from "@ganeshdole/brainbox-shared";
 import type { Position } from "./lib/position.ts";
-import { widgetStore } from "./lib/widget-store.ts";
+import { widgetStore, type CaptureMode } from "./lib/widget-store.ts";
 import { BrainboxWidget } from "./widget.tsx";
 
 export interface MountOptions extends BrainboxOptions {
@@ -13,7 +13,10 @@ export interface MountOptions extends BrainboxOptions {
 
 /** The mounted widget, for a host with no React tree of its own. */
 export interface WidgetHandle {
+  /** Show the chooser. */
   open(): void;
+  /** Go straight into a screenshot or a recording, skipping the chooser. */
+  start(mode: CaptureMode): void;
   close(): void;
   identify(identity: Identity): void;
   /** Unmount the UI, remove it from the page and destroy the instance. */
@@ -40,6 +43,7 @@ export function mount({ trigger, position, ...options }: MountOptions): WidgetHa
 
   return {
     open: store.open,
+    start: store.start,
     close: store.close,
     identify: brainbox.identify,
     destroy() {
