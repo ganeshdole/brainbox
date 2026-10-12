@@ -6,6 +6,7 @@ import { getAuthConfig } from "./auth/config.ts";
 import { env } from "./env.ts";
 import { storeMiddleware } from "./middleware/store.ts";
 import { requireSubscription } from "./middleware/requireSubscription.ts";
+import { authError, AUTH_ERROR_PATH } from "./routes/auth-error.ts";
 import { billing } from "./routes/billing.ts";
 import { filesRoute } from "./routes/files.ts";
 import { health } from "./routes/health.ts";
@@ -34,6 +35,8 @@ app.route("/health", health);
 app.use("/api/auth/*", authHandler());
 // Public widget ingest - auth is project key + origin allowlist, not a session.
 app.route("/ingest", ingest);
+// Public: where a failed sign-in lands before it is sent on to the dashboard.
+app.route(AUTH_ERROR_PATH, authError);
 // Public signed file links, embedded in external tickets (GitHub issue bodies).
 app.route("/f", publicFiles);
 // Public marketing waitlist capture - CORS-scoped to the marketing origins.

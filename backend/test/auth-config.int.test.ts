@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { getAuthConfig } from "../src/auth/config.ts";
 import { env } from "../src/env.ts";
+import { AUTH_ERROR_PATH } from "../src/routes/auth-error.ts";
 
 // Auth.js's provider factories stash whatever you passed under `options` and
 // merge it into the provider during init, so that is where these live before
@@ -40,8 +41,10 @@ describe("pages", () => {
     // is how a failed sign-in ended at app.brainbox.sh/api/auth/error showing a
     // bare code with no way back.
     expect(pages.signIn).toBe(`${env.DASHBOARD_ORIGIN}/login`);
-    expect(pages.error).toBe(`${env.DASHBOARD_ORIGIN}/login`);
     expect(pages.verifyRequest).toBe(`${env.DASHBOARD_ORIGIN}/login`);
+    // A path on the API, which forwards to the dashboard: Auth.js prefixes this
+    // one with the API's origin (test/auth-error.int.test.ts).
+    expect(pages.error).toBe(AUTH_ERROR_PATH);
   });
 
   it("carries no query string of its own", () => {

@@ -4,6 +4,7 @@ import type { EmailConfig } from "@auth/core/providers/email";
 import { getEmailer } from "../email/index.ts";
 import { magicLinkEmail } from "../email/templates/magic-link.ts";
 import { env } from "../env.ts";
+import { AUTH_ERROR_PATH } from "../routes/auth-error.ts";
 import { getStore } from "../store/index.ts";
 
 // How long a sign-in link stays usable. Short enough that a forwarded or
@@ -63,8 +64,12 @@ export function getAuthConfig() {
 
     // Auth.js otherwise renders its own unbranded pages on the API origin, so a
     // failed sign-in dropped the user on app.brainbox.sh/api/auth/error with a
-    // bare error code and no way back. Point both at the dashboard's /login,
-    // which reads ?error= and explains itself.
+    // bare error code and no way back. Every page leads to the dashboard's
+    // /login, which reads ?error= and explains itself.
+    // signIn and verifyRequest are used as given, so they are the dashboard URL.
+    // error is not: when a sign-in step throws, Auth.js prefixes it with the
+    // API's origin, so it is a path on the API that forwards to the dashboard
+    // (routes/auth-error.ts).
     // Note none of these may carry a query string: Auth.js appends the incoming
     // request's own `?...` verbatim (lib/pages/index.js), so `/login?check=1`
     // would come out as `/login?check=1?provider=...` and parse as nonsense.
@@ -72,7 +77,7 @@ export function getAuthConfig() {
     // login page keys its "check your inbox" state off.
     pages: {
       signIn: `${env.DASHBOARD_ORIGIN}/login`,
-      error: `${env.DASHBOARD_ORIGIN}/login`,
+      error: AUTH_ERROR_PATH,
       verifyRequest: `${env.DASHBOARD_ORIGIN}/login`,
     },
 

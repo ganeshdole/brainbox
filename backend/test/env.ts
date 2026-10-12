@@ -54,9 +54,11 @@ export const testEnv: Record<string, string> = {
     BRAINBOX_SERVER_SECRET: TEST_SERVER_SECRET,
   }),
   // Files stay local in both modes: the /api/files tests cover that route.
-  // test/convex-storage.int.test.ts covers the Convex driver.
+  // test/convex.int.test.ts covers the Convex driver.
   STORAGE_DRIVER: "local",
   PUBLIC_API_URL: file.PUBLIC_API_URL ?? "http://localhost:8787",
+  // Tells Auth.js it is mounted at /api/auth, as every deployment does.
+  AUTH_URL: file.AUTH_URL ?? "http://localhost:8787/api/auth",
   GOOGLE_ID: "test",
   GOOGLE_SECRET: "test",
   // Log emails instead of sending them - tests never hit the network.
