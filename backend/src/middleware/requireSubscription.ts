@@ -23,7 +23,7 @@ export const requireSubscription = createMiddleware<AppEnv>(async (c, next) => {
   const uid = token?.sub;
   if (!uid) return c.json({ error: "Unauthorized" }, 401);
 
-  const state = await billingStateFor(uid, token?.email);
+  const state = await billingStateFor(c.get("store"), uid, token?.email);
   if (!state.hasAccess) {
     return c.json({ error: "Subscription required", code: "subscription_required" }, 402);
   }

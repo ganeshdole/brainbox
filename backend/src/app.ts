@@ -4,7 +4,7 @@ import { cors } from "hono/cors";
 
 import { getAuthConfig } from "./auth/config.ts";
 import { env } from "./env.ts";
-import { dbMiddleware } from "./middleware/db.ts";
+import { storeMiddleware } from "./middleware/store.ts";
 import { requireSubscription } from "./middleware/requireSubscription.ts";
 import { billing } from "./routes/billing.ts";
 import { filesRoute } from "./routes/files.ts";
@@ -26,7 +26,7 @@ export const app = new Hono<AppEnv>();
 app.use("/api/*", cors({ origin: env.DASHBOARD_ORIGIN, credentials: true }));
 
 app.use("*", initAuthConfig(getAuthConfig));
-app.use("*", dbMiddleware);
+app.use("*", storeMiddleware);
 
 // Public routes (before the auth gate).
 app.route("/health", health);

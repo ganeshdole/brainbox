@@ -1,19 +1,10 @@
-import { and, eq, sql } from "drizzle-orm";
 import type { DeliveryResult } from "@ganeshdole/brainbox-integrations";
 
-import { db } from "../db/client.ts";
-import {
-  deliveries,
-  integrationConnections,
-  issues,
-  projectDestinations,
-} from "../db/schema/index.ts";
 import { env } from "../env.ts";
 import { publicFileUrl } from "../lib/public-files.ts";
 import { toTicket } from "../lib/serialize.ts";
+import type { DeliveryRecord, Store } from "../store/index.ts";
 import { destinationFor } from "./registry.ts";
-
-export type DeliveryRow = typeof deliveries.$inferSelect;
 
 /**
  * Send one issue to its project's destinations and record each outcome. Never
@@ -21,38 +12,27 @@ export type DeliveryRow = typeof deliveries.$inferSelect;
  * send, which also reaches paused destinations).
  */
 export async function deliverIssue(
+  store: Store,
   issueId: string,
   opts: { force?: boolean } = {},
-): Promise<DeliveryRow[]> {
-  const [issue] = await db.select().from(issues).where(eq(issues.id, issueId)).limit(1);
+): Promise<DeliveryRecord[]> {
+  const issue = await store.issues.get(issueId);
   if (!issue) return [];
 
-  const targets = await db
-    .select({ dest: projectDestinations, conn: integrationConnections })
-    .from(projectDestinations)
-    .innerJoin(integrationConnections, eq(integrationConnections.id, projectDestinations.connectionId))
-    .where(
-      opts.force
-        ? eq(projectDestinations.projectId, issue.projectId)
-        : and(eq(projectDestinations.projectId, issue.projectId), eq(projectDestinations.enabled, true)),
-    );
+  const force = opts.force ?? false;
+  const targets = await store.integrations.deliveryTargets(issue.projectId, { includePaused: force });
   if (targets.length === 0) return [];
 
   const ticket = toTicket(issue, { dashboardOrigin: env.DASHBOARD_ORIGIN, fileUrl: publicFileUrl });
-  const out: DeliveryRow[] = [];
+  const out: DeliveryRecord[] = [];
 
-  for (const { dest, conn } of targets) {
-    const claim = db
-      .insert(deliveries)
-      .values({ issueId, destinationId: dest.id, provider: dest.provider, status: "pending" });
-    const [row] = opts.force
-      ? await claim
-          .onConflictDoUpdate({
-            target: [deliveries.issueId, deliveries.destinationId],
-            set: { status: "pending", error: null, updatedAt: new Date() },
-          })
-          .returning()
-      : await claim.onConflictDoNothing().returning();
+  for (const { destination: dest, connection: conn } of targets) {
+    const row = await store.integrations.claimDelivery({
+      issueId,
+      destinationId: dest.id,
+      provider: dest.provider,
+      retry: force,
+    });
     if (!row) continue;
 
     let result: DeliveryResult;
@@ -65,18 +45,10 @@ export async function deliverIssue(
     if (!result.ok) {
       console.error(`[integrations] ${dest.provider} delivery failed for issue ${issueId}: ${result.error}`);
     }
-    const [updated] = await db
-      .update(deliveries)
-      .set({
-        status: result.ok ? "sent" : "failed",
-        externalId: result.ok ? result.externalId : row.externalId,
-        externalUrl: result.ok ? result.url : row.externalUrl,
-        error: result.ok ? null : result.error,
-        attempts: sql`${deliveries.attempts} + 1`,
-        updatedAt: new Date(),
-      })
-      .where(eq(deliveries.id, row.id))
-      .returning();
+    const updated = await store.integrations.finishDelivery(
+      row.id,
+      result.ok ? { ok: true, externalId: result.externalId, url: result.url } : { ok: false, error: result.error },
+    );
     if (updated) out.push(updated);
   }
   return out;

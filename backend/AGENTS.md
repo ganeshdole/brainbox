@@ -1,16 +1,22 @@
 # backend - AGENTS.md
 
-The API (`@ganeshdole/brainbox-backend`): Hono + Drizzle + Postgres. Root rules in
-`/AGENTS.md` apply; this covers what's specific here.
+The API (`@ganeshdole/brainbox-backend`): Hono over a `Store`, with Postgres
+(Drizzle) as the store today. Root rules in `/AGENTS.md` apply; this covers
+what's specific here.
 
 ## Structure
 
 - Routes live in `src/routes/*` and are mounted in `src/app.ts`. Add a route by
   exporting a Hono sub-app and wiring it in `app.ts`, minding the auth boundary
   below.
-- DB schema is in `src/db/schema/`. Get the db inside a handler via
-  `c.get("db")` (injected by `middleware/db.ts`) - don't import the client
-  directly in route code.
+- All persistence goes through the `Store` interface in `src/store/types.ts`.
+  Inside a handler use `c.get("store")` (injected by `middleware/store.ts`);
+  outside a request, `getStore()`. Never import the Drizzle client or schema
+  outside `src/store/postgres.ts` and `src/db/`: another store has to be able to
+  replace it. A new query is a new `Store` method, implemented by every store.
+- Rules that every store must apply identically live as plain functions beside
+  the stores (e.g. `store/subscription-write.ts`), not inside one store.
+- The Postgres schema is in `src/db/schema/`.
 - Env is read once through `src/env.ts`. Add new vars there with an explicit
   required/optional decision, not ad-hoc `process.env` reads elsewhere.
 

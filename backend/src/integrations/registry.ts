@@ -1,13 +1,10 @@
 import { githubApp, githubIssues, type Destination, type GithubApp } from "@ganeshdole/brainbox-integrations";
 import type { IntegrationProvider } from "@ganeshdole/brainbox-shared";
 
-import type { integrationConnections, projectDestinations } from "../db/schema/index.ts";
 import { env } from "../env.ts";
+import type { ConnectionRecord, DestinationRecord } from "../store/index.ts";
 
-export type DestinationRow = typeof projectDestinations.$inferSelect;
-export type ConnectionRow = typeof integrationConnections.$inferSelect;
-
-const FACTORIES: Record<IntegrationProvider, (dest: DestinationRow, conn: ConnectionRow) => Destination> = {
+const FACTORIES: Record<IntegrationProvider, (dest: DestinationRecord, conn: ConnectionRecord) => Destination> = {
   github: (dest, conn) =>
     githubIssues({
       owner: dest.config.owner,
@@ -17,7 +14,7 @@ const FACTORIES: Record<IntegrationProvider, (dest: DestinationRow, conn: Connec
     }),
 };
 
-export function destinationFor(dest: DestinationRow, conn: ConnectionRow): Destination {
+export function destinationFor(dest: DestinationRecord, conn: ConnectionRecord): Destination {
   return FACTORIES[dest.provider](dest, conn);
 }
 

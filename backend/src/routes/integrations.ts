@@ -1,10 +1,8 @@
 import { GithubApiError } from "@ganeshdole/brainbox-integrations";
 import type { IntegrationRepo } from "@ganeshdole/brainbox-shared";
-import { desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 
-import { integrationConnections, projects } from "../db/schema/index.ts";
 import { env } from "../env.ts";
 import { getGithubApp, integrationsConfigured } from "../integrations/registry.ts";
 import { toConnection } from "../lib/serialize.ts";
@@ -36,12 +34,7 @@ export const integrationsRoute = new Hono<AppEnv>()
   .get("/", async (c) => {
     const uid = c.get("authUser").token?.sub;
     if (!uid) return c.json({ error: "Unauthorized" }, 401);
-    const rows = await c
-      .get("db")
-      .select()
-      .from(integrationConnections)
-      .where(eq(integrationConnections.ownerId, uid))
-      .orderBy(desc(integrationConnections.createdAt));
+    const rows = await c.get("store").integrations.listConnections(uid);
     return c.json({
       github: { available: integrationsConfigured("github") },
       connections: rows.map(toConnection),
@@ -57,12 +50,7 @@ export const integrationsRoute = new Hono<AppEnv>()
     if (!parsed.success) {
       return c.json({ error: "Invalid body", issues: parsed.error.issues }, 400);
     }
-    const [proj] = await c
-      .get("db")
-      .select()
-      .from(projects)
-      .where(eq(projects.id, parsed.data.projectId))
-      .limit(1);
+    const proj = await c.get("store").projects.get(parsed.data.projectId);
     if (!proj || proj.ownerId !== uid) return c.json({ error: "Not found" }, 404);
     const state = sign(JSON.stringify({ uid, projectId: proj.id, exp: Date.now() + STATE_TTL_MS }));
     const url = new URL(`https://github.com/apps/${env.GITHUB_APP_SLUG}/installations/new`);
@@ -91,18 +79,12 @@ export const integrationsRoute = new Hono<AppEnv>()
         (i) => String(i.id) === installationId,
       );
       if (!mine) return back("error");
-      await c
-        .get("db")
-        .insert(integrationConnections)
-        .values({ ownerId: uid, provider: "github", externalId: installationId, label: mine.account.login })
-        .onConflictDoUpdate({
-          target: [
-            integrationConnections.ownerId,
-            integrationConnections.provider,
-            integrationConnections.externalId,
-          ],
-          set: { label: mine.account.login },
-        });
+      await c.get("store").integrations.saveConnection({
+        ownerId: uid,
+        provider: "github",
+        externalId: installationId,
+        label: mine.account.login,
+      });
     } catch (err) {
       console.error("[integrations] GitHub install callback failed:", err);
       return back("error");
@@ -112,12 +94,7 @@ export const integrationsRoute = new Hono<AppEnv>()
   .get("/connections/:id/repos", async (c) => {
     const uid = c.get("authUser").token?.sub;
     if (!uid) return c.json({ error: "Unauthorized" }, 401);
-    const [conn] = await c
-      .get("db")
-      .select()
-      .from(integrationConnections)
-      .where(eq(integrationConnections.id, c.req.param("id")))
-      .limit(1);
+    const conn = await c.get("store").integrations.getConnection(c.req.param("id"));
     if (!conn || conn.ownerId !== uid) return c.json({ error: "Not found" }, 404);
     if (!integrationsConfigured(conn.provider)) {
       return c.json({ error: "GitHub is not configured on this deployment" }, 503);
@@ -138,13 +115,9 @@ export const integrationsRoute = new Hono<AppEnv>()
   .delete("/connections/:id", async (c) => {
     const uid = c.get("authUser").token?.sub;
     if (!uid) return c.json({ error: "Unauthorized" }, 401);
-    const db = c.get("db");
-    const [conn] = await db
-      .select()
-      .from(integrationConnections)
-      .where(eq(integrationConnections.id, c.req.param("id")))
-      .limit(1);
+    const store = c.get("store");
+    const conn = await store.integrations.getConnection(c.req.param("id"));
     if (!conn || conn.ownerId !== uid) return c.json({ error: "Not found" }, 404);
-    await db.delete(integrationConnections).where(eq(integrationConnections.id, conn.id));
+    await store.integrations.deleteConnection(conn.id);
     return c.json({ ok: true });
   });
