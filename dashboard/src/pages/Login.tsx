@@ -1,10 +1,18 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { signIn } from "@hono/auth-js/react";
 import { useLocation, useSearchParams } from "react-router-dom";
 
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Spinner } from "../components/ui/spinner";
+import {
+  PENDING_EMAIL_KEY,
+  codeSignInUrl,
+  fetchEmailSignInMode,
+  isSignInCode,
+  normalizeEmail,
+  type EmailSignInMode,
+} from "../lib/sign-in";
 
 type Status = "idle" | "sending" | "sent" | "error";
 
@@ -19,7 +27,7 @@ type Status = "idle" | "sending" | "sent" | "error";
 const ERROR_MESSAGES: Record<string, string> = {
   Configuration: "Sign-in is misconfigured on our side. We've been notified - please try again shortly.",
   AccessDenied: "That account isn't allowed to sign in.",
-  Verification: "That sign-in link has expired or was already used. Request a new one below.",
+  Verification: "That sign-in link or code has expired or was already used. Request a new one below.",
   OAuthAccountNotLinked:
     "That email is already registered with a different sign-in method. Use the one you signed up with.",
   OAuthSignin: "Couldn't start sign-in with Google. Try again.",
@@ -54,16 +62,40 @@ function GoogleMark() {
   );
 }
 
+/** The address a code went to, if this tab just came back from a wrong one.
+ *  Read once: the next code submitted stores it again. */
+function takePendingEmail(): string | null {
+  try {
+    const email = sessionStorage.getItem(PENDING_EMAIL_KEY);
+    sessionStorage.removeItem(PENDING_EMAIL_KEY);
+    return email;
+  } catch {
+    return null;
+  }
+}
+
 export function Login() {
-  const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<Status>("idle");
   const [params] = useSearchParams();
   const location = useLocation();
-
   const errorCode = params.get("error");
-  const errorMessage = errorCode
-    ? (ERROR_MESSAGES[errorCode] ?? "Something went wrong signing in. Try again.")
-    : null;
+
+  // A wrong code comes back as ?error=Verification. When this tab sent it, go
+  // straight back to the code step instead of starting over.
+  const [retryEmail] = useState(() => (errorCode === "Verification" ? takePendingEmail() : null));
+  const [email, setEmail] = useState(retryEmail ?? "");
+  const [status, setStatus] = useState<Status>(retryEmail ? "sent" : "idle");
+  const [mode, setMode] = useState<EmailSignInMode>(retryEmail ? "code" : "link");
+
+  useEffect(() => {
+    void fetchEmailSignInMode().then(setMode);
+  }, []);
+
+  const errorMessage = retryEmail
+    ? "That code didn't work. Check it and try again, or send a new one."
+    : errorCode
+      ? (ERROR_MESSAGES[errorCode] ?? "Something went wrong signing in. Try again.")
+      : null;
+  const sendsCode = mode !== "link";
 
   // Where to land after signing in. ProtectedRoute stashes the page that
   // bounced us here, so a deep link - notably /claim?token=... after a purchase
@@ -79,8 +111,7 @@ export function Login() {
   // state inline - but a sign-in started anywhere else lands on it.
   const sentViaRedirect = params.get("type") === "email";
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function sendEmail() {
     const address = email.trim();
     if (!address || status === "sending") return;
     setStatus("sending");
@@ -92,6 +123,11 @@ export function Login() {
     } catch {
       setStatus("error");
     }
+  }
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    void sendEmail();
   }
 
   return (
@@ -136,7 +172,15 @@ export function Login() {
             <span className="h-px flex-1 bg-subtle" />
           </div>
 
-          {status === "sent" || sentViaRedirect ? (
+          {status === "sent" && sendsCode ? (
+            <CodeForm
+              email={email}
+              alsoLink={mode === "both"}
+              callbackUrl={callbackUrl}
+              onResend={() => void sendEmail()}
+              onChangeEmail={() => setStatus("idle")}
+            />
+          ) : status === "sent" || sentViaRedirect ? (
             <div
               role="status"
               className="rounded-lg border border-default bg-interactive px-4 py-3 text-sm text-emphasis"
@@ -177,11 +221,17 @@ export function Login() {
                 className="mt-3 w-full"
                 disabled={status === "sending" || !email.trim()}
               >
-                {status === "sending" ? <Spinner /> : "Send me a sign-in link"}
+                {status === "sending" ? (
+                  <Spinner />
+                ) : sendsCode ? (
+                  "Email me a sign-in code"
+                ) : (
+                  "Send me a sign-in link"
+                )}
               </Button>
               {status === "error" && (
                 <p role="alert" className="mt-3 text-sm text-error">
-                  Couldn&rsquo;t send the link. Try again, or use Google.
+                  Couldn&rsquo;t send the email. Try again, or use Google.
                 </p>
               )}
             </form>
@@ -189,9 +239,84 @@ export function Login() {
         </div>
 
         <p className="mt-4 text-center text-xs text-muted">
-          No password to remember. We&rsquo;ll email you a link that signs you in.
+          No password to remember. We&rsquo;ll email you a {sendsCode ? "code" : "link"} that signs
+          you in.
         </p>
       </div>
     </div>
+  );
+}
+
+interface CodeFormProps {
+  email: string;
+  /** The email has a sign-in link in it too ("both" mode). */
+  alsoLink: boolean;
+  callbackUrl: string;
+  onResend: () => void;
+  onChangeEmail: () => void;
+}
+
+/**
+ * The step after a code is emailed. Submitting navigates to the API's sign-in
+ * callback, the same one a link opens: a right code comes back signed in, a
+ * wrong one comes back to /login?error=Verification, which reopens this step.
+ */
+function CodeForm({ email, alsoLink, callbackUrl, onResend, onChangeEmail }: CodeFormProps) {
+  const [code, setCode] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!isSignInCode(code) || submitting) return;
+    setSubmitting(true);
+    try {
+      sessionStorage.setItem(PENDING_EMAIL_KEY, normalizeEmail(email));
+    } catch {
+      // Storage disabled: a wrong code just starts over from the email step.
+    }
+    window.location.assign(codeSignInUrl(email, code, callbackUrl));
+  }
+
+  return (
+    <form onSubmit={onSubmit} noValidate>
+      <p role="status" className="text-sm text-emphasis">
+        We sent a 6-digit code to <span className="font-medium">{email}</span>
+        {alsoLink ? ". Type it below, or open the link in the email." : "."} It expires in 15
+        minutes.
+      </p>
+      <label htmlFor="code" className="mt-4 block text-sm text-emphasis">
+        Code
+      </label>
+      <Input
+        id="code"
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        autoFocus
+        maxLength={6}
+        placeholder="123456"
+        value={code}
+        onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+        className="mt-2 font-mono tracking-[0.3em]"
+      />
+      <Button type="submit" className="mt-3 w-full" disabled={!isSignInCode(code) || submitting}>
+        {submitting ? <Spinner /> : "Sign in"}
+      </Button>
+      <div className="mt-3 flex justify-between text-xs text-muted">
+        <button
+          type="button"
+          onClick={onResend}
+          className="underline underline-offset-4 hover:text-emphasis"
+        >
+          Send a new code
+        </button>
+        <button
+          type="button"
+          onClick={onChangeEmail}
+          className="underline underline-offset-4 hover:text-emphasis"
+        >
+          Use a different email
+        </button>
+      </div>
+    </form>
   );
 }

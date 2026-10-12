@@ -52,6 +52,12 @@ export default defineSchema({
     expires: v.number(),
   }).index("by_identifier_token", ["identifier", "token"]),
 
+  // Wrong sign-in codes per email (src/auth/code-attempts.ts).
+  signInFailures: defineTable({
+    identifier: v.string(),
+    failures: v.number(),
+  }).index("by_identifier", ["identifier"]),
+
   projects: defineTable({
     id: v.string(),
     ownerId: v.string(),

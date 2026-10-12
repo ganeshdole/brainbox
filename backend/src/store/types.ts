@@ -244,6 +244,16 @@ export interface Store {
     ): Promise<void>;
   };
 
+  /** Wrong sign-in codes, counted per email so guessing a code is capped
+   *  (auth/code-attempts.ts). */
+  readonly signIn: {
+    /** Counts one wrong code for this email; returns the count so far. */
+    recordFailedCode(identifier: string): Promise<number>;
+    /** Clears the count. With `revokeCodes`, also deletes every code still
+     *  pending for this email. */
+    reset(identifier: string, opts: { revokeCodes: boolean }): Promise<void>;
+  };
+
   /** Auth.js persistence: users, OAuth account links and magic-link tokens. */
   authAdapter(): Adapter;
 }

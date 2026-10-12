@@ -58,6 +58,11 @@ export const env = {
   R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY ?? "",
   R2_BUCKET: process.env.R2_BUCKET ?? "",
 
+  // How email sign-in works: "link" emails a one-time sign-in link, "code"
+  // emails a 6-digit code typed into the dashboard (link scanners in mail
+  // filters cannot use it up), "both" sends both in one email.
+  AUTH_EMAIL_MODE: oneOf("AUTH_EMAIL_MODE", ["link", "code", "both"], "link"),
+
   // Transactional email. "console" logs the message (dev/test, no network);
   // "resend" sends via the Resend API. RESEND_API_KEY is only needed for the
   // resend driver. EMAIL_FROM must be an address on a Resend-verified domain.

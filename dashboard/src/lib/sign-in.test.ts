@@ -1,0 +1,54 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { API_URL } from "./authConfig.ts";
+import { codeSignInUrl, fetchEmailSignInMode, isSignInCode } from "./sign-in.ts";
+
+describe("codeSignInUrl", () => {
+  it("sends the address the way Auth.js stored it, or a right code is refused", () => {
+    const url = new URL(codeSignInUrl("  Ana@Example.COM ", "042137", "https://app.test/projects"));
+
+    expect(`${url.origin}${url.pathname}`).toBe(`${API_URL}/api/auth/callback/magic-link`);
+    expect(url.searchParams.get("email")).toBe("ana@example.com");
+    expect(url.searchParams.get("token")).toBe("042137");
+    expect(url.searchParams.get("callbackUrl")).toBe("https://app.test/projects");
+  });
+});
+
+describe("isSignInCode", () => {
+  it.each([
+    ["042137", true],
+    ["04213", false],
+    ["0421370", false],
+    ["04 213", false],
+  ])("%s -> %s", (value, expected) => {
+    expect(isSignInCode(value)).toBe(expected);
+  });
+});
+
+describe("fetchEmailSignInMode", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function respond(body: unknown, ok = true) {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok, json: async () => body })));
+  }
+
+  it("reads the backend's mode", async () => {
+    respond({ email: "code" });
+    await expect(fetchEmailSignInMode()).resolves.toBe("code");
+  });
+
+  it("falls back to links for a backend that predates the setting", async () => {
+    respond({ error: "Not found" }, false);
+    await expect(fetchEmailSignInMode()).resolves.toBe("link");
+  });
+
+  it("falls back to links for an answer it does not know", async () => {
+    respond({ email: "carrier-pigeon" });
+    await expect(fetchEmailSignInMode()).resolves.toBe("link");
+  });
+
+  it("falls back to links when the API is unreachable", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("offline"))));
+    await expect(fetchEmailSignInMode()).resolves.toBe("link");
+  });
+});

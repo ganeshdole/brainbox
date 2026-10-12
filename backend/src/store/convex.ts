@@ -136,6 +136,15 @@ export function createConvexStore(convex: ConvexCaller): Store {
       },
     },
 
+    signIn: {
+      async recordFailedCode(identifier) {
+        return convex.mutation(api.signIn.recordFailedCode, { identifier });
+      },
+      async reset(identifier, { revokeCodes }) {
+        await convex.mutation(api.signIn.reset, { identifier, revokeCodes });
+      },
+    },
+
     authAdapter() {
       return createConvexAuthAdapter(convex);
     },

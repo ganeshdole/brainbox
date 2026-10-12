@@ -20,6 +20,7 @@ import { issuesRoute } from "./routes/issues.ts";
 import { me } from "./routes/me.ts";
 import { projectsRoute } from "./routes/projects.ts";
 import { publicFiles } from "./routes/public-files.ts";
+import { signInOptions } from "./routes/sign-in-options.ts";
 import { waitlist } from "./routes/waitlist.ts";
 import { webhooks } from "./routes/webhooks.ts";
 import type { AppEnv } from "./types.ts";
@@ -37,6 +38,8 @@ app.use("*", storeMiddleware);
 app.route("/health", health);
 // Auth.js endpoints: /api/auth/signin, /callback/google, /session, ...
 app.use("/api/auth/*", authHandler());
+// How email sign-in works here (link, code or both), for the login page.
+app.route("/api/sign-in-options", signInOptions);
 // Public widget ingest - auth is project key + origin allowlist, not a session.
 app.route("/ingest", ingest);
 // Public: where a failed sign-in lands before it is sent on to the dashboard.

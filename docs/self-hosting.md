@@ -25,7 +25,13 @@ Everything else is in `backend/src/env.ts`.
 | `DATABASE_DRIVER=convex` or `STORAGE_DRIVER=convex` | `CONVEX_URL`, `BRAINBOX_SERVER_SECRET` (also set on the Convex deployment) |
 | `STORAGE_DRIVER=r2` | `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` |
 | Sign-in with Google | `GOOGLE_ID`, `GOOGLE_SECRET` |
-| Sign-in by email link | `EMAIL_DRIVER=resend`, `RESEND_API_KEY`, `EMAIL_FROM` |
+| Sign-in by email | `EMAIL_DRIVER=resend`, `RESEND_API_KEY`, `EMAIL_FROM` |
+| A code instead of a link | `AUTH_EMAIL_MODE=code`, or `both` for a code and a link in one email (default `link`) |
+
+A code suits people who read email on a different device from the one they
+sign in on, or whose mail scanner opens links before they do. Five wrong codes
+for one address stop every code pending for it; sending a new code starts the
+count again.
 
 ## Keep the dashboard and the API on one site
 

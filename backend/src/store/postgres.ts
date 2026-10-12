@@ -10,6 +10,7 @@ import {
   projectDestinations,
   projects,
   sessions,
+  signInFailures,
   subscriptions,
   users,
   verificationTokens,
@@ -308,6 +309,26 @@ export function createPostgresStore(db: DB): Store {
               : { emailStatus: "failed", emailError: outcome.error },
           )
           .where(eq(waitlistSignups.id, id));
+      },
+    },
+
+    signIn: {
+      async recordFailedCode(identifier) {
+        const [row] = await db
+          .insert(signInFailures)
+          .values({ identifier, failures: 1 })
+          .onConflictDoUpdate({
+            target: signInFailures.identifier,
+            set: { failures: sql`${signInFailures.failures} + 1`, updatedAt: new Date() },
+          })
+          .returning({ failures: signInFailures.failures });
+        return row?.failures ?? 1;
+      },
+      async reset(identifier, { revokeCodes }) {
+        await db.delete(signInFailures).where(eq(signInFailures.identifier, identifier));
+        if (revokeCodes) {
+          await db.delete(verificationTokens).where(eq(verificationTokens.identifier, identifier));
+        }
       },
     },
 

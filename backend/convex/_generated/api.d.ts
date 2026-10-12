@@ -15,6 +15,7 @@ import type * as integrations from "../integrations.js";
 import type * as issues from "../issues.js";
 import type * as lib_server from "../lib/server.js";
 import type * as projects from "../projects.js";
+import type * as signIn from "../signIn.js";
 import type * as testing from "../testing.js";
 import type * as validators from "../validators.js";
 import type * as waitlist from "../waitlist.js";
@@ -34,6 +35,7 @@ declare const fullApi: ApiFromModules<{
   issues: typeof issues;
   "lib/server": typeof lib_server;
   projects: typeof projects;
+  signIn: typeof signIn;
   testing: typeof testing;
   validators: typeof validators;
   waitlist: typeof waitlist;

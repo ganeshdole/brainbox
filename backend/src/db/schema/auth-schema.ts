@@ -71,3 +71,13 @@ export const verificationTokens = pgTable(
   },
   (vt) => [primaryKey({ columns: [vt.identifier, vt.token] })],
 );
+
+// Wrong sign-in codes per email, so guessing a 6-digit code is capped
+// (auth/code-attempts.ts). Cleared when a new code is sent or one is used.
+export const signInFailures = pgTable("sign_in_failures", {
+  identifier: text("identifier").primaryKey(),
+  failures: integer("failures").notNull().default(0),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
