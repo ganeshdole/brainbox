@@ -1,7 +1,13 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { API_URL } from "./authConfig.ts";
-import { codeSignInUrl, fetchEmailSignInMode, isSignInCode } from "./sign-in.ts";
+import {
+  codeSignInUrl,
+  fetchEmailSignInMode,
+  isSignInCode,
+  savePendingSignIn,
+  takePendingSignIn,
+} from "./sign-in.ts";
 
 describe("codeSignInUrl", () => {
   it("sends the address the way Auth.js stored it, or a right code is refused", () => {
@@ -29,7 +35,7 @@ describe("fetchEmailSignInMode", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   function respond(body: unknown, ok = true) {
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok, json: async () => body })));
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok, status: ok ? 200 : 404, json: async () => body })));
   }
 
   it("reads the backend's mode", async () => {
@@ -50,5 +56,24 @@ describe("fetchEmailSignInMode", () => {
   it("falls back to links when the API is unreachable", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("offline"))));
     await expect(fetchEmailSignInMode()).resolves.toBe("link");
+  });
+});
+
+describe("pending code sign-in", () => {
+  beforeEach(() => sessionStorage.clear());
+
+  it("comes back once, with where it was headed", () => {
+    savePendingSignIn({ email: "ana@example.com", callbackUrl: "https://app.test/claim?token=t" });
+
+    expect(takePendingSignIn()).toEqual({
+      email: "ana@example.com",
+      callbackUrl: "https://app.test/claim?token=t",
+    });
+    expect(takePendingSignIn()).toBeNull();
+  });
+
+  it("ignores anything it did not write", () => {
+    sessionStorage.setItem("brainbox:pendingSignIn", "not json");
+    expect(takePendingSignIn()).toBeNull();
   });
 });

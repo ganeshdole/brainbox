@@ -1,5 +1,5 @@
 {
-  "id": "042dabf4-2e89-4860-898d-d7fa3c289414",
+  "id": "a6d9b987-acb9-445e-94ea-7895a5c1e289",
   "prevId": "3377e012-60e3-4cbd-baab-118d468dd665",
   "version": "7",
   "dialect": "postgresql",
@@ -167,12 +167,11 @@
           "notNull": true,
           "default": 0
         },
-        "updated_at": {
-          "name": "updated_at",
+        "window_started_at": {
+          "name": "window_started_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
+          "notNull": true
         }
       },
       "indexes": {},

@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import type { EmailSignInMode } from "@ganeshdole/brainbox-shared";
 import { signIn } from "@hono/auth-js/react";
 import { useLocation, useSearchParams } from "react-router-dom";
 
@@ -6,12 +7,12 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Spinner } from "../components/ui/spinner";
 import {
-  PENDING_EMAIL_KEY,
   codeSignInUrl,
   fetchEmailSignInMode,
   isSignInCode,
   normalizeEmail,
-  type EmailSignInMode,
+  savePendingSignIn,
+  takePendingSignIn,
 } from "../lib/sign-in";
 
 type Status = "idle" | "sending" | "sent" | "error";
@@ -62,18 +63,6 @@ function GoogleMark() {
   );
 }
 
-/** The address a code went to, if this tab just came back from a wrong one.
- *  Read once: the next code submitted stores it again. */
-function takePendingEmail(): string | null {
-  try {
-    const email = sessionStorage.getItem(PENDING_EMAIL_KEY);
-    sessionStorage.removeItem(PENDING_EMAIL_KEY);
-    return email;
-  } catch {
-    return null;
-  }
-}
-
 export function Login() {
   const [params] = useSearchParams();
   const location = useLocation();
@@ -81,17 +70,17 @@ export function Login() {
 
   // A wrong code comes back as ?error=Verification. When this tab sent it, go
   // straight back to the code step instead of starting over.
-  const [retryEmail] = useState(() => (errorCode === "Verification" ? takePendingEmail() : null));
-  const [email, setEmail] = useState(retryEmail ?? "");
-  const [status, setStatus] = useState<Status>(retryEmail ? "sent" : "idle");
-  const [mode, setMode] = useState<EmailSignInMode>(retryEmail ? "code" : "link");
+  const [retry] = useState(() => (errorCode === "Verification" ? takePendingSignIn() : null));
+  const [email, setEmail] = useState(retry?.email ?? "");
+  const [status, setStatus] = useState<Status>(retry ? "sent" : "idle");
+  const [mode, setMode] = useState<EmailSignInMode>(retry ? "code" : "link");
 
   useEffect(() => {
     void fetchEmailSignInMode().then(setMode);
   }, []);
 
-  const errorMessage = retryEmail
-    ? "That code didn't work. Check it and try again, or send a new one."
+  const errorMessage = retry
+    ? "That code didn't work. Check it and try again. After five wrong codes, wait 15 minutes and send a new one."
     : errorCode
       ? (ERROR_MESSAGES[errorCode] ?? "Something went wrong signing in. Try again.")
       : null;
@@ -100,10 +89,11 @@ export function Login() {
   // Where to land after signing in. ProtectedRoute stashes the page that
   // bounced us here, so a deep link - notably /claim?token=... after a purchase
   // - survives the round trip instead of dumping everyone on the dashboard root.
+  // Back from a wrong code that state is gone, so the code sign-in kept it.
   const from = (location.state as { from?: { pathname: string; search: string } } | null)?.from;
-  const callbackUrl = from
-    ? `${window.location.origin}${from.pathname}${from.search}`
-    : window.location.origin;
+  const callbackUrl =
+    retry?.callbackUrl ??
+    (from ? `${window.location.origin}${from.pathname}${from.search}` : window.location.origin);
 
   // Auth.js redirects here after a magic link is sent (pages.verifyRequest),
   // carrying ?provider=<id>&type=email from its own request. The normal path
@@ -269,11 +259,7 @@ function CodeForm({ email, alsoLink, callbackUrl, onResend, onChangeEmail }: Cod
     e.preventDefault();
     if (!isSignInCode(code) || submitting) return;
     setSubmitting(true);
-    try {
-      sessionStorage.setItem(PENDING_EMAIL_KEY, normalizeEmail(email));
-    } catch {
-      // Storage disabled: a wrong code just starts over from the email step.
-    }
+    savePendingSignIn({ email: normalizeEmail(email), callbackUrl });
     window.location.assign(codeSignInUrl(email, code, callbackUrl));
   }
 

@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "../src/app.ts";
-import { MAX_FAILED_CODES } from "../src/auth/code-attempts.ts";
+import { FAILED_CODES_WINDOW_MS, MAX_FAILED_CODES } from "../src/auth/code-attempts.ts";
 import { generateSignInCode, getAuthConfig } from "../src/auth/config.ts";
 import { signInCodeEmail } from "../src/email/templates/sign-in-code.ts";
 import { env } from "../src/env.ts";
+import { getStore } from "../src/store/index.ts";
 
 // The suite runs with AUTH_EMAIL_MODE=link, so codes are issued here the way
 // Auth.js issues them in code mode: through the configured adapter, hashed
@@ -35,6 +36,8 @@ async function guessWrong(times: number): Promise<void> {
 }
 
 describe("signing in with a code", () => {
+  afterEach(() => vi.useRealTimers());
+
   it("works with the right code, once", async () => {
     await issueCode(EMAIL, "042137");
 
@@ -62,13 +65,41 @@ describe("signing in with a code", () => {
     expect(await signInWith("042137")).toBe(false);
   });
 
-  it("starts the count again when a new code is sent, so a typo does not lock anyone out", async () => {
+  it("gives a new code no extra guesses, so asking for codes cannot reset the limit", async () => {
     await issueCode(EMAIL, "042137");
     await guessWrong(MAX_FAILED_CODES - 1);
     await issueCode(EMAIL, "731902");
-    await guessWrong(MAX_FAILED_CODES - 1);
+    await guessWrong(1);
+    await issueCode(EMAIL, "580214");
+
+    expect(await signInWith("580214")).toBe(false);
+  });
+
+  it("accepts codes again once the window has passed", async () => {
+    await issueCode(EMAIL, "042137");
+    await guessWrong(MAX_FAILED_CODES);
+
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + FAILED_CODES_WINDOW_MS + 1000);
+    await issueCode(EMAIL, "731902");
 
     expect(await signInWith("731902")).toBe(true);
+  });
+
+  it("forgets earlier wrong guesses after a successful sign-in", async () => {
+    await issueCode(EMAIL, "042137");
+    await guessWrong(MAX_FAILED_CODES - 1);
+    expect(await signInWith("042137")).toBe(true);
+
+    await issueCode(EMAIL, "731902");
+    await guessWrong(MAX_FAILED_CODES - 1);
+    expect(await signInWith("731902")).toBe(true);
+  });
+
+  it("stores nothing for guesses at an address with no code pending", async () => {
+    expect(await signInWith("000000", "nobody@clinic.test")).toBe(false);
+
+    expect(await getStore().signIn.failedCodes("nobody@clinic.test", new Date(0))).toBe(0);
   });
 });
 

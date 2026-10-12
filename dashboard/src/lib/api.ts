@@ -10,6 +10,7 @@ import type {
   PlanId,
   Project,
   ProjectDestination,
+  SignInOptions,
 } from "@ganeshdole/brainbox-shared";
 
 import { API_URL } from "./authConfig";
@@ -75,6 +76,8 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  // Public: the login page reads it before anyone is signed in.
+  getSignInOptions: () => req<SignInOptions>("/api/sign-in-options"),
   listProjects: () => req<Project[]>("/api/projects"),
   createProject: (body: { name: string; allowedOrigins?: string[] }) =>
     req<Project>("/api/projects", { method: "POST", body: JSON.stringify(body) }),

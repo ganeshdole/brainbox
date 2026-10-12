@@ -30,8 +30,8 @@ Everything else is in `backend/src/env.ts`.
 
 A code suits people who read email on a different device from the one they
 sign in on, or whose mail scanner opens links before they do. Five wrong codes
-for one address stop every code pending for it; sending a new code starts the
-count again.
+for one address within 15 minutes cancel every code pending for it, and no code
+is accepted for that address until the 15 minutes are up.
 
 ## Keep the dashboard and the API on one site
 

@@ -56,6 +56,7 @@ export default defineSchema({
   signInFailures: defineTable({
     identifier: v.string(),
     failures: v.number(),
+    windowStartedAt: v.number(),
   }).index("by_identifier", ["identifier"]),
 
   projects: defineTable({

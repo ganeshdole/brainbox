@@ -1,13 +1,20 @@
-import { API_URL } from "./authConfig";
+import type { EmailSignInMode } from "@ganeshdole/brainbox-shared";
 
-/** What a sign-in email carries, as the backend's AUTH_EMAIL_MODE sets it. */
-export type EmailSignInMode = "link" | "code" | "both";
+import { api } from "./api";
+import { API_URL } from "./authConfig";
 
 const MODES: readonly EmailSignInMode[] = ["link", "code", "both"];
 
-/** Remembers which address a code was sent to while the code round-trips
- *  through the API, so a wrong code brings the person back to the code step. */
-export const PENDING_EMAIL_KEY = "brainbox:pendingSignInEmail";
+/** Remembers a code sign-in while the code round-trips through the API, so a
+ *  wrong code brings the person back to the code step, still headed where
+ *  they were going. */
+const PENDING_SIGN_IN_KEY = "brainbox:pendingSignIn";
+
+/** A code sign-in in flight: who it is for, and where it lands. */
+export interface PendingSignIn {
+  email: string;
+  callbackUrl: string;
+}
 
 /**
  * The address the way Auth.js stores it. Its code check compares the ?email=
@@ -37,16 +44,43 @@ export function codeSignInUrl(email: string, code: string, callbackUrl: string):
  *  a backend that predates the setting does. */
 export async function fetchEmailSignInMode(): Promise<EmailSignInMode> {
   try {
-    const res = await fetch(`${API_URL}/api/sign-in-options`);
-    if (!res.ok) return "link";
-    const body: unknown = await res.json();
-    return isMode(body) ? body.email : "link";
+    const { email } = await api.getSignInOptions();
+    return MODES.find((mode) => mode === email) ?? "link";
   } catch {
     return "link";
   }
 }
 
-function isMode(body: unknown): body is { email: EmailSignInMode } {
-  if (typeof body !== "object" || body === null || !("email" in body)) return false;
-  return MODES.some((mode) => mode === body.email);
+/** Stores the sign-in about to leave for the API. Without storage a wrong
+ *  code just starts over from the email step. */
+export function savePendingSignIn(pending: PendingSignIn): void {
+  try {
+    sessionStorage.setItem(PENDING_SIGN_IN_KEY, JSON.stringify(pending));
+  } catch {
+    // Private mode / storage disabled.
+  }
+}
+
+/** The sign-in this tab sent off, if any. Read once: the next code submitted
+ *  stores it again. */
+export function takePendingSignIn(): PendingSignIn | null {
+  try {
+    const raw = sessionStorage.getItem(PENDING_SIGN_IN_KEY);
+    sessionStorage.removeItem(PENDING_SIGN_IN_KEY);
+    const pending: unknown = raw ? JSON.parse(raw) : null;
+    return isPendingSignIn(pending) ? pending : null;
+  } catch {
+    return null;
+  }
+}
+
+function isPendingSignIn(value: unknown): value is PendingSignIn {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "email" in value &&
+    typeof value.email === "string" &&
+    "callbackUrl" in value &&
+    typeof value.callbackUrl === "string"
+  );
 }
