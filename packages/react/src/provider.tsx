@@ -98,8 +98,10 @@ function OwnedProvider({
     if (brainbox && identity) brainbox.identify(identity);
   }, [brainbox, identity]);
 
+  // The prop owns the instance's fields: dropping it clears them, so a
+  // signed-out user's reports never carry the previous account's details.
   useEffect(() => {
-    if (brainbox && fields) brainbox.setFields(fields);
+    brainbox?.setFields(fields ?? []);
   }, [brainbox, fields]);
 
   return <BrainboxContext.Provider value={brainbox}>{children}</BrainboxContext.Provider>;

@@ -1,7 +1,13 @@
 import { StrictMode, act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createBrainbox, type Brainbox, type Report, type Transport } from "@ganeshdole/brainbox-core";
+import {
+  createBrainbox,
+  type Brainbox,
+  type Report,
+  type ReportField,
+  type Transport,
+} from "@ganeshdole/brainbox-core";
 import { BrainboxProvider, useBrainbox } from "./provider.tsx";
 
 const originalConsoleError = console.error;
@@ -108,6 +114,24 @@ describe("BrainboxProvider", () => {
     render("Northside Vet");
     await act(() => bb!.draft().submit({ text: "two" }));
     expect(sent[1]?.metadata.fields).toEqual([{ label: "Clinic", value: "Northside Vet" }]);
+  });
+
+  it("clears the fields when the prop is dropped, so they cannot outlive a sign-out", async () => {
+    let bb: Brainbox | null = null;
+    const render = (fields?: ReportField[]) =>
+      act(() => {
+        root.render(
+          <BrainboxProvider transport={transport} fields={fields}>
+            <Probe onInstance={(next) => (bb = next)} />
+          </BrainboxProvider>,
+        );
+      });
+
+    render([{ label: "Clinic", value: "Acme Vet" }]);
+    render(undefined);
+    await act(() => bb!.draft().submit({ text: "signed out" }));
+
+    expect(sent[0]?.metadata).not.toHaveProperty("fields");
   });
 
   it("provides a caller-owned instance as is and leaves its lifecycle alone", () => {

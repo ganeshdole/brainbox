@@ -70,10 +70,23 @@ The `json` part:
     "timezone": "Asia/Kolkata",
     "selector": "main > form > button",  // optional, mirrors region.selector
     "consoleErrors": ["TypeError: ..."], // last 20, oldest first
-    "identity": { "id": "u_1", "email": "a@b.c" }   // optional, both fields optional
+    "identity": {                       // optional, every field optional
+      "id": "u_1", "email": "a@b.c",
+      "name": "Ana Lima",               // up to 200 chars
+      "phone": "+1 555 0100"            // up to 50 chars
+    },
+    "fields": [                         // optional, the host app's own details
+      { "label": "Plan", "value": "Pro" },
+      { "label": "Account ID", "value": "acc_9", "type": "id" }
+    ]
   }
 }
 ```
+
+`fields` is whatever the host app wants on every report, in its own words:
+up to 30 entries, `label` 1-60 chars, `value` up to 500. `type` is optional,
+one of `text`, `email`, `phone`, `url` or `id`, and only changes how the
+dashboard shows the value. Brainbox stores them as sent.
 
 Types live in `@ganeshdole/brainbox-shared` (`FeedbackPayload`, `CapturedMetadata`,
 `Region`). The zod schemas in `schema.ts` validate against them and fail to
