@@ -36,7 +36,7 @@ export function ReporterCard({
   const tiles: ReportField[] = [
     ...(email ? [{ label: "Email", value: email, type: "email" as const }] : []),
     ...(phone ? [{ label: "Phone", value: phone, type: "phone" as const }] : []),
-    ...fields,
+    ...fields.filter((field) => field.value.trim()),
     ...(id && id !== title ? [{ label: "User ID", value: id, type: "id" as const }] : []),
   ];
   // Two tiles a row; emails and URLs are long, so they get a row of their own,

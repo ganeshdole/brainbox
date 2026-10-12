@@ -147,12 +147,13 @@ describe("renderTicket body", () => {
     expect(body).toContain("| User | +1 555 0100 |");
   });
 
-  it("skips a blank reporter name rather than leaving the cell blank", () => {
-    for (const name of ["", "   "]) {
+  it("skips a blank reporter name or phone rather than leaving cells blank", () => {
+    for (const blank of ["", "   "]) {
       const body = renderTicket(
-        ticket({ metadata: { ...metadata, identity: { name, email: "jane@example.com" } } }),
+        ticket({ metadata: { ...metadata, identity: { name: blank, phone: blank, email: "jane@example.com" } } }),
       ).body;
       expect(body).toContain("| User | jane@example.com |");
+      expect(body).not.toContain("| Phone |");
     }
   });
 

@@ -55,6 +55,19 @@ describe("feedbackSchema", () => {
     expect(feedbackSchema.safeParse({ ...valid, metadata }).success).toBe(true);
   });
 
+  it("trims the reporter and the fields, so blank values are stored empty", () => {
+    const metadata = {
+      ...valid.metadata,
+      identity: { name: "   ", phone: " +1 555 0100 " },
+      fields: [{ label: " Clinic ", value: "   " }],
+    };
+    const parsed = feedbackSchema.parse({ ...valid, metadata });
+    expect(parsed.metadata.identity).toEqual({ name: "", phone: "+1 555 0100" });
+    expect(parsed.metadata.fields).toEqual([{ label: "Clinic", value: "" }]);
+    const blankLabel = [{ label: "   ", value: "x" }];
+    expect(feedbackSchema.safeParse({ ...valid, metadata: { ...valid.metadata, fields: blankLabel } }).success).toBe(false);
+  });
+
   it("caps the host app's fields so one report cannot carry unbounded data", () => {
     const field = { label: "Clinic", value: "Acme Vet" };
     const tooMany = Array.from({ length: REPORT_FIELD_LIMITS.count + 1 }, () => field);

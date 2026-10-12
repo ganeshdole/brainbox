@@ -73,10 +73,13 @@ function detailsTable(t: Ticket): string {
     ["Locale", cell(`${m.language}, ${m.timezone}`)],
     ["User", cell(user)],
   ];
-  if (m.identity?.phone) rows.push(["Phone", cell(m.identity.phone)]);
+  const phone = m.identity?.phone?.trim();
+  if (phone) rows.push(["Phone", cell(phone)]);
   if (selector) rows.push(["Element", `\`${cell(selector)}\``]);
   // The host app's own details, as it labelled them.
-  for (const field of m.fields ?? []) rows.push([cell(field.label), cell(field.value)]);
+  for (const field of m.fields ?? []) {
+    if (field.value.trim()) rows.push([cell(field.label), cell(field.value)]);
+  }
   rows.push(["Reported", t.createdAt]);
   return ["| | |", "|---|---|", ...rows.map(([k, v]) => `| ${k} | ${v} |`)].join("\n");
 }
