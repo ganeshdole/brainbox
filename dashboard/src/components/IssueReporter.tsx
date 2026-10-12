@@ -31,12 +31,13 @@ export function ReporterCard({
   const known = hasReporter(identity);
   if (!known && fields.length === 0) return null;
   const { name, email, phone, id } = identity;
-  const title = name || email || phone || "Anonymous";
+  const title = name || email || phone || id || "Anonymous";
   const subtitle = highlightLine(fields) || (name ? email : undefined);
   const tiles: ReportField[] = [
     ...(email ? [{ label: "Email", value: email, type: "email" as const }] : []),
     ...(phone ? [{ label: "Phone", value: phone, type: "phone" as const }] : []),
     ...fields,
+    ...(id && id !== title ? [{ label: "User ID", value: id, type: "id" as const }] : []),
   ];
   // Two tiles a row; emails and URLs are long, so they get a row of their own,
   // as does a last tile that would otherwise sit alone.
@@ -56,7 +57,7 @@ export function ReporterCard({
               {known ? initials(identity) : "?"}
             </span>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-emphasis" title={id}>
+              <p className="truncate text-sm font-semibold text-emphasis" title={title}>
                 {title}
               </p>
               {subtitle && (
