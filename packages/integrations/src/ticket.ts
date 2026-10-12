@@ -81,15 +81,17 @@ function detailsTable(t: Ticket): string {
   return ["| | |", "|---|---|", ...rows.map(([k, v]) => `| ${k} | ${v} |`)].join("\n");
 }
 
-/** "Ana Lima <ana@acme.co>", or whichever part is known. Blank parts, empty
+/** "Ana Lima <ana@acme.co>", or the first part known of name, email, phone and
+ *  id, the same order the dashboard uses. Blank parts, empty
  *  or only spaces, count as unknown: the schema accepts them, and they would
  *  leave the cell blank. */
 function reporter(identity: Identity | undefined): string {
   const name = identity?.name?.trim();
   const email = identity?.email?.trim();
+  const phone = identity?.phone?.trim();
   const id = identity?.id?.trim();
   if (name && email) return `${name} <${email}>`;
-  return name || email || id || "anonymous";
+  return name || email || phone || id || "anonymous";
 }
 
 function consoleErrors(errors: string[]): string {

@@ -140,6 +140,13 @@ describe("renderTicket body", () => {
     expect(body).toContain("| Tenant ID | t-1 |");
   });
 
+  it("names a reporter known only by phone instead of calling them anonymous", () => {
+    const body = renderTicket(
+      ticket({ metadata: { ...metadata, identity: { phone: "+1 555 0100" } } }),
+    ).body;
+    expect(body).toContain("| User | +1 555 0100 |");
+  });
+
   it("skips a blank reporter name rather than leaving the cell blank", () => {
     for (const name of ["", "   "]) {
       const body = renderTicket(
