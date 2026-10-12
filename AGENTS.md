@@ -49,6 +49,14 @@ pass before a change is finished. Do not report a task complete on a red
 `verify`. While iterating, scope to one package - e.g. `pnpm -F @brainbox/backend
 test` - but the full `verify` is the gate.
 
+## Publishing
+
+`pnpm release` runs `verify`, then publishes every package that is not
+`private: true` to npm: `@brainbox/shared`, `core`, `react` and `widget`, in
+lockstep (`workspace:*` becomes the exact version). The `private` flag is the
+fence; the backend, dashboard, marketing, server, replay and integrations
+packages keep it.
+
 ## Two strict-mode facts the linter won't tell you up front
 
 `pnpm verify` enforces the mechanical rules (no `any`, no source `!`, etc.), so

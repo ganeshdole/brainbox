@@ -1,8 +1,16 @@
 {
   "name": "@brainbox/core",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "The Brainbox capture engine: screenshots, marks, session recording, console errors and a Transport that sends the report. No React, no UI.",
+  "license": "SEE LICENSE IN LICENSE",
+  "homepage": "https://www.brainbox.sh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ganeshdole/brainbox.git",
+    "directory": "packages/core"
+  },
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./src/index.ts",
@@ -16,6 +24,7 @@
     "README.md"
   ],
   "publishConfig": {
+    "access": "public",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "exports": {

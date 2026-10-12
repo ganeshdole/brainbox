@@ -10,6 +10,7 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "verify": "pnpm -r lint && pnpm -r typecheck && pnpm -r test && pnpm -r build",
+    "release": "pnpm verify && pnpm -r publish",
     "dev:marketing": "pnpm -F brainbox-landing dev"
   },
   "pnpm": {

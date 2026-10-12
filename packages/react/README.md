@@ -13,10 +13,14 @@ peer dependency, so a host ends up with one copy.
 { "dependencies": { "@brainbox/react": "workspace:*" } }
 ```
 
-Outside the monorepo, `pnpm build` emits `dist/` (JS plus `.d.ts`) and
-`pnpm pack` produces a tarball whose `exports` point at it (`publishConfig`),
-so another app can `npm install` the `.tgz` files. Every `@brainbox/*`
-dependency of a package needs its own tarball installed alongside.
+Outside it, from npm:
+
+```sh
+npm install @brainbox/react @brainbox/core
+```
+
+`pnpm build` emits `dist/` (JS plus `.d.ts`); the published package's
+`exports` point at it (`publishConfig`).
 
 ## Use
 
