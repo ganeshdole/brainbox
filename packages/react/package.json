@@ -1,8 +1,16 @@
 {
   "name": "@brainbox/react",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "React bindings for @brainbox/core: a provider that owns one Brainbox instance and hooks that read it. No UI.",
+  "license": "SEE LICENSE IN LICENSE",
+  "homepage": "https://www.brainbox.sh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ganeshdole/brainbox.git",
+    "directory": "packages/react"
+  },
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./src/index.ts",
@@ -16,6 +24,7 @@
     "README.md"
   ],
   "publishConfig": {
+    "access": "public",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "exports": {

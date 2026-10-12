@@ -1,8 +1,16 @@
 {
   "name": "@brainbox/shared",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Brainbox wire types, shared by the widget, the SDK packages and the backend. Pure types, no runtime.",
+  "license": "SEE LICENSE IN LICENSE",
+  "homepage": "https://www.brainbox.sh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ganeshdole/brainbox.git",
+    "directory": "packages/shared"
+  },
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./src/index.ts",
@@ -16,6 +24,7 @@
     "README.md"
   ],
   "publishConfig": {
+    "access": "public",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "exports": {
