@@ -20,6 +20,9 @@ export interface ReportField {
   label: string;
   value: string;
   type?: ReportFieldType;
+  /** Shown under the reporter's name too, for the one or two details that
+   *  say where a report came from at a glance (a clinic, a workspace). */
+  highlight?: boolean;
 }
 
 /** Context auto-captured from the host page at submit time. */

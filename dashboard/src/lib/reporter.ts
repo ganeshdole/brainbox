@@ -27,6 +27,28 @@ export function initials({ name, email }: Identity): string {
   return (first || email || "").slice(0, 2).toUpperCase();
 }
 
+/** Everything the "Reported by" card shows, as plain text for the clipboard:
+ *  the name, then one "Label: value" line per detail. */
+export function reporterSummary(identity: Identity | undefined, fields: ReportField[]): string {
+  const { name, email, phone, id } = identity ?? {};
+  const lines = [
+    name,
+    email && `Email: ${email}`,
+    phone && `Phone: ${phone}`,
+    ...fields.map((field) => `${field.label}: ${field.value}`),
+    id && `User ID: ${id}`,
+  ];
+  return lines.filter(Boolean).join("\n");
+}
+
+/** The values a host app marked `highlight`, for the line under the name. */
+export function highlightLine(fields: ReportField[]): string {
+  return fields
+    .filter((field) => field.highlight && field.value.trim())
+    .map((field) => field.value)
+    .join(" · ");
+}
+
 /** True when the report says anything about who filed it. */
 export function hasReporter(identity: Identity | undefined): identity is Identity {
   return Boolean(identity?.name || identity?.email || identity?.phone || identity?.id);

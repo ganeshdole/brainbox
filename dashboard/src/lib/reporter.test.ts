@@ -1,6 +1,34 @@
 import { describe, expect, it } from "vitest";
 
-import { fieldHref, hasReporter, initials } from "./reporter.ts";
+import { fieldHref, hasReporter, highlightLine, initials, reporterSummary } from "./reporter.ts";
+
+const fields = [
+  { label: "Clinic", value: "Acme Vet", highlight: true },
+  { label: "Location", value: "Downtown", highlight: true },
+  { label: "Tenant ID", value: "t-1", type: "id" as const },
+];
+
+describe("highlightLine", () => {
+  it("joins only the values the app highlighted, in its order", () => {
+    expect(highlightLine(fields)).toBe("Acme Vet · Downtown");
+    expect(highlightLine([{ label: "Plan", value: "Pro" }])).toBe("");
+  });
+});
+
+describe("reporterSummary", () => {
+  it("copies the name, contact details and every field as text", () => {
+    expect(reporterSummary({ name: "Priya Shah", email: "priya@acme.vet", id: "u1" }, fields)).toBe(
+      [
+        "Priya Shah",
+        "Email: priya@acme.vet",
+        "Clinic: Acme Vet",
+        "Location: Downtown",
+        "Tenant ID: t-1",
+        "User ID: u1",
+      ].join("\n"),
+    );
+  });
+});
 
 describe("fieldHref", () => {
   it("links emails, phones and web addresses", () => {

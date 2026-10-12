@@ -39,6 +39,7 @@ export const capturedMetadata = v.object({
         type: v.optional(
           v.union(v.literal("text"), v.literal("email"), v.literal("phone"), v.literal("url"), v.literal("id")),
         ),
+        highlight: v.optional(v.boolean()),
       }),
     ),
   ),

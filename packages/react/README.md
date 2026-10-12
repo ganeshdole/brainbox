@@ -37,7 +37,7 @@ export function Root() {
       transport={transport}
       identity={{ id: user.id, email: user.email, name: user.name, phone: user.phone }}
       fields={[
-        { label: "Plan", value: account.plan },
+        { label: "Plan", value: account.plan, highlight: true },
         { label: "Account ID", value: account.id, type: "id" },
       ]}
     >
@@ -53,7 +53,9 @@ report's "Reported by" card: the person's name, email and phone, then your
 fields with your labels, in your order. Adding one needs no change in
 Brainbox. `type` is optional: `email`,
 `phone` and `url` become links, `id` shows in monospace, anything else is
-text. Up to 30 fields, labels up to 60 characters, values up to 500.
+text. `highlight: true` also puts a field's value under the person's name, for
+the one or two details that say where a report came from. Up to 30 fields,
+labels up to 60 characters, values up to 500.
 
 Your own UI on top of the engine:
 

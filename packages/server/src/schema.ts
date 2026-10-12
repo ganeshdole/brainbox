@@ -17,6 +17,7 @@ export const reportFieldSchema = z.object({
   label: z.string().min(1).max(REPORT_FIELD_LIMITS.label),
   value: z.string().max(REPORT_FIELD_LIMITS.value),
   type: z.enum(["text", "email", "phone", "url", "id"]).optional(),
+  highlight: z.boolean().optional(),
 });
 
 export const metadataSchema = z.object({
