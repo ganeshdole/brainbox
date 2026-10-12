@@ -22,12 +22,14 @@ import { Eyebrow } from "./Eyebrow";
  */
 export function ReporterCard({
   identity: sent,
-  fields = [],
+  fields: sentFields = [],
 }: {
   identity: Identity | undefined;
   fields: ReportField[] | undefined;
 }) {
   const identity = cleanIdentity(sent);
+  // A field with nothing in it says nothing: leave it out of every part.
+  const fields = sentFields.filter((field) => field.value.trim());
   const known = hasReporter(identity);
   if (!known && fields.length === 0) return null;
   const { name, email, phone, id } = identity;
@@ -36,7 +38,7 @@ export function ReporterCard({
   const tiles: ReportField[] = [
     ...(email ? [{ label: "Email", value: email, type: "email" as const }] : []),
     ...(phone ? [{ label: "Phone", value: phone, type: "phone" as const }] : []),
-    ...fields.filter((field) => field.value.trim()),
+    ...fields,
     ...(id && id !== title ? [{ label: "User ID", value: id, type: "id" as const }] : []),
   ];
   // Two tiles a row; emails and URLs are long, so they get a row of their own,
@@ -54,7 +56,7 @@ export function ReporterCard({
               aria-hidden
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#3b5bdb,#7048e8)] text-sm font-semibold text-white"
             >
-              {known ? initials(identity) : "?"}
+              {initials(identity) || "?"}
             </span>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-emphasis" title={title}>
