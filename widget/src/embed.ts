@@ -76,6 +76,7 @@ function boot() {
     }),
     trigger: config.trigger,
     position: config.position,
+    theme: config.theme,
     identity: earlyIdentity,
     fields: earlyFields,
     onSubmitted: ({ id }) =>

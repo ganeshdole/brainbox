@@ -17,7 +17,15 @@ describe("readConfig", () => {
       endpoint: "http://x/ingest",
       trigger: "floating",
       position: "bottom-right",
+      theme: "dark",
     });
+  });
+
+  it("reads data-theme, keeping dark for an unknown one", () => {
+    const base = { "data-project": "pk_a", "data-endpoint": "e" };
+    expect(readConfig(script({ ...base, "data-theme": "light" }))?.theme).toBe("light");
+    expect(readConfig(script({ ...base, "data-theme": "system" }))?.theme).toBe("system");
+    expect(readConfig(script({ ...base, "data-theme": "sepia" }))?.theme).toBe("dark");
   });
 
   it("maps data-mode=\"mount\" to the manual trigger, with mount and position", () => {

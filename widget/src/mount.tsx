@@ -6,7 +6,7 @@ import {
   type ReportField,
 } from "@ganeshdole/brainbox-core";
 import { BrainboxProvider } from "@ganeshdole/brainbox-react";
-import type { TriggerMode } from "@ganeshdole/brainbox-shared";
+import type { TriggerMode, WidgetTheme } from "@ganeshdole/brainbox-shared";
 import type { Position } from "./lib/position.ts";
 import { widgetStore, type CaptureMode } from "./lib/widget-store.ts";
 import { BrainboxWidget } from "./widget.tsx";
@@ -14,6 +14,7 @@ import { BrainboxWidget } from "./widget.tsx";
 export interface MountOptions extends BrainboxOptions {
   trigger?: TriggerMode;
   position?: Position;
+  theme?: WidgetTheme;
 }
 
 /** The mounted widget, for a host with no React tree of its own. */
@@ -32,7 +33,7 @@ export interface WidgetHandle {
 
 /** Put the widget on the page. This is what the script-tag bundle calls; a
  *  React host should render `<BrainboxWidget />` instead. */
-export function mount({ trigger, position, ...options }: MountOptions): WidgetHandle {
+export function mount({ trigger, position, theme, ...options }: MountOptions): WidgetHandle {
   const brainbox = createBrainbox(options);
   const store = widgetStore(brainbox);
 
@@ -44,7 +45,7 @@ export function mount({ trigger, position, ...options }: MountOptions): WidgetHa
   const root = createRoot(anchor);
   root.render(
     <BrainboxProvider brainbox={brainbox}>
-      <BrainboxWidget trigger={trigger} position={position} />
+      <BrainboxWidget trigger={trigger} position={position} theme={theme} />
     </BrainboxProvider>,
   );
 

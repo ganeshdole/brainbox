@@ -9,4 +9,4 @@ export { useBrainboxWidget } from "./use-brainbox-widget.ts";
 export { mount, type MountOptions, type WidgetHandle } from "./mount.tsx";
 export type { Position } from "./lib/position.ts";
 export type { CaptureMode } from "./lib/widget-store.ts";
-export type { TriggerMode } from "@ganeshdole/brainbox-shared";
+export type { TriggerMode, WidgetTheme } from "@ganeshdole/brainbox-shared";
