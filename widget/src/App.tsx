@@ -109,19 +109,29 @@ export function App({
 
   // The screen follows the shared open state. `open()` lands on the chooser;
   // a host's `start(mode)` goes straight into a screenshot or a recording.
-  useEffect(
-    () =>
-      ui.subscribe(() => {
-        if (!ui.isOpen()) return reset();
-        const mode = ui.takeStart();
-        if (!mode) return setStatus((s) => (s === "idle" ? "choosing" : s));
-        if (statusRef.current !== "idle" && statusRef.current !== "choosing") return;
-        if (mode === "screenshot") startMarkup();
-        else if (canSessionRecord()) startRecord();
-        else setStatus("choosing");
-      }),
-    [ui, reset, startMarkup, startRecord],
-  );
+  useEffect(() => {
+    const sync = () => {
+      if (!ui.isOpen()) return reset();
+      const mode = ui.takeStart();
+      if (!mode) return setStatus((s) => (s === "idle" ? "choosing" : s));
+      if (statusRef.current !== "idle" && statusRef.current !== "choosing") return;
+      if (mode === "screenshot") startMarkup();
+      else if (canSessionRecord()) startRecord();
+      else setStatus("choosing");
+    };
+    const unsubscribe = ui.subscribe(sync);
+    // A start() made before this subscription, e.g. `mount()` then `start()`
+    // in one tick, notified no one. Pick it up once, as a store notification
+    // would: deferred, and skipped if this effect was torn down meanwhile.
+    let live = true;
+    queueMicrotask(() => {
+      if (live && ui.isOpen()) sync();
+    });
+    return () => {
+      live = false;
+      unsubscribe();
+    };
+  }, [ui, reset, startMarkup, startRecord]);
 
   const onSubmit = useCallback(
     async (text: string, audio: Blob | null) => {
