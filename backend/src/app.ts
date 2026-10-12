@@ -1,3 +1,6 @@
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { authHandler, initAuthConfig, verifyAuth } from "@hono/auth-js";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -8,6 +11,7 @@ import { storeMiddleware } from "./middleware/store.ts";
 import { requireSubscription } from "./middleware/requireSubscription.ts";
 import { authError, AUTH_ERROR_PATH } from "./routes/auth-error.ts";
 import { billing } from "./routes/billing.ts";
+import { dashboardRoute } from "./routes/dashboard.ts";
 import { filesRoute } from "./routes/files.ts";
 import { health } from "./routes/health.ts";
 import { ingest } from "./routes/ingest.ts";
@@ -64,3 +68,12 @@ app.route("/api/projects", projectsRoute);
 app.route("/api/issues", issuesRoute);
 app.route("/api/files", filesRoute);
 app.route("/api/integrations", integrationsRoute);
+
+// The dashboard, on deployments that serve it from the API (DASHBOARD_DIR).
+// Last, so every API route above answers first.
+if (env.DASHBOARD_DIR) {
+  // Relative to the backend package (one level above src/ or dist/), not the
+  // working directory, which differs between hosts.
+  const packageRoot = fileURLToPath(new URL("..", import.meta.url));
+  app.route("/", dashboardRoute(resolve(packageRoot, env.DASHBOARD_DIR)));
+}

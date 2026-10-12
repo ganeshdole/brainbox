@@ -46,6 +46,10 @@ export const env = {
   // Public base URL of this API - used to build local file URLs (STORAGE_DRIVER=local).
   PUBLIC_API_URL: process.env.PUBLIC_API_URL ?? "http://localhost:8787",
 
+  // A built dashboard for this API to serve itself (e.g. "dashboard", relative
+  // to the backend package folder). Unset: the dashboard is hosted elsewhere.
+  DASHBOARD_DIR: process.env.DASHBOARD_DIR ?? "",
+
   // Object storage. "local" writes to backend/.storage/ (dev only); "r2" uses
   // Cloudflare R2 (R2_* below); "convex" uses Convex file storage (CONVEX_URL).
   STORAGE_DRIVER,
