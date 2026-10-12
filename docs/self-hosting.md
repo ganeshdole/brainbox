@@ -29,12 +29,13 @@ Everything else is in `backend/src/env.ts`.
 | A code instead of a link | `AUTH_EMAIL_MODE=code`, or `both` for a code and a link in one email (default `link`) |
 
 A code suits people who read email on a different device from the one they
-sign in on, or whose mail scanner opens links before they do. Each address
-gets five attempts at a code in 15 minutes. The fifth wrong one cancels every
-code pending for it, and no code is accepted for that address until the 15
-minutes are up. That also means anyone who knows an address can hold its email
-sign-in off for 15 minutes at a time; Google sign-in is unaffected. Link-only sign-in has no such limit, since its token cannot be
-guessed.
+sign in on, or whose mail scanner opens links before they do. Only the newest
+code sent to an address works, and each address gets five attempts in any 15
+minutes, which is also how long a code lives. The fifth wrong attempt cancels
+the code, and no code is accepted until earlier attempts are 15 minutes old.
+That also means anyone who knows an address can hold its email sign-in off
+for 15 minutes at a time; Google sign-in is unaffected. Link-only sign-in has
+no such limit, since its token cannot be guessed.
 
 ## Keep the dashboard and the API on one site
 

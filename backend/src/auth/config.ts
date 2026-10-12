@@ -8,16 +8,17 @@ import { signInCodeEmail } from "../email/templates/sign-in-code.ts";
 import { env } from "../env.ts";
 import { AUTH_ERROR_PATH } from "../routes/auth-error.ts";
 import { getStore } from "../store/index.ts";
-import { withCodeAttemptLimit } from "./code-attempts.ts";
+import { CODE_LIFETIME_MS, withCodeAttemptLimit } from "./code-attempts.ts";
 
 /** A 6-digit sign-in code, zero-padded: every one of the million is equally likely. */
 export function generateSignInCode(): string {
   return randomInt(0, 1_000_000).toString().padStart(6, "0");
 }
 
-// How long a sign-in link stays usable. Short enough that a forwarded or
-// leaked mail stops working quickly, long enough to survive a slow inbox.
-const MAGIC_LINK_MAX_AGE_SECONDS = 15 * 60;
+// How long a sign-in link or code stays usable. Short enough that a forwarded
+// or leaked mail stops working quickly, long enough to survive a slow inbox.
+// The code attempt limit counts over the same span (code-attempts.ts).
+const MAGIC_LINK_MAX_AGE_SECONDS = CODE_LIFETIME_MS / 1000;
 
 // Magic-link sign-in, declared inline rather than via the Nodemailer provider:
 // that one hard-imports `nodemailer` and throws without an SMTP `server`, and

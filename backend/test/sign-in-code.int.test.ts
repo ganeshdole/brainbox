@@ -3,7 +3,7 @@ import type { Adapter } from "@auth/core/adapters";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "../src/app.ts";
-import { CODE_ATTEMPTS_WINDOW_MS, MAX_CODE_ATTEMPTS, withCodeAttemptLimit } from "../src/auth/code-attempts.ts";
+import { CODE_LIFETIME_MS, MAX_CODE_ATTEMPTS, withCodeAttemptLimit } from "../src/auth/code-attempts.ts";
 import { generateSignInCode, getAuthConfig } from "../src/auth/config.ts";
 import { signInCodeEmail } from "../src/email/templates/sign-in-code.ts";
 import { env } from "../src/env.ts";
@@ -53,6 +53,14 @@ describe("signing in with a code", () => {
     expect(await signInWith("042137")).toBe(true);
   });
 
+  it("accepts only the newest code, so a guess is only ever against one", async () => {
+    await issueCode(EMAIL, "042137");
+    await issueCode(EMAIL, "731902");
+
+    expect(await signInWith("042137")).toBe(false);
+    expect(await signInWith("731902")).toBe(true);
+  });
+
   it("refuses a code issued to someone else", async () => {
     await issueCode("other@clinic.test", "042137");
 
@@ -86,10 +94,27 @@ describe("signing in with a code", () => {
     await guessWrong(MAX_CODE_ATTEMPTS);
 
     vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(Date.now() + CODE_ATTEMPTS_WINDOW_MS + 1000);
+    vi.setSystemTime(Date.now() + CODE_LIFETIME_MS + 1000);
     await issueCode(EMAIL, "731902");
 
     expect(await signInWith("731902")).toBe(true);
+  });
+
+  it("never gives a code more than the allowed attempts, even one sent late in a window", async () => {
+    const start = Date.now();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    await issueCode(EMAIL, "042137");
+    await guessWrong(3);
+
+    vi.setSystemTime(start + 14 * 60_000);
+    await issueCode(EMAIL, "731902");
+    await guessWrong(1);
+
+    // The first three guesses have aged out; the code has faced one.
+    vi.setSystemTime(start + 16 * 60_000);
+    await guessWrong(MAX_CODE_ATTEMPTS - 1);
+
+    expect(await signInWith("731902")).toBe(false);
   });
 
   it("forgets earlier attempts after a successful sign-in", async () => {
@@ -118,7 +143,11 @@ describe("withCodeAttemptLimit", () => {
 
   it("checks at most the allowed number of codes when guesses arrive together", async () => {
     const checked = vi.fn(async () => null);
-    const adapter = withCodeAttemptLimit({ useVerificationToken: checked }, getStore().signIn, "code");
+    const adapter = withCodeAttemptLimit(
+      { createVerificationToken: async (token) => token, useVerificationToken: checked },
+      getStore().signIn,
+      "code",
+    );
     await issueCode(EMAIL, "042137");
 
     await Promise.all(

@@ -247,12 +247,13 @@ export interface Store {
   /** Attempts at sign-in codes, counted per email so guessing a code is
    *  capped (auth/code-attempts.ts). */
   readonly signIn: {
-    /** Counts one attempt for this email and returns the count, in a single
-     *  atomic step: attempts arriving together each get their own number. The
-     *  count starts over when it began before `since`. Counts nothing and
-     *  returns 0 when the email has no code pending, so attempts at addresses
-     *  that never asked for a code store nothing. */
-    recordAttempt(identifier: string, since: Date): Promise<number>;
+    /** Records an attempt for this email made `at`, and returns how many of
+     *  its attempts fall at or after `since`, this one included. One atomic
+     *  step, so attempts arriving together each get their own number. Keeps
+     *  only the latest `keep` attempt times. Records nothing and returns 0
+     *  when the email has no code pending, so attempts at addresses that never
+     *  asked for a code store nothing. */
+    recordAttempt(identifier: string, attempt: { at: Date; since: Date; keep: number }): Promise<number>;
     /** Deletes every code still pending for this email. */
     revokeCodes(identifier: string): Promise<void>;
     /** Deletes this email's count. */

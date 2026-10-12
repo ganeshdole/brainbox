@@ -72,11 +72,10 @@ export const verificationTokens = pgTable(
   (vt) => [primaryKey({ columns: [vt.identifier, vt.token] })],
 );
 
-// Attempts at sign-in codes per email, so guessing a 6-digit code is capped
-// (auth/code-attempts.ts). The count starts over once its window has passed,
-// and is deleted when a code is used.
+// When each email last attempted a sign-in code, so guessing a 6-digit code is
+// capped (auth/code-attempts.ts). Holds the latest few times only, and is
+// deleted when a code is used.
 export const signInAttempts = pgTable("sign_in_attempts", {
   identifier: text("identifier").primaryKey(),
-  attempts: integer("attempts").notNull().default(0),
-  windowStartedAt: timestamp("window_started_at", { mode: "date", withTimezone: true }).notNull(),
+  attemptedAt: timestamp("attempted_at", { mode: "date", withTimezone: true }).array().notNull(),
 });

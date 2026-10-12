@@ -1,5 +1,5 @@
 {
-  "id": "2b39ac29-230d-4bd4-bc2a-69ad6b7666bc",
+  "id": "efb54d6c-8ef6-4d59-a6cf-be1ab8fb249a",
   "prevId": "3377e012-60e3-4cbd-baab-118d468dd665",
   "version": "7",
   "dialect": "postgresql",
@@ -160,16 +160,9 @@
           "primaryKey": true,
           "notNull": true
         },
-        "attempts": {
-          "name": "attempts",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "window_started_at": {
-          "name": "window_started_at",
-          "type": "timestamp with time zone",
+        "attempted_at": {
+          "name": "attempted_at",
+          "type": "timestamp with time zone[]",
           "primaryKey": false,
           "notNull": true
         }

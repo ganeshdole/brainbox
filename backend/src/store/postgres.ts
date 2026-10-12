@@ -313,30 +313,29 @@ export function createPostgresStore(db: DB): Store {
     },
 
     signIn: {
-      async recordAttempt(identifier, since) {
-        const now = new Date();
-        const [pending] = await db
-          .select({ identifier: verificationTokens.identifier })
-          .from(verificationTokens)
-          .where(and(eq(verificationTokens.identifier, identifier), gt(verificationTokens.expires, now)))
-          .limit(1);
-        if (!pending) return 0;
-        // One upsert, so concurrent attempts are serialised on the row. Both
-        // expressions read the row as it was: a stale count restarts at 1 with
-        // a new window, a current one adds 1 and keeps its window.
-        const current = sql`${signInAttempts.windowStartedAt} >= ${since.toISOString()}::timestamptz`;
-        const [row] = await db
-          .insert(signInAttempts)
-          .values({ identifier, attempts: 1, windowStartedAt: now })
-          .onConflictDoUpdate({
-            target: signInAttempts.identifier,
-            set: {
-              attempts: sql`case when ${current} then ${signInAttempts.attempts} + 1 else 1 end`,
-              windowStartedAt: sql`case when ${current} then ${signInAttempts.windowStartedAt} else ${now.toISOString()}::timestamptz end`,
-            },
-          })
-          .returning({ attempts: signInAttempts.attempts });
-        return row?.attempts ?? 1;
+      async recordAttempt(identifier, { at, since, keep }) {
+        return db.transaction(async (tx) => {
+          const [pending] = await tx
+            .select({ identifier: verificationTokens.identifier })
+            .from(verificationTokens)
+            .where(and(eq(verificationTokens.identifier, identifier), gt(verificationTokens.expires, at)))
+            .limit(1);
+          if (!pending) return 0;
+          // Make sure the row exists, then lock it: attempts arriving together
+          // wait here for one another, so each counts the ones before it.
+          await tx.insert(signInAttempts).values({ identifier, attemptedAt: [] }).onConflictDoNothing();
+          const [row] = await tx
+            .select({ attemptedAt: signInAttempts.attemptedAt })
+            .from(signInAttempts)
+            .where(eq(signInAttempts.identifier, identifier))
+            .for("update");
+          const recent = (row?.attemptedAt ?? []).filter((time) => time >= since);
+          await tx
+            .update(signInAttempts)
+            .set({ attemptedAt: [...recent, at].slice(-keep) })
+            .where(eq(signInAttempts.identifier, identifier));
+          return recent.length + 1;
+        });
       },
       async revokeCodes(identifier) {
         await db.delete(verificationTokens).where(eq(verificationTokens.identifier, identifier));

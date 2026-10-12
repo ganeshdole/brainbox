@@ -6,16 +6,16 @@ import { serverMutation } from "./lib/server.ts";
 // Times are epoch milliseconds. Each mutation is a transaction, so attempts
 // arriving together are counted one after another.
 
-/** Counts one attempt and returns the count, restarting a count older than
- *  `since`. Counts nothing (returns 0) when the email has no code pending. */
+/** Records an attempt made `at` and returns how many fall at or after `since`,
+ *  this one included, keeping the latest `keep` times. Records nothing
+ *  (returns 0) when the email has no code pending. */
 export const recordAttempt = serverMutation({
-  args: { identifier: v.string(), since: v.number() },
-  handler: async (ctx, { identifier, since }) => {
-    const now = Date.now();
+  args: { identifier: v.string(), at: v.number(), since: v.number(), keep: v.number() },
+  handler: async (ctx, { identifier, at, since, keep }) => {
     const pending = await ctx.db
       .query("verificationTokens")
       .withIndex("by_identifier_token", (q) => q.eq("identifier", identifier))
-      .filter((q) => q.gt(q.field("expires"), now))
+      .filter((q) => q.gt(q.field("expires"), at))
       .first();
     if (!pending) return 0;
 
@@ -23,16 +23,11 @@ export const recordAttempt = serverMutation({
       .query("signInAttempts")
       .withIndex("by_identifier", (q) => q.eq("identifier", identifier))
       .unique();
-    if (!row) {
-      await ctx.db.insert("signInAttempts", { identifier, attempts: 1, windowStartedAt: now });
-      return 1;
-    }
-    const attempts = row.windowStartedAt >= since ? row.attempts + 1 : 1;
-    await ctx.db.patch(row._id, {
-      attempts,
-      windowStartedAt: attempts === 1 ? now : row.windowStartedAt,
-    });
-    return attempts;
+    const recent = (row?.attemptedAt ?? []).filter((time) => time >= since);
+    const attemptedAt = [...recent, at].slice(-keep);
+    if (row) await ctx.db.patch(row._id, { attemptedAt });
+    else await ctx.db.insert("signInAttempts", { identifier, attemptedAt });
+    return recent.length + 1;
   },
 });
 

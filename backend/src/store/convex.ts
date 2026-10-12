@@ -137,8 +137,13 @@ export function createConvexStore(convex: ConvexCaller): Store {
     },
 
     signIn: {
-      async recordAttempt(identifier, since) {
-        return convex.mutation(api.signIn.recordAttempt, { identifier, since: since.getTime() });
+      async recordAttempt(identifier, { at, since, keep }) {
+        return convex.mutation(api.signIn.recordAttempt, {
+          identifier,
+          at: at.getTime(),
+          since: since.getTime(),
+          keep,
+        });
       },
       async revokeCodes(identifier) {
         await convex.mutation(api.signIn.revokeCodes, { identifier });
