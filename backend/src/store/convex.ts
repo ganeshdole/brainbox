@@ -145,6 +145,9 @@ export function createConvexStore(convex: ConvexCaller): Store {
           keep,
         });
       },
+      async replaceCode({ identifier, token, expires }) {
+        await convex.mutation(api.signIn.replaceCode, { identifier, token, expires: expires.getTime() });
+      },
       async revokeCodes(identifier) {
         await convex.mutation(api.signIn.revokeCodes, { identifier });
       },

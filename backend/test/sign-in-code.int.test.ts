@@ -143,11 +143,7 @@ describe("withCodeAttemptLimit", () => {
 
   it("checks at most the allowed number of codes when guesses arrive together", async () => {
     const checked = vi.fn(async () => null);
-    const adapter = withCodeAttemptLimit(
-      { createVerificationToken: async (token) => token, useVerificationToken: checked },
-      getStore().signIn,
-      "code",
-    );
+    const adapter = withCodeAttemptLimit({ useVerificationToken: checked }, getStore().signIn, "code");
     await issueCode(EMAIL, "042137");
 
     await Promise.all(

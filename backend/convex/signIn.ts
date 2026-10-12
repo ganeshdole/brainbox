@@ -31,6 +31,19 @@ export const recordAttempt = serverMutation({
   },
 });
 
+/** Stores a new code and deletes the email's earlier ones, in one transaction. */
+export const replaceCode = serverMutation({
+  args: { identifier: v.string(), token: v.string(), expires: v.number() },
+  handler: async (ctx, code) => {
+    const pending = await ctx.db
+      .query("verificationTokens")
+      .withIndex("by_identifier_token", (q) => q.eq("identifier", code.identifier))
+      .collect();
+    for (const token of pending) await ctx.db.delete(token._id);
+    await ctx.db.insert("verificationTokens", code);
+  },
+});
+
 /** Deletes every code still pending for the email. */
 export const revokeCodes = serverMutation({
   args: { identifier: v.string() },

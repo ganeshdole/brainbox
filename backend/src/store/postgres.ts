@@ -25,6 +25,18 @@ type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
 /** The Postgres store: Drizzle over postgres.js. Foreign keys do the cascades
  *  the `Store` contract describes. */
 export function createPostgresStore(db: DB): Store {
+  // Locks this email's sign-in row for the rest of the transaction, creating
+  // it first. Code requests and attempts for one email take turns on it.
+  async function lockSignIn(tx: Tx, identifier: string): Promise<Date[]> {
+    await tx.insert(signInAttempts).values({ identifier, attemptedAt: [] }).onConflictDoNothing();
+    const [row] = await tx
+      .select({ attemptedAt: signInAttempts.attemptedAt })
+      .from(signInAttempts)
+      .where(eq(signInAttempts.identifier, identifier))
+      .for("update");
+    return row?.attemptedAt ?? [];
+  }
+
   // Records the event id; false when it was already recorded.
   async function claimEvent(tx: Tx, id: string, type: string): Promise<boolean> {
     const claimed = await tx
@@ -321,20 +333,21 @@ export function createPostgresStore(db: DB): Store {
             .where(and(eq(verificationTokens.identifier, identifier), gt(verificationTokens.expires, at)))
             .limit(1);
           if (!pending) return 0;
-          // Make sure the row exists, then lock it: attempts arriving together
-          // wait here for one another, so each counts the ones before it.
-          await tx.insert(signInAttempts).values({ identifier, attemptedAt: [] }).onConflictDoNothing();
-          const [row] = await tx
-            .select({ attemptedAt: signInAttempts.attemptedAt })
-            .from(signInAttempts)
-            .where(eq(signInAttempts.identifier, identifier))
-            .for("update");
-          const recent = (row?.attemptedAt ?? []).filter((time) => time >= since);
+          // Attempts arriving together wait here for one another, so each
+          // counts the ones before it.
+          const recent = (await lockSignIn(tx, identifier)).filter((time) => time >= since);
           await tx
             .update(signInAttempts)
             .set({ attemptedAt: [...recent, at].slice(-keep) })
             .where(eq(signInAttempts.identifier, identifier));
           return recent.length + 1;
+        });
+      },
+      async replaceCode({ identifier, token, expires }) {
+        await db.transaction(async (tx) => {
+          await lockSignIn(tx, identifier);
+          await tx.delete(verificationTokens).where(eq(verificationTokens.identifier, identifier));
+          await tx.insert(verificationTokens).values({ identifier, token, expires });
         });
       },
       async revokeCodes(identifier) {

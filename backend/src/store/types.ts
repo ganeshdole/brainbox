@@ -254,6 +254,9 @@ export interface Store {
      *  when the email has no code pending, so attempts at addresses that never
      *  asked for a code store nothing. */
     recordAttempt(identifier: string, attempt: { at: Date; since: Date; keep: number }): Promise<number>;
+    /** Stores a new code for this email and deletes the ones before it, in one
+     *  atomic step, so codes requested together still leave only one. */
+    replaceCode(code: { identifier: string; token: string; expires: Date }): Promise<void>;
     /** Deletes every code still pending for this email. */
     revokeCodes(identifier: string): Promise<void>;
     /** Deletes this email's count. */

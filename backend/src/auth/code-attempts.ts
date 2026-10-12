@@ -18,8 +18,8 @@ export const CODE_LIFETIME_MS = 15 * 60_000;
  * 6 digits. In link mode the adapter is returned as it is: a cap there would
  * only let anyone cancel someone else's link with five junk tokens.
  *
- * - Only the newest code works: sending one deletes those sent before, so a
- *   guess is only ever against one code.
+ * - Only the newest code works: sending one replaces those sent before, in
+ *   one atomic step, so a guess is only ever against one code.
  * - Each email gets MAX_CODE_ATTEMPTS in any CODE_LIFETIME_MS (a sliding
  *   window). A code lives exactly that long, so it never faces more. An
  *   attempt takes its number from the store before the code is checked, in
@@ -38,13 +38,13 @@ export function withCodeAttemptLimit(
   signIn: Store["signIn"],
   mode: EmailSignInMode,
 ): Adapter {
-  const { createVerificationToken, useVerificationToken } = adapter;
-  if (mode === "link" || !createVerificationToken || !useVerificationToken) return adapter;
+  const { useVerificationToken } = adapter;
+  if (mode === "link" || !useVerificationToken) return adapter;
   return {
     ...adapter,
     async createVerificationToken(token) {
-      await signIn.revokeCodes(token.identifier);
-      return createVerificationToken(token);
+      await signIn.replaceCode(token);
+      return token;
     },
     async useVerificationToken(params) {
       const { identifier } = params;
