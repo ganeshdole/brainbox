@@ -22,8 +22,9 @@ For a page with no build step. Paste before `</body>`:
 | `data-mount` | CSS selector of your trigger, with `data-mode="mount"` | |
 | `data-position` | `bottom-right`, `bottom-left`, `top-right`, `top-left` | `bottom-right` |
 
-The tag publishes `window.Brainbox` with `open()`, `start(mode)`, `close()` and
-`identify({ id, email })`, and fires a `brainbox:submitted` event on `window`
+The tag publishes `window.Brainbox` with `open()`, `start(mode)`, `close()`,
+`identify({ id, email, name, phone })` and `setFields([{ label, value, type }])`
+(your app's own details for every report; see the React package README), and fires a `brainbox:submitted` event on `window`
 (`event.detail.id`) after each report.
 
 ## In a React app
@@ -67,7 +68,8 @@ import { brainboxTransport } from "@ganeshdole/brainbox-core";
 
 const widget = mount({ transport: brainboxTransport({ endpoint, projectKey }), trigger: "manual" });
 widget.open();
-widget.identify({ id, email });
+widget.identify({ id, email, name, phone });
+widget.setFields([{ label: "Plan", value: "Pro" }]);
 widget.destroy();
 ```
 

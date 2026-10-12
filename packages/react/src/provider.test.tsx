@@ -90,6 +90,26 @@ describe("BrainboxProvider", () => {
     expect(sent[1]?.metadata.identity).toEqual({ email: "z@b.c" });
   });
 
+  it("passes the app's fields to the instance and follows changes to them", async () => {
+    let bb: Brainbox | null = null;
+    const render = (clinic: string) =>
+      act(() => {
+        root.render(
+          <BrainboxProvider transport={transport} fields={[{ label: "Clinic", value: clinic }]}>
+            <Probe onInstance={(next) => (bb = next)} />
+          </BrainboxProvider>,
+        );
+      });
+
+    render("Acme Vet");
+    await act(() => bb!.draft().submit({ text: "one" }));
+    expect(sent[0]?.metadata.fields).toEqual([{ label: "Clinic", value: "Acme Vet" }]);
+
+    render("Northside Vet");
+    await act(() => bb!.draft().submit({ text: "two" }));
+    expect(sent[1]?.metadata.fields).toEqual([{ label: "Clinic", value: "Northside Vet" }]);
+  });
+
   it("provides a caller-owned instance as is and leaves its lifecycle alone", () => {
     const own = createBrainbox({ transport });
     const seen: (Brainbox | null)[] = [];

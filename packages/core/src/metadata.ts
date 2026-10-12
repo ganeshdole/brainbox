@@ -1,4 +1,4 @@
-import type { CapturedMetadata, Identity } from "@ganeshdole/brainbox-shared";
+import type { CapturedMetadata, Identity, ReportField } from "@ganeshdole/brainbox-shared";
 
 const MAX_ERRORS = 20;
 
@@ -67,10 +67,12 @@ export function captureErrors(max = MAX_ERRORS): ErrorLog {
 export function captureMetadata({
   consoleErrors,
   identity,
+  fields,
   selector,
 }: {
   consoleErrors: string[];
   identity?: Identity;
+  fields?: ReportField[];
   selector?: string;
 }): CapturedMetadata {
   return {
@@ -84,6 +86,8 @@ export function captureMetadata({
     selector,
     consoleErrors,
     identity,
+    // An empty list says nothing; leave it out like an unset one.
+    ...(fields?.length && { fields }),
   };
 }
 

@@ -1,4 +1,4 @@
-import type { Identity, Region } from "@ganeshdole/brainbox-shared";
+import type { Identity, Region, ReportField } from "@ganeshdole/brainbox-shared";
 import { createAnnotations, type Annotations } from "./annotate.ts";
 import { bakeMarks, captureViewport, pickScreenshot } from "./capture.ts";
 import { unionBounds, type Mark } from "./marks.ts";
@@ -85,6 +85,7 @@ export interface Draft {
 export interface DraftContext {
   transport: Transport;
   identity(): Identity | undefined;
+  fields(): ReportField[] | undefined;
   consoleErrors(): string[];
   onSubmitted?: (result: SubmitResult) => void;
 }
@@ -240,6 +241,7 @@ export function createDraft(ctx: DraftContext, { exclude }: DraftOptions = {}): 
         metadata: captureMetadata({
           consoleErrors: ctx.consoleErrors(),
           identity: ctx.identity(),
+          fields: ctx.fields(),
           selector: region?.selector,
         }),
         screenshot: screenshot ?? undefined,

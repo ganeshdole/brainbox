@@ -33,12 +33,26 @@ const transport = brainboxTransport({ endpoint, projectKey });
 
 export function Root() {
   return (
-    <BrainboxProvider transport={transport} identity={{ id: user.id, email: user.email }}>
+    <BrainboxProvider
+      transport={transport}
+      identity={{ id: user.id, email: user.email, name: user.name, phone: user.phone }}
+      fields={[
+        { label: "Plan", value: account.plan },
+        { label: "Account ID", value: account.id, type: "id" },
+      ]}
+    >
       <App />
     </BrainboxProvider>
   );
 }
 ```
+
+`identity` is who is reporting; the dashboard shows it as "Reported by".
+`fields` are your app's own details, whatever you want next to every report:
+the dashboard lists them under "From the app" with your labels, in your order,
+so adding one needs no change in Brainbox. `type` is optional: `email`,
+`phone` and `url` become links, `id` shows in monospace, anything else is
+text. Up to 30 fields, labels up to 60 characters, values up to 500.
 
 Your own UI on top of the engine:
 
@@ -63,7 +77,8 @@ function Panel({ draft }: { draft: Draft }) {
   keeps a server render side-effect free and leaves exactly one instance
   under StrictMode's mount-unmount-mount. The cost is one render in which
   `useBrainbox()` is `null`.
-- `identity` changes call `identify()` on the live instance. `onSubmitted`
+- `identity` changes call `identify()`, and `fields` changes call
+  `setFields()`, on the live instance. `onSubmitted`
   may change freely. Only a new `transport` rebuilds the instance.
 - `<BrainboxProvider brainbox={instance}>` provides an instance you created
   and own. Shells outside React (the script-tag bundle) use this.

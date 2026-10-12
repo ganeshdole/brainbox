@@ -1,4 +1,9 @@
-import { brainboxTransport, type Identity, type ProjectKey } from "@ganeshdole/brainbox-core";
+import {
+  brainboxTransport,
+  type Identity,
+  type ProjectKey,
+  type ReportField,
+} from "@ganeshdole/brainbox-core";
 import { readConfig } from "./lib/config.ts";
 import type { CaptureMode } from "./lib/widget-store.ts";
 import { mount, type WidgetHandle } from "./mount.tsx";
@@ -19,6 +24,11 @@ let widget: WidgetHandle | null = null;
 const api = {
   identify(identity: Identity) {
     widget?.identify(identity);
+  },
+  /** Your app's own details for every report, e.g.
+   *  `[{ label: "Plan", value: "Pro" }]`. Replaces the previous ones. */
+  setFields(fields: ReportField[]) {
+    widget?.setFields(fields);
   },
   open() {
     widget?.open();

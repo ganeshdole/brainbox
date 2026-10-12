@@ -57,7 +57,7 @@ function ReportRow({ issue, projectLabel }: { issue: Issue; projectLabel?: strin
   // all view the project name leads the meta line instead.
   const titleIsPage = !issue.text?.trim() && !issue.metadata.title;
   const path = titleIsPage ? "" : pagePath(issue.metadata.url);
-  const reporter = issue.metadata.identity?.email;
+  const reporter = issue.metadata.identity?.name || issue.metadata.identity?.email;
   const meta = [
     ...(projectLabel ? [projectLabel] : []),
     ...(path ? [path] : []),

@@ -1,4 +1,4 @@
-import type { CapturedMetadata, Region } from "@ganeshdole/brainbox-shared";
+import type { CapturedMetadata, Identity, Region } from "@ganeshdole/brainbox-shared";
 
 /** A report as a destination needs it. `links` must work without a session. */
 export interface Ticket {
@@ -64,7 +64,7 @@ function bodyFor(t: Ticket): string {
 
 function detailsTable(t: Ticket): string {
   const m = t.metadata;
-  const user = m.identity?.email ?? m.identity?.id ?? "anonymous";
+  const user = reporter(m.identity);
   const selector = t.region?.selector ?? m.selector;
   const rows: Array<[string, string]> = [
     ["Page", `[${cell(m.title.trim() || m.url)}](${m.url})`],
@@ -73,9 +73,19 @@ function detailsTable(t: Ticket): string {
     ["Locale", cell(`${m.language}, ${m.timezone}`)],
     ["User", cell(user)],
   ];
+  if (m.identity?.phone) rows.push(["Phone", cell(m.identity.phone)]);
   if (selector) rows.push(["Element", `\`${cell(selector)}\``]);
+  // The host app's own details, as it labelled them.
+  for (const field of m.fields ?? []) rows.push([cell(field.label), cell(field.value)]);
   rows.push(["Reported", t.createdAt]);
   return ["| | |", "|---|---|", ...rows.map(([k, v]) => `| ${k} | ${v} |`)].join("\n");
+}
+
+/** "Ana Lima <ana@acme.co>", or whichever part is known. */
+function reporter(identity: Identity | undefined): string {
+  const { name, email, id } = identity ?? {};
+  if (name && email) return `${name} <${email}>`;
+  return name ?? email ?? id ?? "anonymous";
 }
 
 function consoleErrors(errors: string[]): string {

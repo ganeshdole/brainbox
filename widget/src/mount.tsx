@@ -1,5 +1,10 @@
 import { createRoot } from "react-dom/client";
-import { createBrainbox, type BrainboxOptions, type Identity } from "@ganeshdole/brainbox-core";
+import {
+  createBrainbox,
+  type BrainboxOptions,
+  type Identity,
+  type ReportField,
+} from "@ganeshdole/brainbox-core";
 import { BrainboxProvider } from "@ganeshdole/brainbox-react";
 import type { TriggerMode } from "@ganeshdole/brainbox-shared";
 import type { Position } from "./lib/position.ts";
@@ -19,6 +24,8 @@ export interface WidgetHandle {
   start(mode: CaptureMode): void;
   close(): void;
   identify(identity: Identity): void;
+  /** Replaces your app's details sent with every report. */
+  setFields(fields: ReportField[]): void;
   /** Unmount the UI, remove it from the page and destroy the instance. */
   destroy(): void;
 }
@@ -46,6 +53,7 @@ export function mount({ trigger, position, ...options }: MountOptions): WidgetHa
     start: store.start,
     close: store.close,
     identify: brainbox.identify,
+    setFields: brainbox.setFields,
     destroy() {
       root.unmount();
       anchor.remove();

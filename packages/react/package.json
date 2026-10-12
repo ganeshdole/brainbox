@@ -1,6 +1,6 @@
 {
   "name": "@ganeshdole/brainbox-react",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "React bindings for @ganeshdole/brainbox-core: a provider that owns one Brainbox instance and hooks that read it. No UI.",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://www.brainbox.sh",
