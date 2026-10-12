@@ -1,9 +1,9 @@
 import { jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
-import type { CapturedMetadata, Region, TranscriptStatus } from "@brainbox/shared";
+import type { CapturedMetadata, Region, TranscriptStatus } from "@brainbox-sh/shared";
 
 import { projects } from "./projects.ts";
 
-// jsonb columns are typed straight from the @brainbox/shared contract - this is
+// jsonb columns are typed straight from the @brainbox-sh/shared contract - this is
 // the first cross-package consumer of the shared types.
 //
 // DB ↔ shared `Issue` seam (handled at the API boundary in step 5, not here):

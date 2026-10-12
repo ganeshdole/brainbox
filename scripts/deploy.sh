@@ -31,7 +31,7 @@ cd "$REPO"
 PREV_SHA="$(git rev-parse HEAD)"
 echo ">> deploy $PREV_SHA -> $TARGET_SHA"
 
-build_backend() { pnpm -F @brainbox/backend build; }
+build_backend() { pnpm -F @brainbox-sh/backend build; }
 
 publish_static() {
   # dashboard/dist has index.html + assets/ (NOT the widget). --exclude keeps the
@@ -78,8 +78,8 @@ bash backend/scripts/backup.sh
 
 # --- 4. build all deployables ---
 build_backend
-pnpm -F @brainbox/widget build
-pnpm -F @brainbox/dashboard build
+pnpm -F @brainbox-sh/widget build
+pnpm -F @brainbox-sh/dashboard build
 pnpm -F brainbox-landing build
 
 # --- 5. snapshot current static for rollback, then migrate ---
@@ -88,7 +88,7 @@ rm -rf "$PREV_WEB"; cp -a "$WEB" "$PREV_WEB"
 # marketing webroot does not exist yet. An if-block is the safe form.
 rm -rf "$PREV_WWW"
 if [ -d "$WWW" ]; then cp -a "$WWW" "$PREV_WWW"; fi
-pnpm -F @brainbox/backend db:migrate || rollback
+pnpm -F @brainbox-sh/backend db:migrate || rollback
 
 # --- 6. publish static + restart backend ---
 publish_static

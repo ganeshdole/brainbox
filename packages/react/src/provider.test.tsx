@@ -1,7 +1,7 @@
 import { StrictMode, act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createBrainbox, type Brainbox, type Report, type Transport } from "@brainbox/core";
+import { createBrainbox, type Brainbox, type Report, type Transport } from "@brainbox-sh/core";
 import { BrainboxProvider, useBrainbox } from "./provider.tsx";
 
 const originalConsoleError = console.error;

@@ -1,5 +1,5 @@
-import { GithubApiError } from "@brainbox/integrations";
-import type { IntegrationRepo } from "@brainbox/shared";
+import { GithubApiError } from "@brainbox-sh/integrations";
+import type { IntegrationRepo } from "@brainbox-sh/shared";
 import { desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";

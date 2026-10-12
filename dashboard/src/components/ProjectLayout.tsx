@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useParams } from "react-router-dom";
 import { LayoutGrid, LogOut, Settings } from "lucide-react";
-import type { Project } from "@brainbox/shared";
+import type { Project } from "@brainbox-sh/shared";
 
 import { api, isAuthRedirect } from "../lib/api";
 import { logout } from "../lib/logout";

@@ -1,4 +1,4 @@
-# @brainbox/replay
+# @brainbox-sh/replay
 
 Plays back a Brainbox session recording: the rrweb log the widget uploaded
 as the `session` part, with the voice note lined up to it. Drop it into any
@@ -7,8 +7,8 @@ React admin that has the file URLs.
 ## Use
 
 ```tsx
-import { SessionReplay } from "@brainbox/replay";
-import "@brainbox/replay/styles.css";
+import { SessionReplay } from "@brainbox-sh/replay";
+import "@brainbox-sh/replay/styles.css";
 
 <SessionReplay
   url={issue.session.url}          // the gzipped rrweb log
@@ -53,7 +53,7 @@ and tolerates older logs without an offset. `formatClock(ms)` gives `m:ss`.
 Inside this monorepo the package is consumed from source (`workspace:*`).
 Outside the monorepo, `pnpm build` emits `dist/` (JS plus `.d.ts`) and
 `pnpm pack` produces a tarball whose `exports` point at it (`publishConfig`),
-so another app can `npm install` the `.tgz` files. Every `@brainbox/*`
+so another app can `npm install` the `.tgz` files. Every `@brainbox-sh/*`
 dependency of a package needs its own tarball installed alongside.
 
 ## Peer dependencies

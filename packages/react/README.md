@@ -1,8 +1,8 @@
-# @brainbox/react
+# @brainbox-sh/react
 
-React bindings for `@brainbox/core`: a provider that owns one instance, and
+React bindings for `@brainbox-sh/core`: a provider that owns one instance, and
 hooks that read it. The `react-redux` to core's `redux`. No UI lives here;
-for Brainbox's own widget see `@brainbox/widget`.
+for Brainbox's own widget see `@brainbox-sh/widget`.
 
 ## Install
 
@@ -10,13 +10,13 @@ Inside this monorepo the package is consumed from source. `react` (19+) is a
 peer dependency, so a host ends up with one copy.
 
 ```json
-{ "dependencies": { "@brainbox/react": "workspace:*" } }
+{ "dependencies": { "@brainbox-sh/react": "workspace:*" } }
 ```
 
 Outside it, from npm:
 
 ```sh
-npm install @brainbox/react @brainbox/core
+npm install @brainbox-sh/react @brainbox-sh/core
 ```
 
 `pnpm build` emits `dist/` (JS plus `.d.ts`); the published package's
@@ -25,8 +25,8 @@ npm install @brainbox/react @brainbox/core
 ## Use
 
 ```tsx
-import { BrainboxProvider, useBrainbox, useDraft } from "@brainbox/react";
-import { brainboxTransport } from "@brainbox/core";
+import { BrainboxProvider, useBrainbox, useDraft } from "@brainbox-sh/react";
+import { brainboxTransport } from "@brainbox-sh/core";
 
 // Keep the transport stable: a new one means a new instance.
 const transport = brainboxTransport({ endpoint, projectKey });

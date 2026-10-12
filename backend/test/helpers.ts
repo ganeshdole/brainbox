@@ -1,5 +1,5 @@
 import { encode } from "@auth/core/jwt";
-import type { BillingPeriod, PlanId, SubscriptionStatus } from "@brainbox/shared";
+import type { BillingPeriod, PlanId, SubscriptionStatus } from "@brainbox-sh/shared";
 
 import { db } from "../src/db/client.ts";
 import {

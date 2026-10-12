@@ -1,4 +1,4 @@
-/* @brainbox/replay - the player's own stylesheet. Plain CSS so a host does not
+/* @brainbox-sh/replay - the player's own stylesheet. Plain CSS so a host does not
    have to scan this package for utility classes. Theme by setting the
    --bb-replay-* properties on .bb-replay. */
 @import "@rrweb/replay/dist/style.css";

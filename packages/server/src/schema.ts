@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { CapturedMetadata, FeedbackPayload, Region } from "@brainbox/shared";
+import type { CapturedMetadata, FeedbackPayload, Region } from "@brainbox-sh/shared";
 
 export const regionSchema = z.object({
   x: z.number(),

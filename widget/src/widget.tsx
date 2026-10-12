@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import type { TriggerMode } from "@brainbox/shared";
-import { useBrainbox } from "@brainbox/react";
+import type { TriggerMode } from "@brainbox-sh/shared";
+import { useBrainbox } from "@brainbox-sh/react";
 import { App } from "./App.tsx";
 import type { Position } from "./lib/position.ts";
 import { createShadowHost, type ShadowHost } from "./lib/shadow-host.ts";

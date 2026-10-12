@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSession } from "@hono/auth-js/react";
-import type { Project } from "@brainbox/shared";
+import type { Project } from "@brainbox-sh/shared";
 
 import { Wordmark } from "../components/Wordmark";
 import { Button } from "../components/ui/button";

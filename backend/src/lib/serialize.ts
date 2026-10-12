@@ -1,11 +1,11 @@
-import type { Ticket } from "@brainbox/integrations";
+import type { Ticket } from "@brainbox-sh/integrations";
 import type {
   Delivery,
   IntegrationConnection,
   Issue,
   Project,
   ProjectDestination,
-} from "@brainbox/shared";
+} from "@brainbox-sh/shared";
 
 import {
   deliveries,

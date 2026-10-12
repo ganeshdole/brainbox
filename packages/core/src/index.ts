@@ -1,4 +1,4 @@
-// @brainbox/core - the capture engine, with no UI and no React.
+// @brainbox-sh/core - the capture engine, with no UI and no React.
 //
 // Importing this module does nothing. `createBrainbox()` is the only way in;
 // everything it sets up is undone by `destroy()`.
@@ -11,4 +11,4 @@ export { canSessionRecord } from "./session.ts";
 export { preloadCapture } from "./lazy.ts";
 export { startAudioRecording, type AudioRecorder } from "./audio.ts";
 export * from "./marks.ts";
-export type { CapturedMetadata, Identity, ProjectKey, Region } from "@brainbox/shared";
+export type { CapturedMetadata, Identity, ProjectKey, Region } from "@brainbox-sh/shared";

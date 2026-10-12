@@ -1,4 +1,4 @@
-import type { CapturedMetadata, Region } from "@brainbox/shared";
+import type { CapturedMetadata, Region } from "@brainbox-sh/shared";
 
 /** A report as a destination needs it. `links` must work without a session. */
 export interface Ticket {

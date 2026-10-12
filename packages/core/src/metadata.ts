@@ -1,4 +1,4 @@
-import type { CapturedMetadata, Identity } from "@brainbox/shared";
+import type { CapturedMetadata, Identity } from "@brainbox-sh/shared";
 
 const MAX_ERRORS = 20;
 

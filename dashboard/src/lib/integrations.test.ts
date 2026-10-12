@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Delivery } from "@brainbox/shared";
+import type { Delivery } from "@brainbox-sh/shared";
 
 import { deliveryLabel, installResult, parseLabels } from "./integrations";
 

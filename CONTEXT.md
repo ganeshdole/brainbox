@@ -18,7 +18,7 @@ The product has three distinct surfaces - keep them separate:
 - **Widget** - the embeddable surface the end-user interacts with. Ships as a
   script-tag IIFE bundle (`widget.js`) and as a library (`<BrainboxWidget />`
   for React hosts, `mount()` for the rest). Isolated from the host via Shadow
-  DOM. It is a UI over the **engine**, `@brainbox/core`, which owns what gets
+  DOM. It is a UI over the **engine**, `@brainbox-sh/core`, which owns what gets
   captured and sent and has no UI of its own (ADR 0005).
 - **Dashboard** - the SaaS we sell: where the customer signs up, gets their
   snippet, and reads incoming tickets. (Out of scope for the widget build.)

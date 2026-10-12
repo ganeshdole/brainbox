@@ -1,6 +1,6 @@
 import { act } from "react";
 import { afterEach, describe, expect, it } from "vitest";
-import type { Transport } from "@brainbox/core";
+import type { Transport } from "@brainbox-sh/core";
 import { mount, type WidgetHandle } from "./mount.tsx";
 
 const transport: Transport = { send: async () => ({ id: "r1" }) };

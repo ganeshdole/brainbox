@@ -1,4 +1,4 @@
-# @brainbox/server
+# @brainbox-sh/server
 
 The receiving end of a Brainbox report. `parseIngest()` reads the widget's
 upload from a web-standard `Request` and hands back typed data or a ready
@@ -8,7 +8,7 @@ accept reports without the Brainbox database. The Brainbox backend uses it.
 ## Use
 
 ```ts
-import { parseIngest, DEFAULT_INGEST_LIMITS } from "@brainbox/server";
+import { parseIngest, DEFAULT_INGEST_LIMITS } from "@brainbox-sh/server";
 
 async function handle(request: Request): Promise<Response> {
   const parsed = await parseIngest(request, DEFAULT_INGEST_LIMITS);
@@ -31,12 +31,12 @@ request's `Origin` is allowed, where the files go.
 Inside this monorepo the package is consumed from source (`workspace:*`).
 Outside the monorepo, `pnpm build` emits `dist/` (JS plus `.d.ts`) and
 `pnpm pack` produces a tarball whose `exports` point at it (`publishConfig`),
-so another app can `npm install` the `.tgz` files. Every `@brainbox/*`
+so another app can `npm install` the `.tgz` files. Every `@brainbox-sh/*`
 dependency of a package needs its own tarball installed alongside.
 
 ## The wire format
 
-This is what `brainboxTransport()` in `@brainbox/core` sends and what
+This is what `brainboxTransport()` in `@brainbox-sh/core` sends and what
 `parseIngest()` reads. A backend in any language can implement it.
 
 `POST <endpoint>` with a `multipart/form-data` body.
@@ -75,7 +75,7 @@ The `json` part:
 }
 ```
 
-Types live in `@brainbox/shared` (`FeedbackPayload`, `CapturedMetadata`,
+Types live in `@brainbox-sh/shared` (`FeedbackPayload`, `CapturedMetadata`,
 `Region`). The zod schemas in `schema.ts` validate against them and fail to
 compile if the two drift.
 

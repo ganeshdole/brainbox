@@ -1,5 +1,5 @@
-import { githubApp, githubIssues, type Destination, type GithubApp } from "@brainbox/integrations";
-import type { IntegrationProvider } from "@brainbox/shared";
+import { githubApp, githubIssues, type Destination, type GithubApp } from "@brainbox-sh/integrations";
+import type { IntegrationProvider } from "@brainbox-sh/shared";
 
 import type { integrationConnections, projectDestinations } from "../db/schema/index.ts";
 import { env } from "../env.ts";

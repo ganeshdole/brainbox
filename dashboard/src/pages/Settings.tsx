@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import type { Project } from "@brainbox/shared";
+import type { Project } from "@brainbox-sh/shared";
 
 import { CopyButton } from "../components/CopyButton";
 import { DomainsEditor } from "../components/DomainsEditor";
