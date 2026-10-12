@@ -81,7 +81,8 @@ without a test is not done. `packages/shared` is pure types; its contract is
 ## Canon vs. not
 
 - **Canon** (trust as current truth): this file, nested `AGENTS.md`, `CONTEXT.md`,
-  and code comments/docstrings.
+  `docs/self-hosting.md` (the deployment options and their settings; keep it in
+  step with `backend/src/env.ts`), and code comments/docstrings.
 - **Not canon** (intent or history, may be stale): `docs/adr/*` records *why* past
   decisions were made, not necessarily the current state; commit messages and any
   plan describe intent. Never treat a plan as a description of what exists - read
