@@ -1,7 +1,8 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/index.ts"],
+  // index.ts: the Node server. azure.ts: the Azure Functions app (package.json "main").
+  entry: ["src/index.ts", "src/azure.ts"],
   format: ["esm"],
   target: "node22",
   clean: true,
