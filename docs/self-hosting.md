@@ -78,7 +78,9 @@ static dashboard behind Caddy. See its header comment for the settings it reads.
    ```
 
 4. **Dashboard.** Build `dashboard/` with `VITE_API_URL=<PUBLIC_API_URL>` and
-   host the static files on the same site as the API.
+   host the static files on the same site as the API. On Azure Static Web Apps,
+   `staticwebapp.config.json` (copied into the build) sends deep links such as
+   `/projects/<id>/issues/<id>` to the app instead of a 404.
 
 Run it locally first: `func start` in `backend/` after a build, with the same
 settings in a git-ignored `backend/local.settings.json`, against a local Convex
