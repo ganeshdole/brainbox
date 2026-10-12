@@ -10,7 +10,7 @@ Root rules in `/AGENTS.md` apply.
   `data-*` attributes, calls `mount()`, and publishes `window.Brainbox`. It is
   the only file here that runs on load.
 - `mount()` (`src/mount.tsx`) is for a host with no React tree: creates the
-  instance, renders the widget, returns `{ open, close, identify, destroy }`.
+  instance, renders the widget, returns `{ open, start, close, identify, destroy }`.
 - `<BrainboxWidget />` and `useBrainboxWidget()` are for a host's own React
   tree, under a `<BrainboxProvider>`.
 
@@ -28,6 +28,10 @@ It runs inside a **host app you don't control**, so isolation is the whole game:
   for styling or assume global styles; keep everything scoped to the shadow
   root. `<BrainboxWidget />` appends the host to `<body>` wherever it sits in
   the host's tree, so no ancestor's `overflow` or `transform` can trap it.
+- Pointer and click events stop at the shadow host (`ISOLATED_EVENTS` in
+  `shadow-host.ts`), so a host that closes its menus on an outside click keeps
+  them open while the user reports them. Keys are not isolated: the widget's
+  own shortcuts listen on `window`. Keep that split when adding listeners.
 - The engine is not here. Screenshots, marks, recording, metadata and sending
   live in `@ganeshdole/brainbox-core`. If a change is about *what gets captured or sent*,
   it belongs in `packages/core`. If it is about *what the user sees*, it

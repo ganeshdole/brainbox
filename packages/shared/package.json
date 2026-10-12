@@ -1,6 +1,6 @@
 {
   "name": "@ganeshdole/brainbox-shared",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Brainbox wire types, shared by the widget, the SDK packages and the backend. Pure types, no runtime.",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://www.brainbox.sh",

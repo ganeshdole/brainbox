@@ -245,8 +245,10 @@ export function MarkupOverlay({
             still sends
           </span>
         ) : (
+          // Say plainly that this is a picture: people otherwise try to click
+          // the page, which Record is for.
           <span className="rounded-full bg-elevated px-3 py-1 text-xs text-muted">
-            Mark up what&apos;s wrong - or just hit Next to describe it
+            This is a snapshot of the page. Mark what&apos;s wrong, or hit Next
           </span>
         )}
       </div>

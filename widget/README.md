@@ -22,7 +22,7 @@ For a page with no build step. Paste before `</body>`:
 | `data-mount` | CSS selector of your trigger, with `data-mode="mount"` | |
 | `data-position` | `bottom-right`, `bottom-left`, `top-right`, `top-left` | `bottom-right` |
 
-The tag publishes `window.Brainbox` with `open()`, `close()` and
+The tag publishes `window.Brainbox` with `open()`, `start(mode)`, `close()` and
 `identify({ id, email })`, and fires a `brainbox:submitted` event on `window`
 (`event.detail.id`) after each report.
 
@@ -47,10 +47,17 @@ function ReportProblemButton() {
 }
 ```
 
+`open()` shows our chooser. If your own UI already offers the two choices,
+`start("screenshot")` or `start("record")` goes straight into one. Recording
+falls back to the chooser in a browser that cannot record (`canSessionRecord()`
+from `@ganeshdole/brainbox-core` tells you in advance).
+
 The widget renders into a shadow root appended to `<body>`, wherever it sits
 in your tree, so your styles cannot reach it and no ancestor's `overflow` or
 `transform` can trap its panels. Your React is used; the package does not
-bundle one.
+bundle one. Clicks on the widget stop at its shadow host, so a menu your page
+closes on an outside click stays open while the user reports it (a listener in
+the capture phase still sees them).
 
 ## Without React, from a bundler
 

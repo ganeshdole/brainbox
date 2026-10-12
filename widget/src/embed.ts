@@ -1,5 +1,6 @@
 import { brainboxTransport, type Identity, type ProjectKey } from "@ganeshdole/brainbox-core";
 import { readConfig } from "./lib/config.ts";
+import type { CaptureMode } from "./lib/widget-store.ts";
 import { mount, type WidgetHandle } from "./mount.tsx";
 
 // The script-tag bundle (`widget.js`). The one file in this package that runs
@@ -21,6 +22,10 @@ const api = {
   },
   open() {
     widget?.open();
+  },
+  /** "screenshot" or "record": skips the chooser. */
+  start(mode: CaptureMode) {
+    widget?.start(mode);
   },
   close() {
     widget?.close();
