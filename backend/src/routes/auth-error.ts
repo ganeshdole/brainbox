@@ -7,7 +7,8 @@ import { env } from "../env.ts";
  * When a sign-in step throws, Auth.js builds the redirect as the API's own
  * origin plus this value, so it must be a path here, not the dashboard's URL:
  * a full URL came out as `http://apihttp://dashboard/login` and crashed the
- * request. This route hands the user on to the dashboard's /login.
+ * request. This route hands the user on to the dashboard's /login. A proxy in
+ * front of the API must forward this path to it (deploy/Caddyfile does).
  */
 export const AUTH_ERROR_PATH = "/auth-error";
 
