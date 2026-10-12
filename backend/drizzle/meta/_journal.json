@@ -78,6 +78,13 @@
       "when": 1791708393415,
       "tag": "0010_careless_karnak",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791803982790,
+      "tag": "0011_sign_in_attempts",
+      "breakpoints": true
     }
   ]
 }

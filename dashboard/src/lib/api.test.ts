@@ -41,6 +41,19 @@ afterEach(() => {
 describe("401 handling", () => {
   beforeEach(() => stubLocation("/projects/all"));
 
+  it("does not redirect for the login page's public sign-in options", async () => {
+    // A backend older than /api/sign-in-options answers 401. Sending the login
+    // page to /login for it would reload the page, which asks again, forever.
+    const loc = stubLocation("/login");
+    vi.stubGlobal("fetch", respondWith(401));
+    const { api, isAuthRedirect } = await freshApi();
+
+    const err = await api.getSignInOptions().catch((e: unknown) => e);
+
+    expect(loc.href).toBe("http://localhost/login");
+    expect(isAuthRedirect(err)).toBe(false);
+  });
+
   it("redirects to /login and throws a recognisable error", async () => {
     const loc = stubLocation("/projects/all");
     vi.stubGlobal("fetch", respondWith(401));

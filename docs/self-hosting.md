@@ -25,7 +25,17 @@ Everything else is in `backend/src/env.ts`.
 | `DATABASE_DRIVER=convex` or `STORAGE_DRIVER=convex` | `CONVEX_URL`, `BRAINBOX_SERVER_SECRET` (also set on the Convex deployment) |
 | `STORAGE_DRIVER=r2` | `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` |
 | Sign-in with Google | `GOOGLE_ID`, `GOOGLE_SECRET` |
-| Sign-in by email link | `EMAIL_DRIVER=resend`, `RESEND_API_KEY`, `EMAIL_FROM` |
+| Sign-in by email | `EMAIL_DRIVER=resend`, `RESEND_API_KEY`, `EMAIL_FROM` |
+| A code instead of a link | `AUTH_EMAIL_MODE=code`, or `both` for a code and a link in one email (default `link`) |
+
+A code suits people who read email on a different device from the one they
+sign in on, or whose mail scanner opens links before they do. Only the newest
+code sent to an address works, and each address gets five attempts in any 15
+minutes, which is also how long a code lives. The fifth wrong attempt cancels
+the code, and no code is accepted until earlier attempts are 15 minutes old.
+That also means anyone who knows an address can hold its email sign-in off
+for 15 minutes at a time; Google sign-in is unaffected. Link-only sign-in has
+no such limit, since its token cannot be guessed.
 
 ## Keep the dashboard and the API on one site
 

@@ -63,6 +63,9 @@ export const testEnv: Record<string, string> = {
   GOOGLE_SECRET: "test",
   // Log emails instead of sending them - tests never hit the network.
   EMAIL_DRIVER: "console",
+  // Codes and links both, so the suite covers the code path and its attempt
+  // limit as well as links.
+  AUTH_EMAIL_MODE: "both",
 
   // Billing. A fixed webhook secret so tests can sign payloads the route will
   // actually accept; standardwebhooks wants base64 after the whsec_ prefix.

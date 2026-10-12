@@ -136,6 +136,26 @@ export function createConvexStore(convex: ConvexCaller): Store {
       },
     },
 
+    signIn: {
+      async recordAttempt(identifier, { at, since, keep }) {
+        return convex.mutation(api.signIn.recordAttempt, {
+          identifier,
+          at: at.getTime(),
+          since: since.getTime(),
+          keep,
+        });
+      },
+      async replaceCode({ identifier, token, expires }) {
+        await convex.mutation(api.signIn.replaceCode, { identifier, token, expires: expires.getTime() });
+      },
+      async revokeCodes(identifier) {
+        await convex.mutation(api.signIn.revokeCodes, { identifier });
+      },
+      async forgetAttempts(identifier) {
+        await convex.mutation(api.signIn.forgetAttempts, { identifier });
+      },
+    },
+
     authAdapter() {
       return createConvexAuthAdapter(convex);
     },

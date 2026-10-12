@@ -10,6 +10,7 @@ import type {
   PlanId,
   Project,
   ProjectDestination,
+  SignInOptions,
 } from "@ganeshdole/brainbox-shared";
 
 import { API_URL } from "./authConfig";
@@ -48,12 +49,20 @@ function redirectOnce(to: string, message: string): never {
   throw new AuthRedirectError(message);
 }
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
+/**
+ * `redirects: false` is for public calls made before anyone is signed in: a
+ * 401 or 402 then throws like any other error instead of navigating. The login
+ * page needs it, since sending it to /login on a 401 would reload it forever.
+ */
+async function req<T>(path: string, init?: RequestInit, { redirects = true } = {}): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     credentials: "include",
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
     ...init,
   });
+  if (!redirects && !res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
   if (res.status === 401) {
     redirectOnce("/login", "Unauthorized");
   }
@@ -75,6 +84,9 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  // Public: the login page reads it before anyone is signed in. A backend
+  // older than this endpoint answers 401, which must not redirect.
+  getSignInOptions: () => req<SignInOptions>("/api/sign-in-options", undefined, { redirects: false }),
   listProjects: () => req<Project[]>("/api/projects"),
   createProject: (body: { name: string; allowedOrigins?: string[] }) =>
     req<Project>("/api/projects", { method: "POST", body: JSON.stringify(body) }),

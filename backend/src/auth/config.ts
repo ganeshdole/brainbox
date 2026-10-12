@@ -1,15 +1,24 @@
+import { randomInt } from "node:crypto";
 import Google from "@auth/core/providers/google";
 import type { EmailConfig } from "@auth/core/providers/email";
 
 import { getEmailer } from "../email/index.ts";
 import { magicLinkEmail } from "../email/templates/magic-link.ts";
+import { signInCodeEmail } from "../email/templates/sign-in-code.ts";
 import { env } from "../env.ts";
 import { AUTH_ERROR_PATH } from "../routes/auth-error.ts";
 import { getStore } from "../store/index.ts";
+import { CODE_LIFETIME_MS, withCodeAttemptLimit } from "./code-attempts.ts";
 
-// How long a sign-in link stays usable. Short enough that a forwarded or
-// leaked mail stops working quickly, long enough to survive a slow inbox.
-const MAGIC_LINK_MAX_AGE_SECONDS = 15 * 60;
+/** A 6-digit sign-in code, zero-padded: every one of the million is equally likely. */
+export function generateSignInCode(): string {
+  return randomInt(0, 1_000_000).toString().padStart(6, "0");
+}
+
+// How long a sign-in link or code stays usable. Short enough that a forwarded
+// or leaked mail stops working quickly, long enough to survive a slow inbox.
+// The code attempt limit counts over the same span (code-attempts.ts).
+const MAGIC_LINK_MAX_AGE_SECONDS = CODE_LIFETIME_MS / 1000;
 
 // Magic-link sign-in, declared inline rather than via the Nodemailer provider:
 // that one hard-imports `nodemailer` and throws without an SMTP `server`, and
@@ -18,6 +27,12 @@ const MAGIC_LINK_MAX_AGE_SECONDS = 15 * 60;
 // generically, so this needs no extra dependency.
 //
 // Requires the store's Auth.js adapter to keep verification tokens.
+//
+// AUTH_EMAIL_MODE picks what the email carries. With "code" or "both" the
+// verification token is a 6-digit code instead of Auth.js's 64-character one;
+// the dashboard sends it to the same callback a link opens, so Auth.js checks
+// both the same way. withCodeAttemptLimit caps guessing.
+const sendsCode = env.AUTH_EMAIL_MODE !== "link";
 const magicLink: EmailConfig = {
   id: "magic-link",
   type: "email",
@@ -25,8 +40,12 @@ const magicLink: EmailConfig = {
   from: env.EMAIL_FROM,
   maxAge: MAGIC_LINK_MAX_AGE_SECONDS,
   options: {},
-  async sendVerificationRequest({ identifier, url }) {
-    const { subject, html, text } = magicLinkEmail(url, MAGIC_LINK_MAX_AGE_SECONDS / 60);
+  ...(sendsCode && { generateVerificationToken: generateSignInCode }),
+  async sendVerificationRequest({ identifier, url, token }) {
+    const minutes = MAGIC_LINK_MAX_AGE_SECONDS / 60;
+    const { subject, html, text } = !sendsCode
+      ? magicLinkEmail(url, minutes)
+      : signInCodeEmail(token, env.AUTH_EMAIL_MODE === "both" ? url : null, minutes);
     // Throwing here surfaces to the caller as a failed sign-in, which is what
     // we want: silently swallowing it would leave the user waiting for a mail
     // that is never coming.
@@ -60,7 +79,7 @@ export function getAuthConfig() {
   return {
     secret: env.AUTH_SECRET,
     trustHost: true,
-    adapter: getStore().authAdapter(),
+    adapter: withCodeAttemptLimit(getStore().authAdapter(), getStore().signIn, env.AUTH_EMAIL_MODE),
 
     // Auth.js otherwise renders its own unbranded pages on the API origin, so a
     // failed sign-in dropped the user on app.brainbox.sh/api/auth/error with a

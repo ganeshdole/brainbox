@@ -244,6 +244,25 @@ export interface Store {
     ): Promise<void>;
   };
 
+  /** Attempts at sign-in codes, counted per email so guessing a code is
+   *  capped (auth/code-attempts.ts). */
+  readonly signIn: {
+    /** Records an attempt for this email made `at`, and returns how many of
+     *  its attempts fall at or after `since`, this one included. One atomic
+     *  step, so attempts arriving together each get their own number. Keeps
+     *  only the latest `keep` attempt times. Records nothing and returns 0
+     *  when the email has no code pending, so attempts at addresses that never
+     *  asked for a code store nothing. */
+    recordAttempt(identifier: string, attempt: { at: Date; since: Date; keep: number }): Promise<number>;
+    /** Stores a new code for this email and deletes the ones before it, in one
+     *  atomic step, so codes requested together still leave only one. */
+    replaceCode(code: { identifier: string; token: string; expires: Date }): Promise<void>;
+    /** Deletes every code still pending for this email. */
+    revokeCodes(identifier: string): Promise<void>;
+    /** Deletes this email's count. */
+    forgetAttempts(identifier: string): Promise<void>;
+  };
+
   /** Auth.js persistence: users, OAuth account links and magic-link tokens. */
   authAdapter(): Adapter;
 }
