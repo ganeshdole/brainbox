@@ -244,21 +244,19 @@ export interface Store {
     ): Promise<void>;
   };
 
-  /** Wrong sign-in codes, counted per email so guessing a code is capped
-   *  (auth/code-attempts.ts). */
+  /** Attempts at sign-in codes, counted per email so guessing a code is
+   *  capped (auth/code-attempts.ts). */
   readonly signIn: {
-    /** Wrong codes for this email in a count that started at or after `since`;
-     *  0 for an older count. */
-    failedCodes(identifier: string, since: Date): Promise<number>;
-    /** Counts one wrong code for this email and returns the count, which starts
-     *  over when the previous one started before `since`. Counts nothing and
-     *  returns 0 when the email has no code pending, so guesses at addresses
+    /** Counts one attempt for this email and returns the count, in a single
+     *  atomic step: attempts arriving together each get their own number. The
+     *  count starts over when it began before `since`. Counts nothing and
+     *  returns 0 when the email has no code pending, so attempts at addresses
      *  that never asked for a code store nothing. */
-    recordFailedCode(identifier: string, since: Date): Promise<number>;
+    recordAttempt(identifier: string, since: Date): Promise<number>;
     /** Deletes every code still pending for this email. */
     revokeCodes(identifier: string): Promise<void>;
     /** Deletes this email's count. */
-    forgetFailures(identifier: string): Promise<void>;
+    forgetAttempts(identifier: string): Promise<void>;
   };
 
   /** Auth.js persistence: users, OAuth account links and magic-link tokens. */

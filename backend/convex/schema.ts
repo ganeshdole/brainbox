@@ -52,10 +52,10 @@ export default defineSchema({
     expires: v.number(),
   }).index("by_identifier_token", ["identifier", "token"]),
 
-  // Wrong sign-in codes per email (src/auth/code-attempts.ts).
-  signInFailures: defineTable({
+  // Attempts at sign-in codes per email (src/auth/code-attempts.ts).
+  signInAttempts: defineTable({
     identifier: v.string(),
-    failures: v.number(),
+    attempts: v.number(),
     windowStartedAt: v.number(),
   }).index("by_identifier", ["identifier"]),
 

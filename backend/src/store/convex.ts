@@ -137,17 +137,14 @@ export function createConvexStore(convex: ConvexCaller): Store {
     },
 
     signIn: {
-      async failedCodes(identifier, since) {
-        return convex.query(api.signIn.failedCodes, { identifier, since: since.getTime() });
-      },
-      async recordFailedCode(identifier, since) {
-        return convex.mutation(api.signIn.recordFailedCode, { identifier, since: since.getTime() });
+      async recordAttempt(identifier, since) {
+        return convex.mutation(api.signIn.recordAttempt, { identifier, since: since.getTime() });
       },
       async revokeCodes(identifier) {
         await convex.mutation(api.signIn.revokeCodes, { identifier });
       },
-      async forgetFailures(identifier) {
-        await convex.mutation(api.signIn.forgetFailures, { identifier });
+      async forgetAttempts(identifier) {
+        await convex.mutation(api.signIn.forgetAttempts, { identifier });
       },
     },
 

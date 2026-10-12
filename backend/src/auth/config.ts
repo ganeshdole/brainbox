@@ -78,7 +78,7 @@ export function getAuthConfig() {
   return {
     secret: env.AUTH_SECRET,
     trustHost: true,
-    adapter: withCodeAttemptLimit(getStore().authAdapter(), getStore().signIn),
+    adapter: withCodeAttemptLimit(getStore().authAdapter(), getStore().signIn, env.AUTH_EMAIL_MODE),
 
     // Auth.js otherwise renders its own unbranded pages on the API origin, so a
     // failed sign-in dropped the user on app.brainbox.sh/api/auth/error with a

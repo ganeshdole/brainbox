@@ -1,5 +1,5 @@
 {
-  "id": "a6d9b987-acb9-445e-94ea-7895a5c1e289",
+  "id": "2b39ac29-230d-4bd4-bc2a-69ad6b7666bc",
   "prevId": "3377e012-60e3-4cbd-baab-118d468dd665",
   "version": "7",
   "dialect": "postgresql",
@@ -150,8 +150,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.sign_in_failures": {
-      "name": "sign_in_failures",
+    "public.sign_in_attempts": {
+      "name": "sign_in_attempts",
       "schema": "",
       "columns": {
         "identifier": {
@@ -160,8 +160,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "failures": {
-          "name": "failures",
+        "attempts": {
+          "name": "attempts",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,

@@ -15,7 +15,7 @@ const TABLES: TableNames[] = [
   "users",
   "authAccounts",
   "verificationTokens",
-  "signInFailures",
+  "signInAttempts",
   "projects",
   "issues",
   "connections",

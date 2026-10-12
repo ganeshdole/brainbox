@@ -1,15 +1,16 @@
 import { createHash } from "node:crypto";
+import type { Adapter } from "@auth/core/adapters";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "../src/app.ts";
-import { FAILED_CODES_WINDOW_MS, MAX_FAILED_CODES } from "../src/auth/code-attempts.ts";
+import { CODE_ATTEMPTS_WINDOW_MS, MAX_CODE_ATTEMPTS, withCodeAttemptLimit } from "../src/auth/code-attempts.ts";
 import { generateSignInCode, getAuthConfig } from "../src/auth/config.ts";
 import { signInCodeEmail } from "../src/email/templates/sign-in-code.ts";
 import { env } from "../src/env.ts";
 import { getStore } from "../src/store/index.ts";
 
-// The suite runs with AUTH_EMAIL_MODE=link, so codes are issued here the way
-// Auth.js issues them in code mode: through the configured adapter, hashed
+// The suite runs with AUTH_EMAIL_MODE=both (test/env.ts). Codes are issued
+// here the way Auth.js issues them: through the configured adapter, hashed
 // with the secret. Everything after that is the real callback.
 
 const EMAIL = "vet@clinic.test";
@@ -58,48 +59,75 @@ describe("signing in with a code", () => {
     expect(await signInWith("042137")).toBe(false);
   });
 
-  it(`stops every pending code after ${MAX_FAILED_CODES} wrong guesses`, async () => {
+  it(`allows ${MAX_CODE_ATTEMPTS} attempts, the right code counting as one`, async () => {
     await issueCode(EMAIL, "042137");
-    await guessWrong(MAX_FAILED_CODES);
+    await guessWrong(MAX_CODE_ATTEMPTS - 1);
+
+    expect(await signInWith("042137")).toBe(true);
+  });
+
+  it(`stops every pending code after ${MAX_CODE_ATTEMPTS} wrong guesses`, async () => {
+    await issueCode(EMAIL, "042137");
+    await guessWrong(MAX_CODE_ATTEMPTS);
 
     expect(await signInWith("042137")).toBe(false);
   });
 
   it("gives a new code no extra guesses, so asking for codes cannot reset the limit", async () => {
     await issueCode(EMAIL, "042137");
-    await guessWrong(MAX_FAILED_CODES - 1);
+    await guessWrong(MAX_CODE_ATTEMPTS);
     await issueCode(EMAIL, "731902");
-    await guessWrong(1);
-    await issueCode(EMAIL, "580214");
 
-    expect(await signInWith("580214")).toBe(false);
+    expect(await signInWith("731902")).toBe(false);
   });
 
   it("accepts codes again once the window has passed", async () => {
     await issueCode(EMAIL, "042137");
-    await guessWrong(MAX_FAILED_CODES);
+    await guessWrong(MAX_CODE_ATTEMPTS);
 
     vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(Date.now() + FAILED_CODES_WINDOW_MS + 1000);
+    vi.setSystemTime(Date.now() + CODE_ATTEMPTS_WINDOW_MS + 1000);
     await issueCode(EMAIL, "731902");
 
     expect(await signInWith("731902")).toBe(true);
   });
 
-  it("forgets earlier wrong guesses after a successful sign-in", async () => {
+  it("forgets earlier attempts after a successful sign-in", async () => {
     await issueCode(EMAIL, "042137");
-    await guessWrong(MAX_FAILED_CODES - 1);
+    await guessWrong(MAX_CODE_ATTEMPTS - 1);
     expect(await signInWith("042137")).toBe(true);
 
     await issueCode(EMAIL, "731902");
-    await guessWrong(MAX_FAILED_CODES - 1);
+    await guessWrong(MAX_CODE_ATTEMPTS - 1);
     expect(await signInWith("731902")).toBe(true);
   });
 
-  it("stores nothing for guesses at an address with no code pending", async () => {
-    expect(await signInWith("000000", "nobody@clinic.test")).toBe(false);
+  it("does not count guesses at an address with no code pending", async () => {
+    await guessWrong(MAX_CODE_ATTEMPTS);
+    await issueCode(EMAIL, "042137");
 
-    expect(await getStore().signIn.failedCodes("nobody@clinic.test", new Date(0))).toBe(0);
+    expect(await signInWith("042137")).toBe(true);
+  });
+});
+
+describe("withCodeAttemptLimit", () => {
+  it("leaves link sign-in alone: a 64-character token needs no cap, and a cap would let anyone cancel a link", () => {
+    const adapter: Adapter = { useVerificationToken: async () => null };
+    expect(withCodeAttemptLimit(adapter, getStore().signIn, "link")).toBe(adapter);
+  });
+
+  it("checks at most the allowed number of codes when guesses arrive together", async () => {
+    const checked = vi.fn(async () => null);
+    const adapter = withCodeAttemptLimit({ useVerificationToken: checked }, getStore().signIn, "code");
+    await issueCode(EMAIL, "042137");
+
+    await Promise.all(
+      Array.from({ length: MAX_CODE_ATTEMPTS * 2 }, () =>
+        adapter.useVerificationToken?.({ identifier: EMAIL, token: "wrong" }),
+      ),
+    );
+
+    expect(checked.mock.calls.length).toBeLessThanOrEqual(MAX_CODE_ATTEMPTS);
   });
 });
 
@@ -129,6 +157,6 @@ describe("GET /api/sign-in-options", () => {
   it("tells the signed-out login page how email sign-in works", async () => {
     const res = await app.request("/api/sign-in-options");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ email: "link" });
+    expect(await res.json()).toEqual({ email: env.AUTH_EMAIL_MODE });
   });
 });

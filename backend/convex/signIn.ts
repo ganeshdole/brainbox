@@ -1,25 +1,14 @@
 import { v } from "convex/values";
 
-import { serverMutation, serverQuery } from "./lib/server.ts";
+import { serverMutation } from "./lib/server.ts";
 
-// Store.signIn: wrong sign-in codes per email (src/auth/code-attempts.ts).
-// Times are epoch milliseconds.
+// Store.signIn: attempts at sign-in codes per email (src/auth/code-attempts.ts).
+// Times are epoch milliseconds. Each mutation is a transaction, so attempts
+// arriving together are counted one after another.
 
-/** Wrong codes in a count that started at or after `since`; 0 for an older one. */
-export const failedCodes = serverQuery({
-  args: { identifier: v.string(), since: v.number() },
-  handler: async (ctx, { identifier, since }) => {
-    const row = await ctx.db
-      .query("signInFailures")
-      .withIndex("by_identifier", (q) => q.eq("identifier", identifier))
-      .unique();
-    return row && row.windowStartedAt >= since ? row.failures : 0;
-  },
-});
-
-/** Counts one wrong code and returns the count, restarting a count older than
+/** Counts one attempt and returns the count, restarting a count older than
  *  `since`. Counts nothing (returns 0) when the email has no code pending. */
-export const recordFailedCode = serverMutation({
+export const recordAttempt = serverMutation({
   args: { identifier: v.string(), since: v.number() },
   handler: async (ctx, { identifier, since }) => {
     const now = Date.now();
@@ -31,19 +20,19 @@ export const recordFailedCode = serverMutation({
     if (!pending) return 0;
 
     const row = await ctx.db
-      .query("signInFailures")
+      .query("signInAttempts")
       .withIndex("by_identifier", (q) => q.eq("identifier", identifier))
       .unique();
     if (!row) {
-      await ctx.db.insert("signInFailures", { identifier, failures: 1, windowStartedAt: now });
+      await ctx.db.insert("signInAttempts", { identifier, attempts: 1, windowStartedAt: now });
       return 1;
     }
-    const failures = row.windowStartedAt >= since ? row.failures + 1 : 1;
+    const attempts = row.windowStartedAt >= since ? row.attempts + 1 : 1;
     await ctx.db.patch(row._id, {
-      failures,
-      windowStartedAt: failures === 1 ? now : row.windowStartedAt,
+      attempts,
+      windowStartedAt: attempts === 1 ? now : row.windowStartedAt,
     });
-    return failures;
+    return attempts;
   },
 });
 
@@ -60,11 +49,11 @@ export const revokeCodes = serverMutation({
 });
 
 /** Deletes the email's count. */
-export const forgetFailures = serverMutation({
+export const forgetAttempts = serverMutation({
   args: { identifier: v.string() },
   handler: async (ctx, { identifier }) => {
     const row = await ctx.db
-      .query("signInFailures")
+      .query("signInAttempts")
       .withIndex("by_identifier", (q) => q.eq("identifier", identifier))
       .unique();
     if (row) await ctx.db.delete(row._id);

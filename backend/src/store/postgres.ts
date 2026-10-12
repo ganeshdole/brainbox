@@ -1,5 +1,5 @@
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
-import { and, count, desc, eq, gt, gte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, sql } from "drizzle-orm";
 
 import type { DB } from "../db/client.ts";
 import {
@@ -10,7 +10,7 @@ import {
   projectDestinations,
   projects,
   sessions,
-  signInFailures,
+  signInAttempts,
   subscriptions,
   users,
   verificationTokens,
@@ -313,14 +313,7 @@ export function createPostgresStore(db: DB): Store {
     },
 
     signIn: {
-      async failedCodes(identifier, since) {
-        const [row] = await db
-          .select({ failures: signInFailures.failures })
-          .from(signInFailures)
-          .where(and(eq(signInFailures.identifier, identifier), gte(signInFailures.windowStartedAt, since)));
-        return row?.failures ?? 0;
-      },
-      async recordFailedCode(identifier, since) {
+      async recordAttempt(identifier, since) {
         const now = new Date();
         const [pending] = await db
           .select({ identifier: verificationTokens.identifier })
@@ -328,27 +321,28 @@ export function createPostgresStore(db: DB): Store {
           .where(and(eq(verificationTokens.identifier, identifier), gt(verificationTokens.expires, now)))
           .limit(1);
         if (!pending) return 0;
-        // Both expressions read the row as it was, so a stale count restarts
-        // at 1 with a new window, and a current one adds 1 and keeps its window.
-        const current = sql`${signInFailures.windowStartedAt} >= ${since.toISOString()}::timestamptz`;
+        // One upsert, so concurrent attempts are serialised on the row. Both
+        // expressions read the row as it was: a stale count restarts at 1 with
+        // a new window, a current one adds 1 and keeps its window.
+        const current = sql`${signInAttempts.windowStartedAt} >= ${since.toISOString()}::timestamptz`;
         const [row] = await db
-          .insert(signInFailures)
-          .values({ identifier, failures: 1, windowStartedAt: now })
+          .insert(signInAttempts)
+          .values({ identifier, attempts: 1, windowStartedAt: now })
           .onConflictDoUpdate({
-            target: signInFailures.identifier,
+            target: signInAttempts.identifier,
             set: {
-              failures: sql`case when ${current} then ${signInFailures.failures} + 1 else 1 end`,
-              windowStartedAt: sql`case when ${current} then ${signInFailures.windowStartedAt} else ${now.toISOString()}::timestamptz end`,
+              attempts: sql`case when ${current} then ${signInAttempts.attempts} + 1 else 1 end`,
+              windowStartedAt: sql`case when ${current} then ${signInAttempts.windowStartedAt} else ${now.toISOString()}::timestamptz end`,
             },
           })
-          .returning({ failures: signInFailures.failures });
-        return row?.failures ?? 1;
+          .returning({ attempts: signInAttempts.attempts });
+        return row?.attempts ?? 1;
       },
       async revokeCodes(identifier) {
         await db.delete(verificationTokens).where(eq(verificationTokens.identifier, identifier));
       },
-      async forgetFailures(identifier) {
-        await db.delete(signInFailures).where(eq(signInFailures.identifier, identifier));
+      async forgetAttempts(identifier) {
+        await db.delete(signInAttempts).where(eq(signInAttempts.identifier, identifier));
       },
     },
 
