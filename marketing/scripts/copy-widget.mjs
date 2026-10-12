@@ -15,8 +15,8 @@ const dest = fileURLToPath(new URL("../public/widget.js", import.meta.url))
 
 if (!existsSync(src)) {
   // Standalone-package builds (Vercel, fresh clones) haven't built the widget yet.
-  console.log("widget/dist/widget.js not found - building @brainbox/widget first")
-  execSync("pnpm -F @brainbox/widget build", { cwd: root, stdio: "inherit" })
+  console.log("widget/dist/widget.js not found - building @brainbox-sh/widget first")
+  execSync("pnpm -F @brainbox-sh/widget build", { cwd: root, stdio: "inherit" })
 }
 if (!existsSync(src)) {
   console.error("widget build did not produce widget/dist/widget.js")

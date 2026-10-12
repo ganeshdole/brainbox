@@ -1,5 +1,5 @@
 {
-  "name": "@brainbox/widget",
+  "name": "@brainbox-sh/widget",
   "version": "0.1.0",
   "description": "Brainbox's in-app feedback widget: the capture UI as a React component, a mount() call for other stacks, or a script tag.",
   "license": "SEE LICENSE IN LICENSE",
@@ -43,9 +43,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@brainbox/core": "workspace:*",
-    "@brainbox/react": "workspace:*",
-    "@brainbox/shared": "workspace:*",
+    "@brainbox-sh/core": "workspace:*",
+    "@brainbox-sh/react": "workspace:*",
+    "@brainbox-sh/shared": "workspace:*",
     "@radix-ui/colors": "^3.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

@@ -1,5 +1,5 @@
 {
-  "name": "@brainbox/core",
+  "name": "@brainbox-sh/core",
   "version": "0.1.0",
   "description": "The Brainbox capture engine: screenshots, marks, session recording, console errors and a Transport that sends the report. No React, no UI.",
   "license": "SEE LICENSE IN LICENSE",
@@ -41,7 +41,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@brainbox/shared": "workspace:*",
+    "@brainbox-sh/shared": "workspace:*",
     "modern-screenshot": "^4.6.0",
     "rrweb": "^2.1.0"
   },

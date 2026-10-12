@@ -10,7 +10,7 @@ import {
   Type,
   Undo2,
 } from "lucide-react";
-import { DEFAULT_COLOR, nextColor, type Annotations, type Mark, type Tool } from "@brainbox/core";
+import { DEFAULT_COLOR, nextColor, type Annotations, type Mark, type Tool } from "@brainbox-sh/core";
 import { isDragTool, nextMarkId, useDrawing } from "../lib/use-drawing.ts";
 import { fmtDuration } from "../lib/time.ts";
 import { MarkShape, MarkTextInput } from "./MarkShape.tsx";

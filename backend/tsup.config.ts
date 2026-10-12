@@ -7,5 +7,5 @@ export default defineConfig({
   clean: true,
   // The workspace packages resolve to TS source inside the monorepo, so they
   // must be bundled in rather than left as external imports.
-  noExternal: ["@brainbox/shared", "@brainbox/server", "@brainbox/integrations"],
+  noExternal: ["@brainbox-sh/shared", "@brainbox-sh/server", "@brainbox-sh/integrations"],
 });

@@ -1,6 +1,6 @@
 # backend - AGENTS.md
 
-The API (`@brainbox/backend`): Hono + Drizzle + Postgres. Root rules in
+The API (`@brainbox-sh/backend`): Hono + Drizzle + Postgres. Root rules in
 `/AGENTS.md` apply; this covers what's specific here.
 
 ## Structure
@@ -16,7 +16,7 @@ The API (`@brainbox/backend`): Hono + Drizzle + Postgres. Root rules in
 
 ## The wire format is not here
 
-`/ingest` parses its upload with `parseIngest()` from `@brainbox/server`: the
+`/ingest` parses its upload with `parseIngest()` from `@brainbox-sh/server`: the
 multipart parts, the zod schema, file types and size caps. The route owns what
 comes after - project lookup, origin allowlist, storage keys, the insert,
 transcription. A change to what the widget sends goes in `packages/server`
@@ -25,7 +25,7 @@ transcription. A change to what the widget sends goes in `packages/server`
 ## Integrations
 
 `src/integrations/registry.ts` turns a stored destination into a `Destination`
-from `@brainbox/integrations`; `dispatch.ts` (`deliverIssue`) sends an issue and
+from `@brainbox-sh/integrations`; `dispatch.ts` (`deliverIssue`) sends an issue and
 writes its `deliveries` row. A change to what a ticket says, or a new tracker,
 goes in `packages/integrations`; which project sends where, and when, is here.
 The GitHub App env (`GITHUB_APP_*`) is optional; `integrationsConfigured()`
@@ -60,6 +60,6 @@ test files.
 
 ## Commands
 
-- `pnpm -F @brainbox/backend test` - run the suite (needs Postgres).
-- `pnpm -F @brainbox/backend db:generate` then `db:migrate` - after a schema
+- `pnpm -F @brainbox-sh/backend test` - run the suite (needs Postgres).
+- `pnpm -F @brainbox-sh/backend db:generate` then `db:migrate` - after a schema
   change. `db:seed` loads dev data.

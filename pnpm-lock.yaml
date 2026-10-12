@@ -43,13 +43,13 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.1075.0
         version: 3.1075.0
-      '@brainbox/integrations':
+      '@brainbox-sh/integrations':
         specifier: workspace:*
         version: link:../packages/integrations
-      '@brainbox/server':
+      '@brainbox-sh/server':
         specifier: workspace:*
         version: link:../packages/server
-      '@brainbox/shared':
+      '@brainbox-sh/shared':
         specifier: workspace:*
         version: link:../packages/shared
       '@hono/auth-js':
@@ -119,10 +119,10 @@ importers:
       '@auth/core':
         specifier: 0.41.2
         version: 0.41.2
-      '@brainbox/replay':
+      '@brainbox-sh/replay':
         specifier: workspace:*
         version: link:../packages/replay
-      '@brainbox/shared':
+      '@brainbox-sh/shared':
         specifier: workspace:*
         version: link:../packages/shared
       '@hono/auth-js':
@@ -253,7 +253,7 @@ importers:
         specifier: ^1.4.0
         version: 1.4.0
     devDependencies:
-      '@brainbox/widget':
+      '@brainbox-sh/widget':
         specifier: workspace:*
         version: link:../widget
       '@eslint/js':
@@ -304,7 +304,7 @@ importers:
 
   packages/core:
     dependencies:
-      '@brainbox/shared':
+      '@brainbox-sh/shared':
         specifier: workspace:*
         version: link:../shared
       modern-screenshot:
@@ -338,7 +338,7 @@ importers:
 
   packages/integrations:
     dependencies:
-      '@brainbox/shared':
+      '@brainbox-sh/shared':
         specifier: workspace:*
         version: link:../shared
     devDependencies:
@@ -366,7 +366,7 @@ importers:
 
   packages/react:
     dependencies:
-      '@brainbox/core':
+      '@brainbox-sh/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -455,7 +455,7 @@ importers:
 
   packages/server:
     dependencies:
-      '@brainbox/shared':
+      '@brainbox-sh/shared':
         specifier: workspace:*
         version: link:../shared
       zod:
@@ -501,13 +501,13 @@ importers:
 
   widget:
     dependencies:
-      '@brainbox/core':
+      '@brainbox-sh/core':
         specifier: workspace:*
         version: link:../packages/core
-      '@brainbox/react':
+      '@brainbox-sh/react':
         specifier: workspace:*
         version: link:../packages/react
-      '@brainbox/shared':
+      '@brainbox-sh/shared':
         specifier: workspace:*
         version: link:../packages/shared
       '@radix-ui/colors':

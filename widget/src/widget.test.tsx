@@ -1,8 +1,8 @@
 import { StrictMode, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { Transport } from "@brainbox/core";
-import { BrainboxProvider } from "@brainbox/react";
+import type { Transport } from "@brainbox-sh/core";
+import { BrainboxProvider } from "@brainbox-sh/react";
 import { BrainboxWidget } from "./widget.tsx";
 import { useBrainboxWidget } from "./use-brainbox-widget.ts";
 

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import type { Draft, DraftState } from "@brainbox/core";
+import type { Draft, DraftState } from "@brainbox-sh/core";
 
 /** A draft's state, re-rendering the component whenever it changes. */
 export function useDraft(draft: Draft): DraftState {

@@ -1,5 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
-import type { DeliveryResult } from "@brainbox/integrations";
+import type { DeliveryResult } from "@brainbox-sh/integrations";
 
 import { db } from "../db/client.ts";
 import {

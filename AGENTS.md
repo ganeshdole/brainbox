@@ -14,29 +14,29 @@ touching product logic - it is canon, describing how the system is meant to work
 
 Ten surfaces, one workspace package each:
 
-- `packages/core/` - the capture engine (`@brainbox/core`). Plain TypeScript, no
+- `packages/core/` - the capture engine (`@brainbox-sh/core`). Plain TypeScript, no
   React: screenshots, marks, session recording, console-error capture, and the
   `Transport` that sends a report. Everything else that captures feedback is a
   UI on top of it (ADR 0005).
-- `packages/react/` - React bindings (`@brainbox/react`): `<BrainboxProvider>`
+- `packages/react/` - React bindings (`@brainbox-sh/react`): `<BrainboxProvider>`
   owns one instance, `useBrainbox()` and `useDraft()` read it. No UI.
-- `widget/` - the embeddable capture UI (`@brainbox/widget`). React, shipped as an
+- `widget/` - the embeddable capture UI (`@brainbox-sh/widget`). React, shipped as an
   IIFE script-tag bundle, isolated from the host page via Shadow DOM.
-- `packages/replay/` - the session player (`@brainbox/replay`): `<SessionReplay />`
+- `packages/replay/` - the session player (`@brainbox-sh/replay`): `<SessionReplay />`
   over `@rrweb/replay`, with its own plain stylesheet. The dashboard is one host.
-- `dashboard/` - the customer-facing SaaS (`@brainbox/dashboard`). React + Vite +
+- `dashboard/` - the customer-facing SaaS (`@brainbox-sh/dashboard`). React + Vite +
   React Router.
-- `packages/server/` - the receiving end of the wire format (`@brainbox/server`):
+- `packages/server/` - the receiving end of the wire format (`@brainbox-sh/server`):
   `parseIngest(request, limits)` over a web-standard `Request`, zod only. Its
   README is the written-down upload format.
-- `packages/integrations/` - where a report goes next (`@brainbox/integrations`):
+- `packages/integrations/` - where a report goes next (`@brainbox-sh/integrations`):
   the `Destination` interface, `renderTicket()`, and `githubIssues()` plus the
   GitHub App helpers. `fetch` and WebCrypto only. The backend decides which
   project has which destination and when to deliver.
-- `backend/` - the API (`@brainbox/backend`). Hono + Drizzle + Postgres. Uses
-  `@brainbox/server` for `/ingest` and `@brainbox/integrations` to deliver.
+- `backend/` - the API (`@brainbox-sh/backend`). Hono + Drizzle + Postgres. Uses
+  `@brainbox-sh/server` for `/ingest` and `@brainbox-sh/integrations` to deliver.
 - `marketing/` - the landing page (`brainbox-landing`). React + Vite.
-- `packages/shared/` - cross-surface types (`@brainbox/shared`). Pure types, no
+- `packages/shared/` - cross-surface types (`@brainbox-sh/shared`). Pure types, no
   runtime.
 
 Package-specific rules live in nested `AGENTS.md` files. Read the one for the
@@ -46,13 +46,14 @@ surface you're editing.
 
 `pnpm verify` runs lint → typecheck → test → build across every package. It must
 pass before a change is finished. Do not report a task complete on a red
-`verify`. While iterating, scope to one package - e.g. `pnpm -F @brainbox/backend
+`verify`. While iterating, scope to one package - e.g. `pnpm -F @brainbox-sh/backend
 test` - but the full `verify` is the gate.
 
 ## Publishing
 
-`pnpm release` runs `verify`, then publishes every package that is not
-`private: true` to npm: `@brainbox/shared`, `core`, `react` and `widget`, in
+The npm scope is `@brainbox-sh` because `brainbox` on npm is someone else's user
+account. `pnpm release` runs `verify`, then publishes every package that is not
+`private: true` to npm: `@brainbox-sh/shared`, `core`, `react` and `widget`, in
 lockstep (`workspace:*` becomes the exact version). The `private` flag is the
 fence; the backend, dashboard, marketing, server, replay and integrations
 packages keep it.

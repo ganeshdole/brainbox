@@ -29,7 +29,7 @@ RUN pnpm -r build
 # Production-only node_modules for the API. dist is gitignored, so pnpm deploy
 # would skip it - it is copied from the build output separately below.
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm deploy --filter @brainbox/backend --prod --legacy /out
+    pnpm deploy --filter @brainbox-sh/backend --prod --legacy /out
 
 FROM build AS migrate
 WORKDIR /app/backend

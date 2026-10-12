@@ -1,4 +1,4 @@
-import type { ProjectKey } from "@brainbox/shared";
+import type { ProjectKey } from "@brainbox-sh/shared";
 
 const ALPHABET =
   "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";

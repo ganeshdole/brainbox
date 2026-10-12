@@ -1,4 +1,4 @@
-import type { Issue } from "@brainbox/shared";
+import type { Issue } from "@brainbox-sh/shared";
 
 /** One-line label for a report: the end-user's note if they wrote one, else
  *  the page's document title. The bare host+path is a last resort - inside a

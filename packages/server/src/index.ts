@@ -1,4 +1,4 @@
-// @brainbox/server - the receiving end of the wire format. See README.md for
+// @brainbox-sh/server - the receiving end of the wire format. See README.md for
 // the format itself.
 export {
   DEFAULT_INGEST_LIMITS,

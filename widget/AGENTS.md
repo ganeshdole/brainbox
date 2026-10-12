@@ -1,7 +1,7 @@
 # widget - AGENTS.md
 
-Brainbox's own capture UI (`@brainbox/widget`). React, built on
-`@brainbox/core` (the engine) and `@brainbox/react` (the provider and hooks).
+Brainbox's own capture UI (`@brainbox-sh/widget`). React, built on
+`@brainbox-sh/core` (the engine) and `@brainbox-sh/react` (the provider and hooks).
 Root rules in `/AGENTS.md` apply.
 
 ## Three ways in, one UI
@@ -29,7 +29,7 @@ It runs inside a **host app you don't control**, so isolation is the whole game:
   root. `<BrainboxWidget />` appends the host to `<body>` wherever it sits in
   the host's tree, so no ancestor's `overflow` or `transform` can trap it.
 - The engine is not here. Screenshots, marks, recording, metadata and sending
-  live in `@brainbox/core`. If a change is about *what gets captured or sent*,
+  live in `@brainbox-sh/core`. If a change is about *what gets captured or sent*,
   it belongs in `packages/core`. If it is about *what the user sees*, it
   belongs here.
 - Keep the UI-side browser logic in `src/lib/*` (`config`, `position`,
@@ -43,7 +43,7 @@ IIFE with React bundled; `dist/widget-capture.js`, rrweb and modern-screenshot
 as a second IIFE that `widget.js` injects on first open (core's `lazy.ts` is
 swapped for `src/lib/load-capture.ts` in that build - keep the two in step);
 and `dist/index.js`, an ES module of
-the library entry with React and the other `@brainbox/*` packages external.
+the library entry with React and the other `@brainbox-sh/*` packages external.
 Inside the monorepo the package is consumed from source (`src/index.ts`).
 
 ## Tests
@@ -51,4 +51,4 @@ Inside the monorepo the package is consumed from source (`src/index.ts`).
 Vitest under jsdom. `lib/*` functions are tested directly. `widget.test.tsx`,
 `mount.test.tsx` and `embed.test.ts` render the real tree with
 `react-dom/client` inside `act()` and read the shadow root. `!` is allowed in
-`*.test.ts(x)`. Run: `pnpm -F @brainbox/widget test`.
+`*.test.ts(x)`. Run: `pnpm -F @brainbox-sh/widget test`.

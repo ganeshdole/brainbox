@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import type { BillingState, PlanId, Subscription, SubscriptionStatus } from "@brainbox/shared";
+import type { BillingState, PlanId, Subscription, SubscriptionStatus } from "@brainbox-sh/shared";
 
 import { db } from "../db/client.ts";
 import { subscriptions } from "../db/schema/index.ts";

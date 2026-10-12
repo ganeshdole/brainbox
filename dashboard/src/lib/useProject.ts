@@ -1,5 +1,5 @@
 import { useOutletContext } from "react-router-dom";
-import type { Project } from "@brainbox/shared";
+import type { Project } from "@brainbox-sh/shared";
 
 /** localStorage key remembering the project `/` forwards to. */
 export const LAST_PROJECT_KEY = "brainbox:lastProject";
