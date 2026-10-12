@@ -9,8 +9,9 @@
    Same two-layer system as marketing/dashboard, but this CSS is
    injected into the widget's Shadow DOM. `:root` is rewritten to
    `:host` at inject time (embed.ts) because `:root` never matches
-   inside a shadow tree. The app is rendered inside a `.dark`
-   wrapper, so the `.dark` overrides apply.
+   inside a shadow tree. The app renders inside a `.bb-root`
+   wrapper that also carries `.dark` unless the host asked for the
+   light theme (lib/theme.ts), so the `.dark` overrides apply then.
    ============================================================ */
 
 @theme inline {
@@ -20,13 +21,14 @@
 }
 
 @layer base {
-  :host {
-    color-scheme: dark;
-  }
-  .dark {
+  .bb-root {
+    color-scheme: light;
     color: var(--text-emphasis);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     letter-spacing: -0.011em;
+  }
+  .bb-root.dark {
+    color-scheme: dark;
   }
 }

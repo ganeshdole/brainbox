@@ -6,6 +6,9 @@ export type ProjectKey = `pk_${string}`;
  *  `useBrainboxWidget().open()` in React). */
 export type TriggerMode = "floating" | "manual";
 
+/** The widget's colours: `system` follows the visitor's OS setting. */
+export type WidgetTheme = "dark" | "light" | "system";
+
 /** A customer's project as rendered in the dashboard. */
 export interface Project {
   id: string;

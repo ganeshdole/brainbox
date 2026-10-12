@@ -5,7 +5,8 @@ import { shadowCss } from "./shadow-css.ts";
 export interface ShadowHost {
   /** The element for the host document. Hidden while screenshotting. */
   element: HTMLElement;
-  /** Where to render. Carries the `.dark` class the stylesheet keys off. */
+  /** Where to render. Carries `.bb-root`, plus the `.dark` class the
+   *  stylesheet keys colours off when the theme is dark (lib/theme.ts). */
   container: HTMLElement;
 }
 
@@ -51,7 +52,7 @@ export function createShadowHost(css: string): ShadowHost {
   shadow.appendChild(style);
 
   const container = document.createElement("div");
-  container.className = "dark";
+  container.className = "bb-root dark";
   shadow.appendChild(container);
 
   return { element, container };

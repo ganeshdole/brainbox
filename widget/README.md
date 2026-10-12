@@ -21,6 +21,7 @@ For a page with no build step. Paste before `</body>`:
 | `data-mode` | `float` (our button) or `mount` (your own trigger) | `float` |
 | `data-mount` | CSS selector of your trigger, with `data-mode="mount"` | |
 | `data-position` | `bottom-right`, `bottom-left`, `top-right`, `top-left` | `bottom-right` |
+| `data-theme` | `dark`, `light`, or `system` to follow the visitor's OS | `dark` |
 
 The tag publishes `window.Brainbox` with `open()`, `start(mode)`, `close()`,
 `identify({ id, email, name, phone })` and `setFields([{ label, value, type }])`
@@ -39,7 +40,7 @@ import { BrainboxWidget, useBrainboxWidget } from "@ganeshdole/brainbox-widget";
 
 <BrainboxProvider transport={transport} identity={user}>
   <App />
-  <BrainboxWidget />                         {/* trigger="floating" | "manual", position */}
+  <BrainboxWidget />                         {/* trigger="floating" | "manual", position, theme */}
 </BrainboxProvider>
 
 function ReportProblemButton() {
