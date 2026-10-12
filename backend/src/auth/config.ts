@@ -1,17 +1,10 @@
-import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import Google from "@auth/core/providers/google";
 import type { EmailConfig } from "@auth/core/providers/email";
 
-import { db } from "../db/client.ts";
-import {
-  accounts,
-  sessions,
-  users,
-  verificationTokens,
-} from "../db/schema/index.ts";
 import { getEmailer } from "../email/index.ts";
 import { magicLinkEmail } from "../email/templates/magic-link.ts";
 import { env } from "../env.ts";
+import { getStore } from "../store/index.ts";
 
 // How long a sign-in link stays usable. Short enough that a forwarded or
 // leaked mail stops working quickly, long enough to survive a slow inbox.
@@ -23,8 +16,7 @@ const MAGIC_LINK_MAX_AGE_SECONDS = 15 * 60;
 // plus a Resend-verified domain. Auth.js treats any `type: "email"` provider
 // generically, so this needs no extra dependency.
 //
-// Requires the adapter's verificationTokens table, which the Drizzle schema
-// already defines for exactly this purpose.
+// Requires the store's Auth.js adapter to keep verification tokens.
 const magicLink: EmailConfig = {
   id: "magic-link",
   type: "email",
@@ -67,12 +59,7 @@ export function getAuthConfig() {
   return {
     secret: env.AUTH_SECRET,
     trustHost: true,
-    adapter: DrizzleAdapter(db, {
-      usersTable: users,
-      accountsTable: accounts,
-      sessionsTable: sessions,
-      verificationTokensTable: verificationTokens,
-    }),
+    adapter: getStore().authAdapter(),
 
     // Auth.js otherwise renders its own unbranded pages on the API origin, so a
     // failed sign-in dropped the user on app.brainbox.sh/api/auth/error with a

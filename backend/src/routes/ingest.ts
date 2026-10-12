@@ -1,15 +1,14 @@
-import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { parseIngest } from "@ganeshdole/brainbox-server";
 
-import { db } from "../db/client.ts";
-import { issues, projects } from "../db/schema/index.ts";
 import { env } from "../env.ts";
 import { deliverIssue } from "../integrations/dispatch.ts";
 import { cropRegion } from "../lib/crop.ts";
 import { transcribeAudio, transcriptionEnabled } from "../lib/transcription.ts";
 import { getStorage } from "../storage/index.ts";
+import type { Store } from "../store/index.ts";
+import type { AppEnv } from "../types.ts";
 
 const AUDIO_EXT: Record<string, string> = {
   "audio/webm": "webm",
@@ -24,7 +23,7 @@ const VIDEO_EXT: Record<string, string> = {
   "video/mp4": "mp4",
 };
 
-export const ingest = new Hono();
+export const ingest = new Hono<AppEnv>();
 
 // Public: called cross-origin from arbitrary customer sites, no cookies. The
 // per-project origin allowlist is enforced in the handler (not via CORS).
@@ -44,11 +43,8 @@ ingest.post("/", async (c) => {
   const { screenshot, video, session, audio } = parsed.files;
 
   // --- project key ---
-  const [project] = await db
-    .select()
-    .from(projects)
-    .where(eq(projects.key, feedback.projectKey))
-    .limit(1);
+  const store = c.get("store");
+  const project = await store.projects.getByKey(feedback.projectKey);
   if (!project) return c.json({ error: "Unknown project key" }, 401);
 
   // --- origin allowlist (empty = allow all; absent Origin, e.g. curl = allow) ---
@@ -123,7 +119,7 @@ ingest.post("/", async (c) => {
   // The video's mic audio track; whisper takes the webm/mp4 container as-is.
   const willTranscribeVideo = videoBytes !== null && transcriptionEnabled();
 
-  await db.insert(issues).values({
+  await store.issues.create({
     id: issueId,
     projectId: project.id,
     text: feedback.text ?? null,
@@ -144,43 +140,31 @@ ingest.post("/", async (c) => {
   // Delivery waits for it so the ticket carries the transcript.
   const transcriptions: Promise<void>[] = [];
   if (audioBytes && willTranscribeAudio) {
-    transcriptions.push(transcribeAndStore(issueId, audioBytes, "audio"));
+    transcriptions.push(transcribeAndStore(store, issueId, audioBytes, "audio"));
   }
   if (videoBytes && willTranscribeVideo) {
-    transcriptions.push(transcribeAndStore(issueId, videoBytes, "video"));
+    transcriptions.push(transcribeAndStore(store, issueId, videoBytes, "video"));
   }
   void Promise.allSettled(transcriptions)
-    .then(() => deliverIssue(issueId))
+    .then(() => deliverIssue(store, issueId))
     .catch((err: unknown) => console.error(`[ingest] delivery failed for ${issueId}:`, err));
 
   return c.json({ id: issueId }, 201);
 });
 
 async function transcribeAndStore(
+  store: Store,
   issueId: string,
   media: Uint8Array,
   kind: "audio" | "video",
 ): Promise<void> {
   try {
     const text = await transcribeAudio(media);
-    await db
-      .update(issues)
-      .set(
-        kind === "audio"
-          ? { audioTranscript: text, audioTranscriptStatus: "done" }
-          : { videoTranscript: text, videoTranscriptStatus: "done" },
-      )
-      .where(eq(issues.id, issueId));
+    await store.issues.setTranscript(issueId, kind, { status: "done", text });
   } catch (err) {
     console.error(`[ingest] ${kind} transcription failed for issue ${issueId}:`, err);
-    await db
-      .update(issues)
-      .set(
-        kind === "audio"
-          ? { audioTranscriptStatus: "failed" }
-          : { videoTranscriptStatus: "failed" },
-      )
-      .where(eq(issues.id, issueId))
+    await store.issues
+      .setTranscript(issueId, kind, { status: "failed" })
       .catch((dbErr: unknown) => {
         console.error(`[ingest] failed to mark transcription failed for ${issueId}:`, dbErr);
       });

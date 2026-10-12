@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CapturedMetadata, Region } from "@ganeshdole/brainbox-shared";
 
-import { issues, projects } from "../db/schema/index.ts";
+import type { IssueRecord, ProjectRecord } from "../store/index.ts";
 import type { Storage } from "../storage/index.ts";
 import { toIssue, toProject } from "./serialize.ts";
 
@@ -25,7 +25,7 @@ const storage: Storage = {
 
 describe("toProject", () => {
   it("maps a row 1:1 with an ISO createdAt", () => {
-    const row: typeof projects.$inferSelect = {
+    const row: ProjectRecord = {
       id: "p1",
       ownerId: "o1",
       name: "N",
@@ -44,7 +44,7 @@ describe("toProject", () => {
 });
 
 describe("toIssue", () => {
-  const base: typeof issues.$inferSelect = {
+  const base: IssueRecord = {
     id: "i1",
     projectId: "p1",
     createdAt: new Date("2024-01-01T00:00:00Z"),

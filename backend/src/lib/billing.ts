@@ -1,9 +1,7 @@
-import { eq } from "drizzle-orm";
 import type { BillingState, PlanId, Subscription, SubscriptionStatus } from "@ganeshdole/brainbox-shared";
 
-import { db } from "../db/client.ts";
-import { subscriptions } from "../db/schema/index.ts";
 import { env } from "../env.ts";
+import type { Store } from "../store/index.ts";
 
 // Tickets included per billing cycle, before overage. Mirrors the marketing
 // page's `lib/pricing.ts`; both ultimately mirror the free_threshold on the
@@ -37,16 +35,13 @@ export function isExempt(email: string | null | undefined): boolean {
  * re-deriving the rule, so there is one place to change if the policy changes.
  */
 export async function billingStateFor(
+  store: Store,
   userId: string,
   email: string | null | undefined,
 ): Promise<BillingState> {
   const exempt = isExempt(email);
 
-  const [row] = await db
-    .select()
-    .from(subscriptions)
-    .where(eq(subscriptions.userId, userId))
-    .limit(1);
+  const row = await store.billing.subscriptionFor(userId);
 
   if (!row) return { subscription: null, exempt, hasAccess: exempt };
 

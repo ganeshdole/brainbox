@@ -7,20 +7,14 @@ import type {
   ProjectDestination,
 } from "@ganeshdole/brainbox-shared";
 
-import {
-  deliveries,
-  integrationConnections,
-  issues,
-  projectDestinations,
-  projects,
-} from "../db/schema/index.ts";
 import type { Storage } from "../storage/index.ts";
-
-type IssueRow = typeof issues.$inferSelect;
-type ProjectRow = typeof projects.$inferSelect;
-type DeliveryRow = typeof deliveries.$inferSelect;
-type DestinationRow = typeof projectDestinations.$inferSelect;
-type ConnectionRow = typeof integrationConnections.$inferSelect;
+import type {
+  ConnectionRecord as ConnectionRow,
+  DeliveryRecord as DeliveryRow,
+  DestinationRecord as DestinationRow,
+  IssueRecord as IssueRow,
+  ProjectRecord as ProjectRow,
+} from "../store/index.ts";
 
 /** Map a DB issue row → the shared Issue, minting file URLs via storage. */
 export async function toIssue(

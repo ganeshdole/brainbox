@@ -1,13 +1,12 @@
 import { verifyGithubSignature } from "@ganeshdole/brainbox-integrations";
-import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { Webhook } from "standardwebhooks";
 import type { SubscriptionStatus } from "@ganeshdole/brainbox-shared";
 
-import { db } from "../db/client.ts";
-import { integrationConnections, subscriptions, webhookEvents } from "../db/schema/index.ts";
 import { env } from "../env.ts";
 import { planForProductId } from "../lib/dodo.ts";
+import type { SubscriptionChange } from "../store/index.ts";
+import type { AppEnv } from "../types.ts";
 
 // Dodo's subscription states -> ours. Anything unmapped is ignored rather than
 // guessed at: writing a wrong status here either locks a paying customer out or
@@ -31,7 +30,7 @@ interface SubscriptionPayload {
   metadata?: Record<string, string>;
 }
 
-export const webhooks = new Hono();
+export const webhooks = new Hono<AppEnv>();
 
 // Public: authenticated by signature, not by session. Mounted before the auth
 // gate in app.ts.
@@ -61,32 +60,23 @@ webhooks.post("/dodo", async (c) => {
 
   const event = JSON.parse(raw) as { type?: string; data?: SubscriptionPayload };
   const type = event.type ?? "";
-  const eventId = headers["webhook-id"];
   // Dodo sends unix seconds. Used to order events, not to trust their clock.
   const sentAtSeconds = Number(headers["webhook-timestamp"]);
   const sentAt = Number.isFinite(sentAtSeconds) ? new Date(sentAtSeconds * 1000) : new Date();
 
   try {
-    // Claim and apply in ONE transaction. Claiming first is what makes
-    // redelivery a no-op, but if the two were separate a crash between them
-    // would leave the id claimed with nothing written - and Dodo's retry would
-    // then be skipped as a duplicate, losing the subscription silently. In a
-    // transaction, a failure rolls the claim back too, so the retry re-claims.
-    const applied = await db.transaction(async (tx) => {
-      const claimed = await tx
-        .insert(webhookEvents)
-        .values({ id: eventId, type })
-        .onConflictDoNothing()
-        .returning({ id: webhookEvents.id });
-      if (claimed.length === 0) return false;
-
-      await applySubscriptionEvent(tx, type, event.data ?? {}, sentAt);
-      return true;
+    // The store records the event id and applies the change in one
+    // transaction. Recording first is what makes redelivery a no-op; doing
+    // both atomically means a failure leaves no record, so Dodo's retry is
+    // processed rather than skipped as a duplicate.
+    const result = await c.get("store").webhooks.applySubscriptionEvent({
+      eventId: headers["webhook-id"],
+      eventType: type,
+      change: subscriptionChange(type, event.data ?? {}, sentAt),
     });
-
-    return c.json(applied ? { received: true } : { received: true, duplicate: true });
+    return c.json(result === "applied" ? { received: true } : { received: true, duplicate: true });
   } catch (err) {
-    // 500 so Dodo retries; the transaction has already undone the claim.
+    // 500 so Dodo retries; nothing was recorded.
     console.error(`[webhooks] failed to apply ${type}:`, err);
     return c.json({ error: "Processing failed" }, 500);
   }
@@ -116,44 +106,33 @@ webhooks.post("/github", async (c) => {
     return c.json({ error: "Invalid JSON" }, 400);
   }
   const installationId = payload.installation?.id;
+  const uninstalled =
+    type === "installation" && payload.action === "deleted" && installationId !== undefined;
 
   try {
-    const applied = await db.transaction(async (tx) => {
-      const claimed = await tx
-        .insert(webhookEvents)
-        .values({ id: `github:${deliveryId}`, type: `${type}.${payload.action ?? ""}` })
-        .onConflictDoNothing()
-        .returning({ id: webhookEvents.id });
-      if (claimed.length === 0) return false;
-
-      if (type === "installation" && payload.action === "deleted" && installationId !== undefined) {
-        await tx
-          .delete(integrationConnections)
-          .where(
-            and(
-              eq(integrationConnections.provider, "github"),
-              eq(integrationConnections.externalId, String(installationId)),
-            ),
-          );
-      }
-      return true;
+    const result = await c.get("store").webhooks.applyGithubEvent({
+      eventId: `github:${deliveryId}`,
+      eventType: `${type}.${payload.action ?? ""}`,
+      removedInstallation: uninstalled ? String(installationId) : null,
     });
-    return c.json(applied ? { received: true } : { received: true, duplicate: true });
+    return c.json(result === "applied" ? { received: true } : { received: true, duplicate: true });
   } catch (err) {
     console.error(`[webhooks] failed to apply github ${type}:`, err);
     return c.json({ error: "Processing failed" }, 500);
   }
 });
 
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-async function applySubscriptionEvent(
-  db: Tx,
+/**
+ * What a Dodo event asks the store to change. Null for events that are only
+ * recorded: not about a subscription, or a status we do not map. Throws for a
+ * subscription event without an id, which the route answers with a 500.
+ */
+function subscriptionChange(
   type: string,
   data: SubscriptionPayload,
   sentAt: Date,
-) {
-  if (!type.startsWith("subscription.")) return;
+): SubscriptionChange | null {
+  if (!type.startsWith("subscription.")) return null;
 
   const dodoSubscriptionId = data.subscription_id;
   if (!dodoSubscriptionId) throw new Error("subscription event without subscription_id");
@@ -161,75 +140,32 @@ async function applySubscriptionEvent(
   const status = STATUS[data.status ?? ""];
   if (!status) {
     console.warn(`[webhooks] ignoring ${type} with unmapped status ${data.status}`);
-    return;
+    return null;
   }
 
-  const currentPeriodEnd = data.next_billing_date ? new Date(data.next_billing_date) : null;
-
-  // An update to a subscription we already know about: status changes only.
-  // Matching on the Dodo id means renewals and cancellations land on the right
-  // row even though they carry no session or user context.
-  const [existing] = await db
-    .select()
-    .from(subscriptions)
-    .where(eq(subscriptions.dodoSubscriptionId, dodoSubscriptionId))
-    .limit(1);
-
-  if (existing) {
-    // Delivery order is not guaranteed and retries can arrive minutes late, so
-    // a stale `cancelled` must not clobber a newer `active`. Compare when the
-    // events were SENT, not when they arrived.
-    if (existing.lastEventAt && existing.lastEventAt > sentAt) {
-      console.warn(
-        `[webhooks] ignoring ${type} sent ${sentAt.toISOString()}, older than the ` +
-          `state from ${existing.lastEventAt.toISOString()}`,
-      );
-      return;
-    }
-    await db
-      .update(subscriptions)
-      .set({ status, currentPeriodEnd, lastEventAt: sentAt, updatedAt: new Date() })
-      .where(eq(subscriptions.dodoSubscriptionId, dodoSubscriptionId));
-    return;
-  }
-
-  // First time we have seen it - the checkout we started. `metadata.userId` is
-  // the only link back to the Account, since the webhook arrives out-of-band
-  // with no session.
+  // Only needed the first time we see this subscription: the checkout we
+  // started. `metadata.userId` is the only link back to the Account, since the
+  // webhook arrives out-of-band with no session.
   const userId = data.metadata?.userId;
-  if (!userId) throw new Error(`${type} for unknown subscription and no metadata.userId`);
-
   const productId = data.product_id ?? "";
   const mapped = planForProductId(productId);
-  if (!mapped) throw new Error(`${type} references unconfigured product ${productId}`);
+  const create = !userId
+    ? { error: `${type} for unknown subscription and no metadata.userId` }
+    : !mapped
+      ? { error: `${type} references unconfigured product ${productId}` }
+      : {
+          userId,
+          dodoCustomerId: data.customer?.customer_id ?? "",
+          dodoProductId: productId,
+          plan: mapped.plan,
+          period: mapped.period,
+        };
 
-  await db
-    .insert(subscriptions)
-    .values({
-      userId,
-      dodoSubscriptionId,
-      dodoCustomerId: data.customer?.customer_id ?? "",
-      dodoProductId: productId,
-      plan: mapped.plan,
-      period: mapped.period,
-      status,
-      currentPeriodEnd,
-      lastEventAt: sentAt,
-    })
-    // An Account re-subscribing after cancelling already has a row; the unique
-    // index on user_id would otherwise reject it.
-    .onConflictDoUpdate({
-      target: subscriptions.userId,
-      set: {
-        dodoSubscriptionId,
-        dodoCustomerId: data.customer?.customer_id ?? "",
-        dodoProductId: productId,
-        plan: mapped.plan,
-        period: mapped.period,
-        status,
-        currentPeriodEnd,
-        lastEventAt: sentAt,
-        updatedAt: new Date(),
-      },
-    });
+  return {
+    dodoSubscriptionId,
+    status,
+    currentPeriodEnd: data.next_billing_date ? new Date(data.next_billing_date) : null,
+    sentAt,
+    create,
+  };
 }

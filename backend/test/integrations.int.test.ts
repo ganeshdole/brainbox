@@ -5,6 +5,7 @@ import { app } from "../src/app.ts";
 import { db } from "../src/db/client.ts";
 import { deliveries } from "../src/db/schema/index.ts";
 import { deliverIssue } from "../src/integrations/dispatch.ts";
+import { getStore } from "../src/store/index.ts";
 import { publicFileUrl } from "../src/lib/public-files.ts";
 import { getStorage } from "../src/storage/index.ts";
 import { fakeGithub } from "./github-fake.ts";
@@ -163,7 +164,7 @@ describe("deliverIssue", () => {
     await makeDestination(project.id, conn.id);
     const issue = await makeIssue(project.id);
 
-    const [failed] = await deliverIssue(issue.id);
+    const [failed] = await deliverIssue(getStore(), issue.id);
     expect(failed).toMatchObject({
       status: "failed",
       error: "Issues are disabled for this repo",
@@ -171,7 +172,7 @@ describe("deliverIssue", () => {
     });
 
     fail = false;
-    const [sent] = await deliverIssue(issue.id, { force: true });
+    const [sent] = await deliverIssue(getStore(), issue.id, { force: true });
     expect(sent).toMatchObject({
       status: "sent",
       externalId: "7",
@@ -187,8 +188,8 @@ describe("deliverIssue", () => {
     await makeDestination(project.id, conn.id);
     const issue = await makeIssue(project.id);
 
-    await deliverIssue(issue.id);
-    expect(await deliverIssue(issue.id)).toEqual([]);
+    await deliverIssue(getStore(), issue.id);
+    expect(await deliverIssue(getStore(), issue.id)).toEqual([]);
     expect(gh.issueCalls()).toHaveLength(1);
   });
 });

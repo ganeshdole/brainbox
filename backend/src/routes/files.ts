@@ -1,7 +1,5 @@
-import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 
-import { projects } from "../db/schema/index.ts";
 import { getStorage } from "../storage/index.ts";
 import { LocalStorage } from "../storage/local.ts";
 import { mimeForKey } from "../storage/mime.ts";
@@ -17,12 +15,7 @@ export const filesRoute = new Hono<AppEnv>().get("/*", async (c) => {
   const projectId = key.split("/")[0];
   if (!projectId) return c.json({ error: "Not found" }, 404);
 
-  const db = c.get("db");
-  const [proj] = await db
-    .select()
-    .from(projects)
-    .where(eq(projects.id, projectId))
-    .limit(1);
+  const proj = await c.get("store").projects.get(projectId);
   if (!proj || proj.ownerId !== uid) return c.json({ error: "Not found" }, 404);
 
   const storage = getStorage();

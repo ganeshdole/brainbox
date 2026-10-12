@@ -1,9 +1,7 @@
-import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { z } from "zod";
 
-import { waitlistSignups } from "../db/schema/index.ts";
 import { getEmailer } from "../email/index.ts";
 import { earlyAccessReservedEmail } from "../email/templates/early-access.ts";
 import { env } from "../env.ts";
@@ -58,15 +56,10 @@ waitlist.post("/", async (c) => {
   if (!parsed.success) return c.json({ error: "Invalid email" }, 400);
   const email = parsed.data.email;
 
-  const db = c.get("db");
+  const store = c.get("store");
 
-  // Idempotent capture: the unique(email) constraint makes re-submits no-ops.
-  // An empty returning() means the email was already on the list.
-  const [row] = await db
-    .insert(waitlistSignups)
-    .values({ email, source: "marketing" })
-    .onConflictDoNothing({ target: waitlistSignups.email })
-    .returning();
+  // Idempotent capture: a re-submitted email is a no-op (null).
+  const row = await store.waitlist.add(email, "marketing");
 
   if (!row) return c.json({ ok: true, alreadyRegistered: true });
 
@@ -82,19 +75,14 @@ waitlist.post("/", async (c) => {
       text: tmpl.text,
       ...(env.EMAIL_REPLY_TO ? { replyTo: env.EMAIL_REPLY_TO } : {}),
     });
-    await db
-      .update(waitlistSignups)
-      .set({ emailStatus: "sent" })
-      .where(eq(waitlistSignups.id, row.id));
+    await store.waitlist.setEmailStatus(row.id, { status: "sent" });
   } catch (err) {
     console.error("[waitlist] confirmation email failed:", err);
-    await db
-      .update(waitlistSignups)
-      .set({
-        emailStatus: "failed",
-        emailError: err instanceof Error ? err.message : String(err),
+    await store.waitlist
+      .setEmailStatus(row.id, {
+        status: "failed",
+        error: err instanceof Error ? err.message : String(err),
       })
-      .where(eq(waitlistSignups.id, row.id))
       .catch((dbErr: unknown) => {
         console.error("[waitlist] failed to record email failure:", dbErr);
       });
