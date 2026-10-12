@@ -4,6 +4,7 @@ import {
   type Brainbox,
   type BrainboxOptions,
   type Identity,
+  type ReportField,
   type SubmitResult,
   type Transport,
 } from "@ganeshdole/brainbox-core";
@@ -16,6 +17,9 @@ interface OwnedProps {
   transport: Transport;
   /** Who is filing. Changing it calls `identify()` on the live instance. */
   identity?: Identity;
+  /** Your app's own details for every report (clinic, plan, ...). Changing it
+   *  calls `setFields()` on the live instance. */
+  fields?: ReportField[];
   /** Called after every successful submit. May change between renders. */
   onSubmitted?: (result: SubmitResult) => void;
   brainbox?: never;
@@ -28,6 +32,7 @@ interface GivenProps {
   brainbox: Brainbox;
   transport?: never;
   identity?: never;
+  fields?: never;
   onSubmitted?: never;
 }
 
@@ -54,6 +59,7 @@ export function BrainboxProvider(props: BrainboxProviderProps) {
 function OwnedProvider({
   transport,
   identity,
+  fields,
   onSubmitted,
   children,
 }: OwnedProps & { children?: ReactNode }) {
@@ -68,11 +74,16 @@ function OwnedProvider({
   useEffect(() => {
     identityRef.current = identity;
   }, [identity]);
+  const fieldsRef = useRef(fields);
+  useEffect(() => {
+    fieldsRef.current = fields;
+  }, [fields]);
 
   useEffect(() => {
     const options: BrainboxOptions = {
       transport,
       identity: identityRef.current,
+      fields: fieldsRef.current,
       onSubmitted: (result) => onSubmittedRef.current?.(result),
     };
     const instance = createBrainbox(options);
@@ -86,6 +97,12 @@ function OwnedProvider({
   useEffect(() => {
     if (brainbox && identity) brainbox.identify(identity);
   }, [brainbox, identity]);
+
+  // The prop owns the instance's fields: dropping it clears them, so a
+  // signed-out user's reports never carry the previous account's details.
+  useEffect(() => {
+    brainbox?.setFields(fields ?? []);
+  }, [brainbox, fields]);
 
   return <BrainboxContext.Provider value={brainbox}>{children}</BrainboxContext.Provider>;
 }

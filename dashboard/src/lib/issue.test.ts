@@ -146,6 +146,20 @@ describe("matchesIssue", () => {
     expect(matchesIssue(issue, "dole777")).toBe(true);
   });
 
+  it("matches the reporter's name and phone, and the app's own field values", () => {
+    const fromClinic = {
+      text: "Invoice total is wrong",
+      metadata: meta({
+        identity: { name: "Priya Shah", phone: "+1 555 201 8842" },
+        fields: [{ label: "Clinic", value: "Acme Vet" }],
+      }),
+    };
+    expect(matchesIssue(fromClinic, "priya")).toBe(true);
+    expect(matchesIssue(fromClinic, "201 8842")).toBe(true);
+    expect(matchesIssue(fromClinic, "acme vet")).toBe(true);
+    expect(matchesIssue(fromClinic, "clinic")).toBe(false);
+  });
+
   it("matches everything on an empty or whitespace query", () => {
     expect(matchesIssue(issue, "")).toBe(true);
     expect(matchesIssue(issue, "   ")).toBe(true);

@@ -11,4 +11,11 @@ export { canSessionRecord } from "./session.ts";
 export { preloadCapture } from "./lazy.ts";
 export { startAudioRecording, type AudioRecorder } from "./audio.ts";
 export * from "./marks.ts";
-export type { CapturedMetadata, Identity, ProjectKey, Region } from "@ganeshdole/brainbox-shared";
+export type {
+  CapturedMetadata,
+  Identity,
+  ProjectKey,
+  Region,
+  ReportField,
+  ReportFieldType,
+} from "@ganeshdole/brainbox-shared";

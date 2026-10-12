@@ -71,6 +71,25 @@ describe("POST /ingest", () => {
     expect([...bytes.slice(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
   });
 
+  it("keeps the reporter and the app's own fields exactly as sent", async () => {
+    const user = await makeUser();
+    const project = await makeProject(user.id);
+    const identity = { id: "u1", email: "priya@acme.vet", name: "Priya Shah", phone: "+1 555 0100" };
+    const fields = [
+      { label: "Clinic", value: "Acme Vet", highlight: true },
+      { label: "Tenant ID", value: "t-1", type: "id" },
+    ];
+    const json = payload(project.key);
+
+    const res = await post(form({ ...json, metadata: { ...json.metadata, identity, fields } }));
+    expect(res.status).toBe(201);
+    const { id } = (await res.json()) as { id: string };
+
+    const row = (await stored.issues(id))[0]!;
+    expect(row.metadata.identity).toEqual(identity);
+    expect(row.metadata.fields).toEqual(fields);
+  });
+
   it("rejects an unknown project key (401)", async () => {
     const res = await post(form(payload("pk_does_not_exist")));
     expect(res.status).toBe(401);

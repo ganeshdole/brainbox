@@ -121,6 +121,42 @@ describe("renderTicket body", () => {
     expect(body).toContain("| User | anonymous |");
   });
 
+  it("names the reporter and lists the app's own fields as it labelled them", () => {
+    const body = renderTicket(
+      ticket({
+        metadata: {
+          ...metadata,
+          identity: { email: "jane@example.com", name: "Jane Roe", phone: "+1 555 0100" },
+          fields: [
+            { label: "Clinic", value: "Acme | Vet" },
+            { label: "Tenant ID", value: "t-1", type: "id" },
+          ],
+        },
+      }),
+    ).body;
+    expect(body).toContain("| User | Jane Roe <jane@example.com> |");
+    expect(body).toContain("| Phone | +1 555 0100 |");
+    expect(body).toContain("| Clinic | Acme \\| Vet |");
+    expect(body).toContain("| Tenant ID | t-1 |");
+  });
+
+  it("names a reporter known only by phone instead of calling them anonymous", () => {
+    const body = renderTicket(
+      ticket({ metadata: { ...metadata, identity: { phone: "+1 555 0100" } } }),
+    ).body;
+    expect(body).toContain("| User | +1 555 0100 |");
+  });
+
+  it("skips a blank reporter name or phone rather than leaving cells blank", () => {
+    for (const blank of ["", "   "]) {
+      const body = renderTicket(
+        ticket({ metadata: { ...metadata, identity: { name: blank, phone: blank, email: "jane@example.com" } } }),
+      ).body;
+      expect(body).toContain("| User | jane@example.com |");
+      expect(body).not.toContain("| Phone |");
+    }
+  });
+
   it("escapes pipes and newlines inside table cells", () => {
     const body = renderTicket(
       ticket({ metadata: { ...metadata, title: "A | B\nC", userAgent: "UA|1" } }),

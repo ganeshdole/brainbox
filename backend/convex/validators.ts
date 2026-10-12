@@ -23,7 +23,26 @@ export const capturedMetadata = v.object({
   timezone: v.string(),
   selector: v.optional(v.string()),
   consoleErrors: v.array(v.string()),
-  identity: v.optional(v.object({ id: v.optional(v.string()), email: v.optional(v.string()) })),
+  identity: v.optional(
+    v.object({
+      id: v.optional(v.string()),
+      email: v.optional(v.string()),
+      name: v.optional(v.string()),
+      phone: v.optional(v.string()),
+    }),
+  ),
+  fields: v.optional(
+    v.array(
+      v.object({
+        label: v.string(),
+        value: v.string(),
+        type: v.optional(
+          v.union(v.literal("text"), v.literal("email"), v.literal("phone"), v.literal("url"), v.literal("id")),
+        ),
+        highlight: v.optional(v.boolean()),
+      }),
+    ),
+  ),
 });
 
 export const transcriptStatus = v.union(v.literal("pending"), v.literal("done"), v.literal("failed"));

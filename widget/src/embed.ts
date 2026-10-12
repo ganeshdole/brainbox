@@ -1,4 +1,9 @@
-import { brainboxTransport, type Identity, type ProjectKey } from "@ganeshdole/brainbox-core";
+import {
+  brainboxTransport,
+  type Identity,
+  type ProjectKey,
+  type ReportField,
+} from "@ganeshdole/brainbox-core";
 import { readConfig } from "./lib/config.ts";
 import type { CaptureMode } from "./lib/widget-store.ts";
 import { mount, type WidgetHandle } from "./mount.tsx";
@@ -11,14 +16,25 @@ import { mount, type WidgetHandle } from "./mount.tsx";
 // Module scripts (dev harness) leave it null, so we fall back to a query below.
 const currentScript = document.currentScript as HTMLScriptElement | null;
 
-/** Set once the DOM is ready. Calls that beat it are no-ops, not crashes. */
+/** Set once the DOM is ready. Calls that beat it are no-ops, not crashes,
+ *  except who is reporting and the app's fields: a snippet sets those right
+ *  away, so they are kept and applied when the widget mounts. */
 let widget: WidgetHandle | null = null;
+let earlyIdentity: Identity | undefined;
+let earlyFields: ReportField[] | undefined;
 
 // Public API for host pages. "brainbox:submitted" ({ detail: { id } }) fires
 // on window after a successful submit.
 const api = {
   identify(identity: Identity) {
-    widget?.identify(identity);
+    if (widget) widget.identify(identity);
+    else earlyIdentity = identity;
+  },
+  /** Your app's own details for every report, e.g.
+   *  `[{ label: "Plan", value: "Pro" }]`. Replaces the previous ones. */
+  setFields(fields: ReportField[]) {
+    if (widget) widget.setFields(fields);
+    else earlyFields = fields;
   },
   open() {
     widget?.open();
@@ -60,6 +76,8 @@ function boot() {
     }),
     trigger: config.trigger,
     position: config.position,
+    identity: earlyIdentity,
+    fields: earlyFields,
     onSubmitted: ({ id }) =>
       window.dispatchEvent(new CustomEvent("brainbox:submitted", { detail: { id } })),
   });

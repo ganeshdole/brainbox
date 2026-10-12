@@ -8,4 +8,10 @@ export {
   type IngestRejection,
   type IngestResult,
 } from "./ingest.ts";
-export { feedbackSchema, metadataSchema, regionSchema } from "./schema.ts";
+export {
+  feedbackSchema,
+  metadataSchema,
+  regionSchema,
+  REPORT_FIELD_LIMITS,
+  reportFieldSchema,
+} from "./schema.ts";

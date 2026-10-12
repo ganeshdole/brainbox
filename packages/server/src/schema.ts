@@ -9,6 +9,19 @@ export const regionSchema = z.object({
   selector: z.string().optional(),
 });
 
+/** Caps on the host app's `fields`, so one report cannot carry an unbounded
+ *  amount of host data. */
+export const REPORT_FIELD_LIMITS = { count: 30, label: 60, value: 500 } as const;
+
+// Host-supplied text is trimmed on the way in, so a value of only spaces is
+// stored as empty and every display treats it as absent.
+export const reportFieldSchema = z.object({
+  label: z.string().trim().min(1).max(REPORT_FIELD_LIMITS.label),
+  value: z.string().trim().max(REPORT_FIELD_LIMITS.value),
+  type: z.enum(["text", "email", "phone", "url", "id"]).optional(),
+  highlight: z.boolean().optional(),
+});
+
 export const metadataSchema = z.object({
   url: z.string(),
   title: z.string(),
@@ -20,8 +33,14 @@ export const metadataSchema = z.object({
   selector: z.string().optional(),
   consoleErrors: z.array(z.string()),
   identity: z
-    .object({ id: z.string().optional(), email: z.string().optional() })
+    .object({
+      id: z.string().trim().optional(),
+      email: z.string().trim().optional(),
+      name: z.string().trim().max(200).optional(),
+      phone: z.string().trim().max(50).optional(),
+    })
     .optional(),
+  fields: z.array(reportFieldSchema).max(REPORT_FIELD_LIMITS.count).optional(),
 });
 
 export const feedbackSchema = z.object({

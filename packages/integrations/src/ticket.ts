@@ -1,4 +1,4 @@
-import type { CapturedMetadata, Region } from "@ganeshdole/brainbox-shared";
+import type { CapturedMetadata, Identity, Region } from "@ganeshdole/brainbox-shared";
 
 /** A report as a destination needs it. `links` must work without a session. */
 export interface Ticket {
@@ -64,7 +64,7 @@ function bodyFor(t: Ticket): string {
 
 function detailsTable(t: Ticket): string {
   const m = t.metadata;
-  const user = m.identity?.email ?? m.identity?.id ?? "anonymous";
+  const user = reporter(m.identity);
   const selector = t.region?.selector ?? m.selector;
   const rows: Array<[string, string]> = [
     ["Page", `[${cell(m.title.trim() || m.url)}](${m.url})`],
@@ -73,9 +73,28 @@ function detailsTable(t: Ticket): string {
     ["Locale", cell(`${m.language}, ${m.timezone}`)],
     ["User", cell(user)],
   ];
+  const phone = m.identity?.phone?.trim();
+  if (phone) rows.push(["Phone", cell(phone)]);
   if (selector) rows.push(["Element", `\`${cell(selector)}\``]);
+  // The host app's own details, as it labelled them.
+  for (const field of m.fields ?? []) {
+    if (field.value.trim()) rows.push([cell(field.label), cell(field.value)]);
+  }
   rows.push(["Reported", t.createdAt]);
   return ["| | |", "|---|---|", ...rows.map(([k, v]) => `| ${k} | ${v} |`)].join("\n");
+}
+
+/** "Ana Lima <ana@acme.co>", or the first part known of name, email, phone and
+ *  id, the same order the dashboard uses. Blank parts, empty
+ *  or only spaces, count as unknown: the schema accepts them, and they would
+ *  leave the cell blank. */
+function reporter(identity: Identity | undefined): string {
+  const name = identity?.name?.trim();
+  const email = identity?.email?.trim();
+  const phone = identity?.phone?.trim();
+  const id = identity?.id?.trim();
+  if (name && email) return `${name} <${email}>`;
+  return name || email || phone || id || "anonymous";
 }
 
 function consoleErrors(errors: string[]): string {

@@ -283,6 +283,17 @@ describe("Draft submit", () => {
     expect(sent[0]?.metadata.consoleErrors).toEqual(["seen-by-both", "seen-by-bb-only"]);
   });
 
+  it("carries the app's latest fields, and leaves an empty list out", async () => {
+    bb.setFields([{ label: "Clinic", value: "Acme Vet" }]);
+    bb.setFields([{ label: "Clinic", value: "Northside Vet" }]);
+    await bb.draft().submit({ text: "x" });
+    bb.setFields([]);
+    await bb.draft().submit({ text: "y" });
+
+    expect(sent[0]?.metadata.fields).toEqual([{ label: "Clinic", value: "Northside Vet" }]);
+    expect(sent[1]?.metadata).not.toHaveProperty("fields");
+  });
+
   it("reports a successful submit to the instance", async () => {
     const onSubmitted = vi.fn();
     const withHook = createBrainbox({ transport, onSubmitted });

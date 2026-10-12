@@ -9,6 +9,7 @@ import { issueTitle, pageLabel } from "../lib/issue";
 import { CopyButton } from "./CopyButton";
 import { Eyebrow } from "./Eyebrow";
 import { IssueDeliveries } from "./IssueDeliveries";
+import { ReporterCard } from "./IssueReporter";
 import { Lightbox } from "./Lightbox";
 import { Skeleton } from "./ui/skeleton";
 
@@ -152,7 +153,6 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
             <span className="truncate">{pageLabel(m.url)}</span>
             <ExternalLink className="h-3 w-3 shrink-0" />
           </a>
-          {m.identity?.email && <span className="truncate">{m.identity.email}</span>}
         </div>
         <IssueDeliveries
           issueId={issue.id}
@@ -221,6 +221,8 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
         </div>
 
         <aside className="min-w-0">
+          <ReporterCard identity={m.identity} fields={m.fields} />
+
           {/* status is only set when transcription ran; "done" implies text */}
           {transcript && (
             <div className="mb-6">
@@ -250,7 +252,6 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
           <Meta label="Language" value={m.language} />
           <Meta label="Timezone" value={m.timezone} />
           {m.selector && <Meta label="Selector" value={m.selector} />}
-          {m.identity?.email && <Meta label="User" value={m.identity.email} />}
           <Meta label="User agent" value={m.userAgent} />
 
           {m.consoleErrors.length > 0 && (
