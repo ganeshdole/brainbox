@@ -1,4 +1,4 @@
-import type { Identity } from "@brainbox-sh/shared";
+import type { Identity } from "@ganeshdole/brainbox-shared";
 import { createDraft, type Draft, type DraftOptions } from "./draft.ts";
 import { captureErrors } from "./metadata.ts";
 import type { SubmitResult, Transport } from "./transport.ts";

@@ -10,7 +10,7 @@ import type {
   PlanId,
   Project,
   ProjectDestination,
-} from "@brainbox-sh/shared";
+} from "@ganeshdole/brainbox-shared";
 
 import { API_URL } from "./authConfig";
 

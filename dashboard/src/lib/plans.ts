@@ -1,4 +1,4 @@
-import type { BillingPeriod, PlanId } from "@brainbox-sh/shared";
+import type { BillingPeriod, PlanId } from "@ganeshdole/brainbox-shared";
 
 // The plan catalogue as the picker renders it. Prices are in cents and must
 // match both the marketing page (marketing/src/lib/pricing.ts) and the Dodo

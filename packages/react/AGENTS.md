@@ -1,7 +1,7 @@
 # react - AGENTS.md
 
-React bindings for the engine (`@brainbox-sh/react`). The `react-redux` to
-`@brainbox-sh/core`'s `redux`: a provider that owns one instance, and hooks that
+React bindings for the engine (`@ganeshdole/brainbox-react`). The `react-redux` to
+`@ganeshdole/brainbox-core`'s `redux`: a provider that owns one instance, and hooks that
 read it. Root rules in `/AGENTS.md` apply; ADR 0005 explains the layering.
 
 ## What this package is
@@ -24,4 +24,4 @@ with its own UI uses these hooks the same way the widget does.
 ## Tests
 
 Vitest under jsdom. Render with `react-dom/client` inside React's `act()`;
-`test-setup.ts` flags the act environment. Run: `pnpm -F @brainbox-sh/react test`.
+`test-setup.ts` flags the act environment. Run: `pnpm -F @ganeshdole/brainbox-react test`.

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Mic, Pause, Play, Square, Trash2 } from "lucide-react";
-import { startAudioRecording, type AudioRecorder } from "@brainbox-sh/core";
+import { startAudioRecording, type AudioRecorder } from "@ganeshdole/brainbox-core";
 import { downsample, peakLevel } from "../lib/multiband.ts";
 import { useMultibandVolume } from "../lib/use-multiband.ts";
 import { fmtDuration } from "../lib/time.ts";

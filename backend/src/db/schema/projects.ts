@@ -1,5 +1,5 @@
 import { jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
-import type { ProjectKey } from "@brainbox-sh/shared";
+import type { ProjectKey } from "@ganeshdole/brainbox-shared";
 
 import { users } from "./auth-schema.ts";
 

@@ -1,16 +1,16 @@
-# @brainbox-sh/integrations
+# @ganeshdole/brainbox-integrations
 
 Send a Brainbox report to the tracker a team already uses. A `Destination`
 takes a `Ticket` and returns where it landed. GitHub issues is the first
 destination; it works with a GitHub App installation or a plain token.
 
-No dependencies beyond `@brainbox-sh/shared`. Runs anywhere `fetch` and WebCrypto
+No dependencies beyond `@ganeshdole/brainbox-shared`. Runs anywhere `fetch` and WebCrypto
 exist: Node 20+, Bun, Deno, Cloudflare Workers, Vercel.
 
 ## Use
 
 ```ts
-import { githubIssues, type Ticket } from "@brainbox-sh/integrations";
+import { githubIssues, type Ticket } from "@ganeshdole/brainbox-integrations";
 
 const dest = githubIssues({
   owner: "acme",
@@ -46,7 +46,7 @@ in one place.
 Inside the monorepo the package is consumed from source. Outside it:
 
 ```sh
-pnpm -F @brainbox-sh/integrations pack   # emits a tarball with dist/
+pnpm -F @ganeshdole/brainbox-integrations pack   # emits a tarball with dist/
 npm install ./brainbox-integrations-0.0.0.tgz
 ```
 
@@ -96,7 +96,7 @@ openssl pkcs8 -topk8 -nocrypt -in app.pem -out app.pkcs8.pem
 ```
 
 ```ts
-import { githubApp, githubIssues, verifyGithubSignature } from "@brainbox-sh/integrations";
+import { githubApp, githubIssues, verifyGithubSignature } from "@ganeshdole/brainbox-integrations";
 
 const app = githubApp({ appId: "12345", privateKey: pkcs8Pem });
 
@@ -132,7 +132,7 @@ Server.
 One file, one factory, no framework:
 
 ```ts
-import { renderTicket, type Destination } from "@brainbox-sh/integrations";
+import { renderTicket, type Destination } from "@ganeshdole/brainbox-integrations";
 
 export function linearIssues(opts: { teamId: string; apiKey: string }): Destination {
   return {

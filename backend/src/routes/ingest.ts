@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { parseIngest } from "@brainbox-sh/server";
+import { parseIngest } from "@ganeshdole/brainbox-server";
 
 import { db } from "../db/client.ts";
 import { issues, projects } from "../db/schema/index.ts";
@@ -31,7 +31,7 @@ export const ingest = new Hono();
 ingest.use("*", cors({ origin: (origin) => origin ?? "*", credentials: false }));
 
 ingest.post("/", async (c) => {
-  // The wire format itself (parts, schema, types, sizes) is @brainbox-sh/server's
+  // The wire format itself (parts, schema, types, sizes) is @ganeshdole/brainbox-server's
   // job; from here on it is ours: which project, where files go, what we store.
   const parsed = await parseIngest(c.req.raw, {
     screenshotBytes: env.MAX_SCREENSHOT_BYTES,

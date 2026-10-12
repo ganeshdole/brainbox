@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import type { BillingPeriod, BillingState } from "@brainbox-sh/shared";
+import type { BillingPeriod, BillingState } from "@ganeshdole/brainbox-shared";
 
 import { Button } from "../components/ui/button";
 import { Spinner } from "../components/ui/spinner";

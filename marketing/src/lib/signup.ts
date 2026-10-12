@@ -1,4 +1,4 @@
-// Types come from the local plan catalogue rather than @brainbox-sh/shared, which
+// Types come from the local plan catalogue rather than @ganeshdole/brainbox-shared, which
 // this package deliberately does not depend on - marketing is a static site
 // with no contract with the API beyond these two link params.
 import type { BillingPeriod, Plan } from "./pricing"

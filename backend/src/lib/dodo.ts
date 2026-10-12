@@ -1,4 +1,4 @@
-import type { BillingPeriod, PlanId } from "@brainbox-sh/shared";
+import type { BillingPeriod, PlanId } from "@ganeshdole/brainbox-shared";
 
 import { env } from "../env.ts";
 

@@ -6,7 +6,7 @@ import {
   type Identity,
   type SubmitResult,
   type Transport,
-} from "@brainbox-sh/core";
+} from "@ganeshdole/brainbox-core";
 
 const BrainboxContext = createContext<Brainbox | null>(null);
 

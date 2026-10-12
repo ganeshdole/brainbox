@@ -1,7 +1,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Mark } from "@brainbox-sh/core";
+import type { Mark } from "@ganeshdole/brainbox-core";
 import { MarkupOverlay } from "./MarkupOverlay.tsx";
 
 let container: HTMLDivElement;

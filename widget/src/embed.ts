@@ -1,4 +1,4 @@
-import { brainboxTransport, type Identity, type ProjectKey } from "@brainbox-sh/core";
+import { brainboxTransport, type Identity, type ProjectKey } from "@ganeshdole/brainbox-core";
 import { readConfig } from "./lib/config.ts";
 import { mount, type WidgetHandle } from "./mount.tsx";
 

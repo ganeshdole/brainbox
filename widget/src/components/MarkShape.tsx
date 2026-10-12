@@ -8,7 +8,7 @@ import {
   TEXT_HALO_WIDTH,
   TEXT_SIZE,
   type Mark,
-} from "@brainbox-sh/core";
+} from "@ganeshdole/brainbox-core";
 
 /** One mark as SVG. Shared by the markup step and the in-recording overlay so
  *  a box drawn in one looks identical in the other - and matches the bake,

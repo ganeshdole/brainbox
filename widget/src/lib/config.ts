@@ -1,4 +1,4 @@
-import type { TriggerMode } from "@brainbox-sh/shared";
+import type { TriggerMode } from "@ganeshdole/brainbox-shared";
 import type { Position } from "./position.ts";
 
 /** What the script tag asked for, read off its `data-*` attributes. */

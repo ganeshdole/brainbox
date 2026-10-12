@@ -1,7 +1,7 @@
 import type { record } from "rrweb";
 import type { domToCanvas } from "modern-screenshot";
 
-// The script-tag build's stand-in for `@brainbox-sh/core`'s `lazy.ts` (swapped in
+// The script-tag build's stand-in for `@ganeshdole/brainbox-core`'s `lazy.ts` (swapped in
 // by vite.config.ts). A bundler would split rrweb and modern-screenshot into
 // chunks; an IIFE can't, so they ship as a sibling `widget-capture.js` that
 // this injects on first use.

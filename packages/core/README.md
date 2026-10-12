@@ -1,4 +1,4 @@
-# @brainbox-sh/core
+# @ganeshdole/brainbox-core
 
 The Brainbox capture engine. Plain TypeScript, runs in the browser, no React
 and no UI. It takes the screenshot, bakes the user's marks into it, records
@@ -6,7 +6,7 @@ the session, keeps the last console errors, and hands the finished report to
 a `Transport`. Every Brainbox UI, including our own widget, is built on it.
 
 Use it directly when you are building your own feedback UI. If you want
-Brainbox's UI, see `@brainbox-sh/widget`; if you are in React, `@brainbox-sh/react`
+Brainbox's UI, see `@ganeshdole/brainbox-widget`; if you are in React, `@ganeshdole/brainbox-react`
 holds an instance for you.
 
 ## Install
@@ -14,13 +14,13 @@ holds an instance for you.
 Inside this monorepo the package is consumed from source:
 
 ```json
-{ "dependencies": { "@brainbox-sh/core": "workspace:*" } }
+{ "dependencies": { "@ganeshdole/brainbox-core": "workspace:*" } }
 ```
 
 Outside it, from npm:
 
 ```sh
-npm install @brainbox-sh/core
+npm install @ganeshdole/brainbox-core
 ```
 
 `pnpm build` emits `dist/` (JS plus `.d.ts`); the published package's
@@ -29,7 +29,7 @@ npm install @brainbox-sh/core
 ## Use
 
 ```ts
-import { createBrainbox, brainboxTransport } from "@brainbox-sh/core";
+import { createBrainbox, brainboxTransport } from "@ganeshdole/brainbox-core";
 
 const brainbox = createBrainbox({
   // Brainbox Cloud, or your own backend (see Transport below)
@@ -71,7 +71,7 @@ speaks the Brainbox backend's `/ingest` format. To send reports somewhere
 else, implement the one-method interface:
 
 ```ts
-import type { Transport } from "@brainbox-sh/core";
+import type { Transport } from "@ganeshdole/brainbox-core";
 
 const mine: Transport = {
   async send(report) {
@@ -85,7 +85,7 @@ const mine: Transport = {
 ```
 
 `Report` carries `text`, `region`, `metadata` (`CapturedMetadata` from
-`@brainbox-sh/shared`), and the `screenshot`, `session` and `audio` blobs.
+`@ganeshdole/brainbox-shared`), and the `screenshot`, `session` and `audio` blobs.
 
 ## Rules
 

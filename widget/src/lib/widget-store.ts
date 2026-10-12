@@ -1,4 +1,4 @@
-import type { Brainbox } from "@brainbox-sh/core";
+import type { Brainbox } from "@ganeshdole/brainbox-core";
 
 /** Whether the widget UI is open, shared between `<BrainboxWidget />` and
  *  whoever wants to open it: a host button, `window.Brainbox.open()`. Core

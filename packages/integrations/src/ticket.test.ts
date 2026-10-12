@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CapturedMetadata } from "@brainbox-sh/shared";
+import type { CapturedMetadata } from "@ganeshdole/brainbox-shared";
 
 import { renderTicket, type Ticket } from "./ticket.ts";
 

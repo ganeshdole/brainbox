@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { CapturedMetadata } from "@brainbox-sh/shared";
+import type { CapturedMetadata } from "@ganeshdole/brainbox-shared";
 
-import type { Issue } from "@brainbox-sh/shared";
+import type { Issue } from "@ganeshdole/brainbox-shared";
 
 import {
   issueTitle,
