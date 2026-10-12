@@ -1,0 +1,12 @@
+{
+  // The Convex functions, type-checked by the Convex CLI on push. Same strict
+  // settings as the rest of the repo; Convex runs them in its own runtime.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    // process.env is how Convex exposes deployment env vars.
+    "types": ["node"]
+  },
+  "include": ["./**/*"],
+  "exclude": ["./_generated"]
+}

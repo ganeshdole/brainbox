@@ -1,10 +1,8 @@
 import { createHmac, randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "../src/app.ts";
-import { db } from "../src/db/client.ts";
-import { integrationConnections, projectDestinations } from "../src/db/schema/index.ts";
+import { stored } from "./harness.ts";
 import { verify } from "../src/lib/signed.ts";
 import { fakeGithub } from "./github-fake.ts";
 import { testEnv } from "./env.ts";
@@ -78,11 +76,11 @@ describe("GitHub App install round-trip", () => {
     expect(res.headers.get("location")).toBe(
       `${testEnv.DASHBOARD_ORIGIN ?? "http://localhost:5173"}/projects/${project.id}/settings?github=connected`,
     );
-    const rows = await db.select().from(integrationConnections).where(eq(integrationConnections.ownerId, me.id));
+    const rows = await stored.connections(me.id);
     expect(rows).toMatchObject([{ provider: "github", externalId: "4242", label: "acme" }]);
 
     await callback(cookie, { installation_id: "4242", code: "good-code", state });
-    expect(await db.select().from(integrationConnections)).toHaveLength(1);
+    expect(await stored.connections()).toHaveLength(1);
     expect(gh.calls.some((c) => c.path.startsWith("/user/installations"))).toBe(true);
   });
 
@@ -99,7 +97,7 @@ describe("GitHub App install round-trip", () => {
     expect(badCode.headers.get("location")).toContain("?github=error");
     const noCode = await callback(cookie, { installation_id: "7", state });
     expect(noCode.headers.get("location")).toContain("?github=error");
-    expect(await db.select().from(integrationConnections)).toEqual([]);
+    expect(await stored.connections()).toEqual([]);
   });
 
   it("400s a forged state and another user's state", async () => {
@@ -144,7 +142,7 @@ describe("connections", () => {
       headers: { cookie: await authCookie(me.id) },
     });
     expect(res.status).toBe(200);
-    expect(await db.select().from(projectDestinations)).toEqual([]);
+    expect(await stored.destinations()).toEqual([]);
   });
 });
 
@@ -181,9 +179,9 @@ describe("POST /webhooks/github", () => {
     const id = randomUUID();
     const res = await send({ action: "deleted", installation: { id: 4242 } }, { id });
     expect(await res.json()).toEqual({ received: true });
-    const left = await db.select().from(integrationConnections);
+    const left = await stored.connections();
     expect(left.map((c) => c.externalId)).toEqual(["5555"]);
-    expect(await db.select().from(projectDestinations)).toEqual([]);
+    expect(await stored.destinations()).toEqual([]);
 
     const again = await send({ action: "deleted", installation: { id: 4242 } }, { id });
     expect(await again.json()).toEqual({ received: true, duplicate: true });
@@ -194,6 +192,6 @@ describe("POST /webhooks/github", () => {
     await makeConnection(me.id, "4242");
     const res = await send({ action: "added", installation: { id: 4242 } }, { event: "installation_repositories" });
     expect(res.status).toBe(200);
-    expect(await db.select().from(integrationConnections)).toHaveLength(1);
+    expect(await stored.connections()).toHaveLength(1);
   });
 });

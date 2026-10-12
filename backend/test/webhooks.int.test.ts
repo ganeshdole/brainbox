@@ -1,10 +1,8 @@
-import { eq } from "drizzle-orm";
 import { Webhook } from "standardwebhooks";
 import { describe, expect, it } from "vitest";
 
 import { app } from "../src/app.ts";
-import { db } from "../src/db/client.ts";
-import { subscriptions, webhookEvents } from "../src/db/schema/index.ts";
+import { stored } from "./harness.ts";
 import { testEnv } from "./env.ts";
 import { makeUser } from "./helpers.ts";
 
@@ -60,7 +58,7 @@ describe("POST /webhooks/dodo - signature", () => {
     });
     expect(res.status).toBe(400);
 
-    const rows = await db.select().from(subscriptions).where(eq(subscriptions.userId, me.id));
+    const rows = await stored.subscriptions(me.id);
     expect(rows).toHaveLength(0);
   });
 
@@ -102,10 +100,7 @@ describe("POST /webhooks/dodo - subscription lifecycle", () => {
     const res = await send(subscriptionActive(me.id, "sub_new"));
     expect(res.status).toBe(200);
 
-    const [row] = await db
-      .select()
-      .from(subscriptions)
-      .where(eq(subscriptions.userId, me.id));
+    const [row] = await stored.subscriptions(me.id);
     expect(row?.status).toBe("active");
     expect(row?.plan).toBe("pro");
     expect(row?.period).toBe("monthly");
@@ -119,10 +114,7 @@ describe("POST /webhooks/dodo - subscription lifecycle", () => {
     event.data.product_id = testEnv.DODO_PRODUCT_BUSINESS_ANNUAL!;
     await send(event);
 
-    const [row] = await db
-      .select()
-      .from(subscriptions)
-      .where(eq(subscriptions.userId, me.id));
+    const [row] = await stored.subscriptions(me.id);
     expect(row?.plan).toBe("business");
     expect(row?.period).toBe("annual");
   });
@@ -136,10 +128,7 @@ describe("POST /webhooks/dodo - subscription lifecycle", () => {
       data: { subscription_id: "sub_cancel", status: "cancelled" },
     });
 
-    const [row] = await db
-      .select()
-      .from(subscriptions)
-      .where(eq(subscriptions.userId, me.id));
+    const [row] = await stored.subscriptions(me.id);
     expect(row?.status).toBe("cancelled");
   });
 
@@ -151,10 +140,7 @@ describe("POST /webhooks/dodo - subscription lifecycle", () => {
       data: { subscription_id: "sub_hold", status: "on_hold" },
     });
 
-    const [row] = await db
-      .select()
-      .from(subscriptions)
-      .where(eq(subscriptions.userId, me.id));
+    const [row] = await stored.subscriptions(me.id);
     expect(row?.status).toBe("on_hold");
   });
 
@@ -170,7 +156,7 @@ describe("POST /webhooks/dodo - subscription lifecycle", () => {
     const res = await send(again);
     expect(res.status).toBe(200);
 
-    const rows = await db.select().from(subscriptions).where(eq(subscriptions.userId, me.id));
+    const rows = await stored.subscriptions(me.id);
     expect(rows).toHaveLength(1);
     expect(rows[0]?.status).toBe("active");
     expect(rows[0]?.dodoSubscriptionId).toBe("sub_second");
@@ -197,10 +183,7 @@ describe("POST /webhooks/dodo - out-of-order delivery", () => {
     );
     expect(res.status).toBe(200);
 
-    const [row] = await db
-      .select()
-      .from(subscriptions)
-      .where(eq(subscriptions.userId, me.id));
+    const [row] = await stored.subscriptions(me.id);
     expect(row?.status).toBe("active");
   });
 
@@ -215,10 +198,7 @@ describe("POST /webhooks/dodo - out-of-order delivery", () => {
       { sentAt: new Date(Date.now() + 60_000) },
     );
 
-    const [row] = await db
-      .select()
-      .from(subscriptions)
-      .where(eq(subscriptions.userId, me.id));
+    const [row] = await stored.subscriptions(me.id);
     expect(row?.status).toBe("cancelled");
   });
 });
@@ -236,7 +216,7 @@ describe("POST /webhooks/dodo - idempotency", () => {
     expect(second.status).toBe(200);
     expect(await second.json()).toMatchObject({ duplicate: true });
 
-    const rows = await db.select().from(subscriptions).where(eq(subscriptions.userId, me.id));
+    const rows = await stored.subscriptions(me.id);
     expect(rows).toHaveLength(1);
   });
 
@@ -245,7 +225,7 @@ describe("POST /webhooks/dodo - idempotency", () => {
     const id = nextId();
     await send(subscriptionActive(me.id, "sub_recorded"), { id });
 
-    const [row] = await db.select().from(webhookEvents).where(eq(webhookEvents.id, id));
+    const [row] = await stored.webhookEvents(id);
     expect(row?.type).toBe("subscription.active");
   });
 
@@ -261,7 +241,7 @@ describe("POST /webhooks/dodo - idempotency", () => {
     );
     expect(res.status).toBe(500);
 
-    const rows = await db.select().from(webhookEvents).where(eq(webhookEvents.id, id));
+    const rows = await stored.webhookEvents(id);
     expect(rows).toHaveLength(0);
   });
 });
@@ -277,10 +257,7 @@ describe("POST /webhooks/dodo - unknown input", () => {
     });
     expect(res.status).toBe(200);
 
-    const [row] = await db
-      .select()
-      .from(subscriptions)
-      .where(eq(subscriptions.userId, me.id));
+    const [row] = await stored.subscriptions(me.id);
     expect(row?.status).toBe("active");
   });
 

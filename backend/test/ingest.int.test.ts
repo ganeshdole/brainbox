@@ -1,9 +1,7 @@
-import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "../src/app.ts";
-import { db } from "../src/db/client.ts";
-import { issues } from "../src/db/schema/index.ts";
+import { stored } from "./harness.ts";
 import { getStorage } from "../src/storage/index.ts";
 import { LocalStorage } from "../src/storage/local.ts";
 import { makeProject, makeUser } from "./helpers.ts";
@@ -62,7 +60,7 @@ describe("POST /ingest", () => {
     const body = (await res.json()) as { id: string };
     expect(body.id).toBeTruthy();
 
-    const row = (await db.select().from(issues).where(eq(issues.id, body.id)))[0]!;
+    const row = (await stored.issues(body.id))[0]!;
     expect(row.projectId).toBe(project.id);
     expect(row.text).toBe("broken");
     expect(row.region).toEqual({ x: 1, y: 2, width: 3, height: 4 });
@@ -118,7 +116,7 @@ describe("POST /ingest — voice note transcription", () => {
   }
 
   async function issueRow(id: string) {
-    return (await db.select().from(issues).where(eq(issues.id, id)))[0]!;
+    return (await stored.issues(id))[0]!;
   }
 
   it("leaves transcript status null when transcription is disabled", async () => {

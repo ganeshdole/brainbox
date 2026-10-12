@@ -33,8 +33,10 @@ Ten surfaces, one workspace package each:
   the `Destination` interface, `renderTicket()`, and `githubIssues()` plus the
   GitHub App helpers. `fetch` and WebCrypto only. The backend decides which
   project has which destination and when to deliver.
-- `backend/` - the API (`@ganeshdole/brainbox-backend`). Hono + Drizzle + Postgres. Uses
-  `@ganeshdole/brainbox-server` for `/ingest` and `@ganeshdole/brainbox-integrations` to deliver.
+- `backend/` - the API (`@ganeshdole/brainbox-backend`). Hono over a pluggable
+  store (Postgres or Convex) and file storage (local, R2 or Convex), runnable as
+  a Node server or on Azure Functions. Uses `@ganeshdole/brainbox-server` for
+  `/ingest` and `@ganeshdole/brainbox-integrations` to deliver.
 - `marketing/` - the landing page (`brainbox-landing`). React + Vite.
 - `packages/shared/` - cross-surface types (`@ganeshdole/brainbox-shared`). Pure types, no
   runtime.

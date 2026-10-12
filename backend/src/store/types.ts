@@ -51,8 +51,11 @@ export interface IssueRecord {
   metadata: CapturedMetadata;
 }
 
-/** A new issue. Transcripts arrive later through `issues.setTranscript`. */
-export type NewIssue = Omit<IssueRecord, "createdAt" | "audioTranscript" | "videoTranscript">;
+/** A new issue. Transcripts arrive later through `issues.setTranscript`.
+ *  `createdAt` defaults to now; set it only when importing existing issues. */
+export type NewIssue = Omit<IssueRecord, "createdAt" | "audioTranscript" | "videoTranscript"> & {
+  createdAt?: Date;
+};
 
 export interface ConnectionRecord {
   id: string;
