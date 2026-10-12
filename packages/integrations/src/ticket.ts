@@ -81,11 +81,12 @@ function detailsTable(t: Ticket): string {
   return ["| | |", "|---|---|", ...rows.map(([k, v]) => `| ${k} | ${v} |`)].join("\n");
 }
 
-/** "Ana Lima <ana@acme.co>", or whichever part is known. */
+/** "Ana Lima <ana@acme.co>", or whichever part is known. Empty strings count
+ *  as unknown: the schema accepts them, and they would leave the cell blank. */
 function reporter(identity: Identity | undefined): string {
   const { name, email, id } = identity ?? {};
   if (name && email) return `${name} <${email}>`;
-  return name ?? email ?? id ?? "anonymous";
+  return name || email || id || "anonymous";
 }
 
 function consoleErrors(errors: string[]): string {

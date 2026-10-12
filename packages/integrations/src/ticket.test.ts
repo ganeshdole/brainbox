@@ -140,6 +140,13 @@ describe("renderTicket body", () => {
     expect(body).toContain("| Tenant ID | t-1 |");
   });
 
+  it("skips an empty reporter name rather than leaving the cell blank", () => {
+    const body = renderTicket(
+      ticket({ metadata: { ...metadata, identity: { name: "", email: "jane@example.com" } } }),
+    ).body;
+    expect(body).toContain("| User | jane@example.com |");
+  });
+
   it("escapes pipes and newlines inside table cells", () => {
     const body = renderTicket(
       ticket({ metadata: { ...metadata, title: "A | B\nC", userAgent: "UA|1" } }),
