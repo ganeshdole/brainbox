@@ -1,4 +1,4 @@
-import type { CapturedMetadata, FeedbackPayload, ProjectKey, Region } from "@brainbox-sh/shared";
+import type { CapturedMetadata, FeedbackPayload, ProjectKey, Region } from "@ganeshdole/brainbox-shared";
 
 /** A finished report, as handed to a `Transport`. Core does not know about
  *  project keys or endpoints; those belong to whichever transport sends it. */

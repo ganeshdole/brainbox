@@ -1,5 +1,5 @@
 import sharp from "sharp";
-import type { Region } from "@brainbox-sh/shared";
+import type { Region } from "@ganeshdole/brainbox-shared";
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(v, max));

@@ -8,7 +8,7 @@ import {
   nextColor,
   type Mark,
   type Tool,
-} from "@brainbox-sh/core";
+} from "@ganeshdole/brainbox-core";
 import { lockScroll } from "../lib/scroll-lock.ts";
 import { isDragTool, nextMarkId, useDrawing } from "../lib/use-drawing.ts";
 import { MarkShape, MarkTextInput } from "./MarkShape.tsx";

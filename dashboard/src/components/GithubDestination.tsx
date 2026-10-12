@@ -5,7 +5,7 @@ import type {
   IntegrationRepo,
   IntegrationsState,
   ProjectDestination,
-} from "@brainbox-sh/shared";
+} from "@ganeshdole/brainbox-shared";
 
 import { api, isAuthRedirect } from "../lib/api";
 import { installResult, parseLabels } from "../lib/integrations";

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Camera, Mic, Play, Search, Video } from "lucide-react";
-import type { Issue } from "@brainbox-sh/shared";
+import type { Issue } from "@ganeshdole/brainbox-shared";
 
 import { EmptyState } from "../components/EmptyState";
 import { InstallSnippet } from "../components/InstallSnippet";

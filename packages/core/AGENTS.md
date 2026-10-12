@@ -1,6 +1,6 @@
 # core - AGENTS.md
 
-The capture engine (`@brainbox-sh/core`). Plain TypeScript, no React, no UI. Root
+The capture engine (`@ganeshdole/brainbox-core`). Plain TypeScript, no React, no UI. Root
 rules in `/AGENTS.md` apply; ADR 0005 explains why this package exists.
 
 ## What this package is
@@ -27,4 +27,4 @@ a host app with its own UI is another.
 
 Vitest under jsdom, colocated `*.test.ts`. jsdom has no canvas, screenshotting
 or `URL.createObjectURL`, so `draft.test.ts` mocks `capture.ts` and stubs the
-URL functions. Run: `pnpm -F @brainbox-sh/core test`.
+URL functions. Run: `pnpm -F @ganeshdole/brainbox-core test`.

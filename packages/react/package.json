@@ -1,7 +1,7 @@
 {
-  "name": "@brainbox-sh/react",
+  "name": "@ganeshdole/brainbox-react",
   "version": "0.1.0",
-  "description": "React bindings for @brainbox-sh/core: a provider that owns one Brainbox instance and hooks that read it. No UI.",
+  "description": "React bindings for @ganeshdole/brainbox-core: a provider that owns one Brainbox instance and hooks that read it. No UI.",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://www.brainbox.sh",
   "repository": {
@@ -41,7 +41,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@brainbox-sh/core": "workspace:*"
+    "@ganeshdole/brainbox-core": "workspace:*"
   },
   "peerDependencies": {
     "react": "^19.0.0"

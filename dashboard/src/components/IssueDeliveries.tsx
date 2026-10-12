@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ExternalLink, RotateCw } from "lucide-react";
-import type { Delivery } from "@brainbox-sh/shared";
+import type { Delivery } from "@ganeshdole/brainbox-shared";
 
 import { api, isAuthRedirect } from "../lib/api";
 import { deliveryLabel } from "../lib/integrations";

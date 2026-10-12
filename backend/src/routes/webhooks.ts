@@ -1,8 +1,8 @@
-import { verifyGithubSignature } from "@brainbox-sh/integrations";
+import { verifyGithubSignature } from "@ganeshdole/brainbox-integrations";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { Webhook } from "standardwebhooks";
-import type { SubscriptionStatus } from "@brainbox-sh/shared";
+import type { SubscriptionStatus } from "@ganeshdole/brainbox-shared";
 
 import { db } from "../db/client.ts";
 import { integrationConnections, subscriptions, webhookEvents } from "../db/schema/index.ts";

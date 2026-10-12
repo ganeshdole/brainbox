@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
-import type { Project } from "@brainbox-sh/shared";
+import type { Project } from "@ganeshdole/brainbox-shared";
 
 import { api } from "../lib/api";
 import { cn } from "../lib/utils";

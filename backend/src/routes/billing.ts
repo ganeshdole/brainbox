@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import type { BillingPeriod, PlanId } from "@brainbox-sh/shared";
+import type { BillingPeriod, PlanId } from "@ganeshdole/brainbox-shared";
 
 import { env } from "../env.ts";
 import { billingStateFor } from "../lib/billing.ts";

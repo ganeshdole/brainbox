@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { canSessionRecord, preloadCapture, type Brainbox, type Mark, type Recording } from "@brainbox-sh/core";
-import { useDraft } from "@brainbox-sh/react";
-import type { TriggerMode } from "@brainbox-sh/shared";
+import { canSessionRecord, preloadCapture, type Brainbox, type Mark, type Recording } from "@ganeshdole/brainbox-core";
+import { useDraft } from "@ganeshdole/brainbox-react";
+import type { TriggerMode } from "@ganeshdole/brainbox-shared";
 import type { Position } from "./lib/position.ts";
 import { widgetStore } from "./lib/widget-store.ts";
 import { Launcher } from "./components/Launcher.tsx";

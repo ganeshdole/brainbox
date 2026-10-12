@@ -8,7 +8,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
-import type { DeliveryStatus, DestinationConfig, IntegrationProvider } from "@brainbox-sh/shared";
+import type { DeliveryStatus, DestinationConfig, IntegrationProvider } from "@ganeshdole/brainbox-shared";
 
 import { users } from "./auth-schema.ts";
 import { issues } from "./issues.ts";

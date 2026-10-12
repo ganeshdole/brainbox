@@ -15,7 +15,7 @@ const MAX_SCALE = 2;
  *  under the smallest browser limit (Safari's 16.7M pixels). */
 const MAX_CANVAS_PIXELS = 16_777_216;
 
-/** `@brainbox-sh/server`'s default screenshot cap. */
+/** `@ganeshdole/brainbox-server`'s default screenshot cap. */
 export const SCREENSHOT_BUDGET_BYTES = 5 * 1024 * 1024;
 
 export function captureScale(devicePixelRatio: number, documentPixels: number): number {

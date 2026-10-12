@@ -1,7 +1,7 @@
-# @brainbox-sh/widget
+# @ganeshdole/brainbox-widget
 
 Brainbox's own capture UI: the floating button, the markup step, the
-recorder, the composer. Built on `@brainbox-sh/core` and `@brainbox-sh/react`.
+recorder, the composer. Built on `@ganeshdole/brainbox-core` and `@ganeshdole/brainbox-react`.
 Three ways in, one UI.
 
 ## Script tag
@@ -29,12 +29,12 @@ The tag publishes `window.Brainbox` with `open()`, `close()` and
 ## In a React app
 
 ```sh
-npm install @brainbox-sh/widget @brainbox-sh/react @brainbox-sh/core
+npm install @ganeshdole/brainbox-widget @ganeshdole/brainbox-react @ganeshdole/brainbox-core
 ```
 
 ```tsx
-import { BrainboxProvider } from "@brainbox-sh/react";
-import { BrainboxWidget, useBrainboxWidget } from "@brainbox-sh/widget";
+import { BrainboxProvider } from "@ganeshdole/brainbox-react";
+import { BrainboxWidget, useBrainboxWidget } from "@ganeshdole/brainbox-widget";
 
 <BrainboxProvider transport={transport} identity={user}>
   <App />
@@ -55,8 +55,8 @@ bundle one.
 ## Without React, from a bundler
 
 ```ts
-import { mount } from "@brainbox-sh/widget";
-import { brainboxTransport } from "@brainbox-sh/core";
+import { mount } from "@ganeshdole/brainbox-widget";
+import { brainboxTransport } from "@ganeshdole/brainbox-core";
 
 const widget = mount({ transport: brainboxTransport({ endpoint, projectKey }), trigger: "manual" });
 widget.open();
@@ -68,12 +68,12 @@ widget.destroy();
 
 | Concern | Package |
 |---|---|
-| What gets captured and sent | `@brainbox-sh/core` |
-| Holding an instance in React | `@brainbox-sh/react` |
+| What gets captured and sent | `@ganeshdole/brainbox-core` |
+| Holding an instance in React | `@ganeshdole/brainbox-react` |
 | What the user sees | this package |
 
 Reports go wherever the `Transport` sends them. `brainboxTransport()` is
-Brainbox Cloud; see `@brainbox-sh/core` for pointing one at your own backend.
+Brainbox Cloud; see `@ganeshdole/brainbox-core` for pointing one at your own backend.
 
 ## Build
 
@@ -81,7 +81,7 @@ Brainbox Cloud; see `@brainbox-sh/core` for pointing one at your own backend.
 except the capture libraries), `dist/widget-capture.js` (rrweb and
 modern-screenshot, which `widget.js` loads from beside itself the first time the
 widget opens - serve the two files from the same folder), `dist/index.js` (an ES module of the library entry with React, `lucide-react`
-and the other `@brainbox-sh/*` packages external) and the `.d.ts` files. Inside
+and the other `@ganeshdole/brainbox-*` packages external) and the `.d.ts` files. Inside
 the monorepo the package is consumed from source; the published package's
 `exports` point at `dist/` (`publishConfig`). `react` and `react-dom` are peer
 dependencies of the library; the IIFE still bundles them.

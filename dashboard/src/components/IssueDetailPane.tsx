@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, ExternalLink, ZoomIn } from "lucide-react";
-import type { Issue } from "@brainbox-sh/shared";
-import { SessionReplay } from "@brainbox-sh/replay";
+import type { Issue } from "@ganeshdole/brainbox-shared";
+import { SessionReplay } from "@ganeshdole/brainbox-replay";
 
 import { api } from "../lib/api";
 import { issueTitle, pageLabel } from "../lib/issue";

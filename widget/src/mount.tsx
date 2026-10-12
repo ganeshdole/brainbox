@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client";
-import { createBrainbox, type BrainboxOptions, type Identity } from "@brainbox-sh/core";
-import { BrainboxProvider } from "@brainbox-sh/react";
-import type { TriggerMode } from "@brainbox-sh/shared";
+import { createBrainbox, type BrainboxOptions, type Identity } from "@ganeshdole/brainbox-core";
+import { BrainboxProvider } from "@ganeshdole/brainbox-react";
+import type { TriggerMode } from "@ganeshdole/brainbox-shared";
 import type { Position } from "./lib/position.ts";
 import { widgetStore } from "./lib/widget-store.ts";
 import { BrainboxWidget } from "./widget.tsx";

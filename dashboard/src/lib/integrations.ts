@@ -1,4 +1,4 @@
-import type { Delivery } from "@brainbox-sh/shared";
+import type { Delivery } from "@ganeshdole/brainbox-shared";
 
 export type DeliveryTone = "ok" | "error" | "muted";
 

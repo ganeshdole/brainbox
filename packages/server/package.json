@@ -1,5 +1,5 @@
 {
-  "name": "@brainbox-sh/server",
+  "name": "@ganeshdole/brainbox-server",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -32,7 +32,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@brainbox-sh/shared": "workspace:*",
+    "@ganeshdole/brainbox-shared": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

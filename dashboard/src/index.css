@@ -57,7 +57,7 @@
   }
 }
 
-/* @brainbox-sh/replay draws from its own --bb-replay-* properties; point them
+/* @ganeshdole/brainbox-replay draws from its own --bb-replay-* properties; point them
    at our tokens so the player sits in the dashboard like everything else. */
 .bb-replay {
   --bb-replay-bg: var(--bg-elevated);

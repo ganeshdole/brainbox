@@ -1,8 +1,8 @@
 # integrations - AGENTS.md
 
-Where a report goes after it is stored (`@brainbox-sh/integrations`). A ticket in,
+Where a report goes after it is stored (`@ganeshdole/brainbox-integrations`). A ticket in,
 an issue in someone else's tracker out. No dependencies beyond
-`@brainbox-sh/shared`. Root rules in `/AGENTS.md` apply; ADR 0006 explains why
+`@ganeshdole/brainbox-shared`. Root rules in `/AGENTS.md` apply; ADR 0006 explains why
 this is its own package.
 
 ## What this package is
@@ -33,4 +33,4 @@ stored about the outcome are the host's business. `backend/` is one host.
 
 Vitest under Node with `fakeFetch` from `src/test/`. Assert the request that
 went out and the result that came back. The RSA key in `app.test.ts` is
-generated per run. Run: `pnpm -F @brainbox-sh/integrations test`.
+generated per run. Run: `pnpm -F @ganeshdole/brainbox-integrations test`.

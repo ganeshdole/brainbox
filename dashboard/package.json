@@ -1,5 +1,5 @@
 {
-  "name": "@brainbox-sh/dashboard",
+  "name": "@ganeshdole/brainbox-dashboard",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -13,8 +13,8 @@
   },
   "dependencies": {
     "@auth/core": "0.41.2",
-    "@brainbox-sh/replay": "workspace:*",
-    "@brainbox-sh/shared": "workspace:*",
+    "@ganeshdole/brainbox-replay": "workspace:*",
+    "@ganeshdole/brainbox-shared": "workspace:*",
     "@hono/auth-js": "^1.1.1",
     "@radix-ui/colors": "^3.0.0",
     "@radix-ui/react-dropdown-menu": "^2.1.20",

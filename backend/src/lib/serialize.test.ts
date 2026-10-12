@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CapturedMetadata, Region } from "@brainbox-sh/shared";
+import type { CapturedMetadata, Region } from "@ganeshdole/brainbox-shared";
 
 import { issues, projects } from "../db/schema/index.ts";
 import type { Storage } from "../storage/index.ts";

@@ -1,4 +1,4 @@
-import type { Identity, Region } from "@brainbox-sh/shared";
+import type { Identity, Region } from "@ganeshdole/brainbox-shared";
 import { createAnnotations, type Annotations } from "./annotate.ts";
 import { bakeMarks, captureViewport, pickScreenshot } from "./capture.ts";
 import { unionBounds, type Mark } from "./marks.ts";

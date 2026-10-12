@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Project } from "@brainbox-sh/shared";
+import type { Project } from "@ganeshdole/brainbox-shared";
 
 import { homeTarget } from "./useProject.ts";
 

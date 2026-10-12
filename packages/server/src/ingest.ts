@@ -1,4 +1,4 @@
-import type { FeedbackPayload } from "@brainbox-sh/shared";
+import type { FeedbackPayload } from "@ganeshdole/brainbox-shared";
 import type { z } from "zod";
 import { feedbackSchema } from "./schema.ts";
 

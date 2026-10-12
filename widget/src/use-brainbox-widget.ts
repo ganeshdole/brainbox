@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { useBrainbox } from "@brainbox-sh/react";
+import { useBrainbox } from "@ganeshdole/brainbox-react";
 import { NO_WIDGET, widgetStore } from "./lib/widget-store.ts";
 
 /** Open or close the widget from anywhere under the same provider. */

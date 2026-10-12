@@ -1,7 +1,7 @@
 import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { Draft, DraftState } from "@brainbox-sh/core";
+import type { Draft, DraftState } from "@ganeshdole/brainbox-core";
 import { useDraft } from "./use-draft.ts";
 
 /** The two methods the hook uses, over a state the test can replace. */

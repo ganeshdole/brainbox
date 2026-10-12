@@ -1,5 +1,5 @@
 {
-  "name": "@brainbox-sh/integrations",
+  "name": "@ganeshdole/brainbox-integrations",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -32,7 +32,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@brainbox-sh/shared": "workspace:*"
+    "@ganeshdole/brainbox-shared": "workspace:*"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
