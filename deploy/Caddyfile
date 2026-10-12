@@ -15,7 +15,7 @@
 {$APP_HOST:app.localhost} {
 	encode zstd gzip
 
-	@api path /api/* /ingest /ingest/* /health /health/* /waitlist /waitlist/* /webhooks/* /f/*
+	@api path /api/* /ingest /ingest/* /health /health/* /waitlist /waitlist/* /webhooks/* /f/* /auth-error
 	handle @api {
 		reverse_proxy api:8787
 	}
