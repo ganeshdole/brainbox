@@ -1,17 +1,11 @@
 import { encode } from "@auth/core/jwt";
 import type { BillingPeriod, PlanId, SubscriptionStatus } from "@ganeshdole/brainbox-shared";
 
-import { db } from "../src/db/client.ts";
-import {
-  integrationConnections,
-  issues,
-  projectDestinations,
-  projects,
-  subscriptions,
-  users,
-} from "../src/db/schema/index.ts";
 import { generateProjectKey } from "../src/lib/projectKey.ts";
+import { getStore, type DestinationRecord, type NewIssue } from "../src/store/index.ts";
 import { testEnv } from "./env.ts";
+
+// Seed data through the Store, so the same tests run against every store.
 
 // Auth.js jwt session cookie name on http/localhost (no __Secure- prefix).
 const COOKIE_NAME = "authjs.session-token";
@@ -43,84 +37,91 @@ export async function makeUser(
   email = `u-${Math.random().toString(36).slice(2)}@test.local`,
   opts: { subscribed?: boolean } = {},
 ) {
-  const [u] = await db.insert(users).values({ email, name: "Test" }).returning();
-  if (opts.subscribed !== false) await subscribeUser(u!.id);
-  return u!;
+  const adapter = getStore().authAdapter();
+  const user = await adapter.createUser!({ id: crypto.randomUUID(), email, emailVerified: null, name: "Test" });
+  if (opts.subscribed !== false) await subscribeUser(user.id);
+  return user;
 }
 
-/** Give an Account an active subscription, so it gets past requireSubscription. */
+/** Give an Account an active subscription, so it gets past requireSubscription.
+ *  Seeded as the checkout webhook would record it. */
 export async function subscribeUser(
   userId: string,
   status: SubscriptionStatus = "active",
   over: { plan?: PlanId; period?: BillingPeriod } = {},
 ) {
-  await db.insert(subscriptions).values({
-    userId,
-    dodoSubscriptionId: `sub_${Math.random().toString(36).slice(2)}`,
-    dodoCustomerId: "cus_test",
-    dodoProductId: "pdt_test",
-    plan: over.plan ?? "pro",
-    period: over.period ?? "monthly",
-    status,
+  await getStore().webhooks.applySubscriptionEvent({
+    eventId: `seed_${crypto.randomUUID()}`,
+    eventType: "test.seed",
+    change: {
+      dodoSubscriptionId: `sub_${Math.random().toString(36).slice(2)}`,
+      status,
+      currentPeriodEnd: null,
+      sentAt: new Date(0),
+      create: {
+        userId,
+        dodoCustomerId: "cus_test",
+        dodoProductId: "pdt_test",
+        plan: over.plan ?? "pro",
+        period: over.period ?? "monthly",
+      },
+    },
   });
 }
 
 export async function makeProject(ownerId: string, allowedOrigins: string[] = []) {
-  const [p] = await db
-    .insert(projects)
-    .values({ ownerId, name: "Test Project", key: generateProjectKey(), allowedOrigins })
-    .returning();
-  return p!;
+  return getStore().projects.create({ ownerId, name: "Test Project", key: generateProjectKey(), allowedOrigins });
 }
 
-export async function makeIssue(
-  projectId: string,
-  over: Partial<typeof issues.$inferInsert> = {},
-) {
-  const [i] = await db
-    .insert(issues)
-    .values({
-      projectId,
-      screenshotKey: `${projectId}/issue/screenshot.png`,
-      region: { x: 0, y: 0, width: 10, height: 10 },
-      metadata: {
-        url: "http://host/app",
-        title: "App",
-        viewport: { width: 1, height: 1 },
-        devicePixelRatio: 1,
-        userAgent: "x",
-        language: "en",
-        timezone: "UTC",
-        consoleErrors: [],
-      },
-      ...over,
-    })
-    .returning();
-  return i!;
+export async function makeIssue(projectId: string, over: Partial<NewIssue> = {}) {
+  const id = over.id ?? crypto.randomUUID();
+  await getStore().issues.create({
+    projectId,
+    text: null,
+    screenshotKey: `${projectId}/issue/screenshot.png`,
+    cropKey: null,
+    videoKey: null,
+    videoMime: null,
+    videoTranscriptStatus: null,
+    sessionKey: null,
+    audioKey: null,
+    audioMime: null,
+    audioTranscriptStatus: null,
+    region: { x: 0, y: 0, width: 10, height: 10 },
+    metadata: {
+      url: "http://host/app",
+      title: "App",
+      viewport: { width: 1, height: 1 },
+      devicePixelRatio: 1,
+      userAgent: "x",
+      language: "en",
+      timezone: "UTC",
+      consoleErrors: [],
+    },
+    ...over,
+    id,
+  });
+  return (await getStore().issues.get(id))!;
 }
 
 export async function makeConnection(ownerId: string, externalId = "4242", label = "acme") {
-  const [c] = await db
-    .insert(integrationConnections)
-    .values({ ownerId, provider: "github", externalId, label })
-    .returning();
-  return c!;
+  const store = getStore();
+  await store.integrations.saveConnection({ ownerId, provider: "github", externalId, label });
+  const connections = await store.integrations.listConnections(ownerId);
+  return connections.find((c) => c.provider === "github" && c.externalId === externalId)!;
 }
 
 export async function makeDestination(
   projectId: string,
   connectionId: string,
-  over: Partial<typeof projectDestinations.$inferInsert> = {},
+  over: Partial<Pick<DestinationRecord, "config" | "enabled">> = {},
 ) {
-  const [d] = await db
-    .insert(projectDestinations)
-    .values({
-      projectId,
-      connectionId,
-      provider: "github",
-      config: { owner: "acme", repo: "web", labels: [] },
-      ...over,
-    })
-    .returning();
-  return d!;
+  return getStore().integrations.saveDestination({
+    projectId,
+    connectionId,
+    provider: "github",
+    config: { owner: "acme", repo: "web", labels: [] },
+    enabled: true,
+    ...over,
+  });
 }

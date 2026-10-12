@@ -30,6 +30,8 @@
     "@hono/auth-js": "^1.1.1",
     "@hono/node-server": "^2.0.6",
     "ai": "^7.0.15",
+    "convex": "^1.46.0",
+    "convex-helpers": "^0.1.128",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.27",
     "postgres": "^3.4.9",

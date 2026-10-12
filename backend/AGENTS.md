@@ -1,8 +1,8 @@
 # backend - AGENTS.md
 
-The API (`@ganeshdole/brainbox-backend`): Hono over a `Store`, with Postgres
-(Drizzle) as the store today. Root rules in `/AGENTS.md` apply; this covers
-what's specific here.
+The API (`@ganeshdole/brainbox-backend`): Hono over a `Store`. Postgres (Drizzle)
+and Convex are the stores, picked by `DATABASE_DRIVER`. Root rules in
+`/AGENTS.md` apply; this covers what's specific here.
 
 ## Structure
 
@@ -16,7 +16,16 @@ what's specific here.
   replace it. A new query is a new `Store` method, implemented by every store.
 - Rules that every store must apply identically live as plain functions beside
   the stores (e.g. `store/subscription-write.ts`), not inside one store.
-- The Postgres schema is in `src/db/schema/`.
+- The Postgres schema is in `src/db/schema/`. The Convex store is
+  `src/store/convex.ts` over the functions in `convex/` (schema in
+  `convex/schema.ts`); a schema change lands in both. Convex has no foreign
+  keys, so its deleting mutations do the cascades Postgres does
+  (`convex/lib/server.ts`).
+- Every Convex function is built with `serverQuery`/`serverMutation`, which
+  demand `BRAINBOX_SERVER_SECRET`: Convex functions are otherwise callable by
+  anyone with the deployment URL. Never export a bare `query` or `mutation`.
+- File storage is a separate choice (`STORAGE_DRIVER`: `local`, `r2`,
+  `convex`), behind the `Storage` interface in `src/storage/`.
 - Env is read once through `src/env.ts`. Add new vars there with an explicit
   required/optional decision, not ad-hoc `process.env` reads elsewhere.
 
@@ -71,18 +80,23 @@ undefined` - guard it (`if (!row) return c.json(..., 4xx/5xx)`) before use.
 
 ## Tests
 
-Integration tests (`test/*.int.test.ts`) run against a REAL Postgres. Local
-setup: copy `.env.test.example`, have Postgres reachable at the configured URL.
-`test/global-setup.ts` creates `brainbox_test` and truncates between tests, so
-they run serially - don't add cross-test state assumptions.
+Integration tests (`test/*.int.test.ts`) are the contract every store must
+pass. They run against a REAL Postgres by default: copy `.env.test.example`,
+have Postgres reachable at the configured URL. `TEST_STORE=convex` runs the same
+suite against a local Convex deployment instead (`CONVEX_AGENT_MODE=anonymous
+npx convex dev` in `backend/`, plus the two `npx convex env set` lines that
+`test/global-setup.ts` prints when they are missing). The store is emptied
+between tests, so they run serially - don't add cross-test state assumptions.
 
-Use the fixtures in `test/helpers.ts` (`makeUser`, `makeProject`, `makeIssue`,
-`authCookie`) instead of hand-rolling rows or minting cookies. `!` is allowed in
-test files.
+Seed with the fixtures in `test/helpers.ts` (`makeUser`, `makeProject`,
+`makeIssue`, `authCookie`) and assert on what was written with `stored` from
+`test/harness.ts`. Never reach for one database's client in a test, or the
+other store stops being tested. `!` is allowed in test files.
 
 ## Commands
 
-- `pnpm -F @ganeshdole/brainbox-backend test` - run the suite (needs Postgres).
+- `pnpm -F @ganeshdole/brainbox-backend test` - run the suite (needs Postgres);
+  `TEST_STORE=convex` runs it against local Convex.
 - `pnpm -F @ganeshdole/brainbox-backend db:generate` then `db:migrate` - after a schema
   change. `db:seed` loads dev data.
 - `func start` in `backend/` after a build - run under the Azure Functions host

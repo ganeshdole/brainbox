@@ -10,12 +10,33 @@ function optional(name: string, fallback: string): string {
   return value ?? fallback;
 }
 
-// AUTH_SECRET + DATABASE_URL are infra and must be present to boot.
-// GOOGLE_* are optional so the server can boot for inspection before the OAuth
-// client exists; Google sign-in obviously won't work until they're set.
+/** An env var that must be one of `allowed`; unset means `fallback`. */
+function oneOf<const T extends string>(name: string, allowed: readonly T[], fallback: T): T {
+  const value = process.env[name];
+  if (!value) return fallback;
+  const match = allowed.find((option) => option === value);
+  if (!match) throw new Error(`${name} must be one of ${allowed.join(", ")}; got "${value}"`);
+  return match;
+}
+
+// Where data and uploaded files live. Each driver needs only its own settings,
+// checked at boot so a misconfigured deployment fails loudly.
+const DATABASE_DRIVER = oneOf("DATABASE_DRIVER", ["postgres", "convex"], "postgres");
+const STORAGE_DRIVER = oneOf("STORAGE_DRIVER", ["local", "r2", "convex"], "local");
+const USES_CONVEX = DATABASE_DRIVER === "convex" || STORAGE_DRIVER === "convex";
+
+// AUTH_SECRET and the chosen store's settings are infra and must be present to
+// boot. GOOGLE_* are optional so the server can boot for inspection before the
+// OAuth client exists; Google sign-in obviously won't work until they're set.
 export const env = {
   AUTH_SECRET: required("AUTH_SECRET"),
-  DATABASE_URL: required("DATABASE_URL"),
+
+  // "postgres" needs DATABASE_URL. "convex" needs CONVEX_URL and the
+  // BRAINBOX_SERVER_SECRET also set on the Convex deployment (convex/lib/server.ts).
+  DATABASE_DRIVER,
+  DATABASE_URL: DATABASE_DRIVER === "postgres" ? required("DATABASE_URL") : (process.env.DATABASE_URL ?? ""),
+  CONVEX_URL: USES_CONVEX ? required("CONVEX_URL") : "",
+  BRAINBOX_SERVER_SECRET: USES_CONVEX ? required("BRAINBOX_SERVER_SECRET") : "",
   GOOGLE_ID: optional("GOOGLE_ID", ""),
   GOOGLE_SECRET: optional("GOOGLE_SECRET", ""),
   AUTH_URL: process.env.AUTH_URL ?? "http://localhost:8787/api/auth",
@@ -25,9 +46,9 @@ export const env = {
   // Public base URL of this API - used to build local file URLs (STORAGE_DRIVER=local).
   PUBLIC_API_URL: process.env.PUBLIC_API_URL ?? "http://localhost:8787",
 
-  // Object storage. "local" writes to backend/.storage/ (dev); "r2" uses
-  // Cloudflare R2. R2_* are only needed when STORAGE_DRIVER=r2.
-  STORAGE_DRIVER: process.env.STORAGE_DRIVER ?? "local",
+  // Object storage. "local" writes to backend/.storage/ (dev only); "r2" uses
+  // Cloudflare R2 (R2_* below); "convex" uses Convex file storage (CONVEX_URL).
+  STORAGE_DRIVER,
   R2_ENDPOINT: process.env.R2_ENDPOINT ?? "",
   R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID ?? "",
   R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY ?? "",

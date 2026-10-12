@@ -1,9 +1,7 @@
-import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "../src/app.ts";
-import { db } from "../src/db/client.ts";
-import { deliveries } from "../src/db/schema/index.ts";
+import { stored } from "./harness.ts";
 import { deliverIssue } from "../src/integrations/dispatch.ts";
 import { getStore } from "../src/store/index.ts";
 import { publicFileUrl } from "../src/lib/public-files.ts";
@@ -65,7 +63,7 @@ function ingestForm(projectKey: string, extra?: (fd: FormData) => void) {
 async function settled(issueId: string, timeoutMs = 3000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    const rows = await db.select().from(deliveries).where(eq(deliveries.issueId, issueId));
+    const rows = await stored.deliveries(issueId);
     if (rows.length > 0 && rows.every((r) => r.status !== "pending")) return rows;
     await new Promise((r) => setTimeout(r, 25));
   }
@@ -146,7 +144,7 @@ describe("delivery after ingest", () => {
     await new Promise((r) => setTimeout(r, 100));
     expect(gh.issueCalls()).toHaveLength(0);
     for (const issueId of [id, id2]) {
-      expect(await db.select().from(deliveries).where(eq(deliveries.issueId, issueId))).toEqual([]);
+      expect(await stored.deliveries(issueId)).toEqual([]);
     }
   });
 });

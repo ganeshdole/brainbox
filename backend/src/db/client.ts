@@ -4,8 +4,18 @@ import postgres from "postgres";
 import { env } from "../env.ts";
 import * as schema from "./schema/index.ts";
 
-// One pool for the lifetime of this long-running process.
-const client = postgres(env.DATABASE_URL);
+function connect() {
+  return drizzle(postgres(env.DATABASE_URL), { schema });
+}
 
-export const db = drizzle(client, { schema });
-export type DB = typeof db;
+export type DB = ReturnType<typeof connect>;
+
+let instance: DB | null = null;
+
+/** The Postgres pool, opened on first use and kept for the life of the
+ *  process, so a deployment on another store never needs DATABASE_URL. */
+export function getDb(): DB {
+  if (!env.DATABASE_URL) throw new Error("DATABASE_URL is not set");
+  instance ??= connect();
+  return instance;
+}

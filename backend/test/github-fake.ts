@@ -8,7 +8,11 @@ export interface GithubCall {
 
 type Reply = { status: number; body?: unknown };
 
-/** Stubs global fetch with a minimal GitHub API. Returns the recorded calls. */
+const GITHUB_HOSTS = new Set(["github.com", "api.github.com"]);
+
+/** Stubs global fetch with a minimal GitHub API. Returns the recorded calls.
+ *  Requests to any other host go to the real fetch, so a store that talks
+ *  HTTP (Convex) keeps working. */
 export function fakeGithub(
   opts: { createIssue?: () => Reply; userInstallationIds?: number[] } = {},
 ) {
@@ -24,8 +28,10 @@ export function fakeGithub(
       };
     });
 
+  const realFetch = globalThis.fetch;
   vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
-    const url = new URL(String(input));
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (!GITHUB_HOSTS.has(url.host)) return realFetch(input, init);
     const method = init?.method ?? "GET";
     const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
     calls.push({ method, path: url.pathname + url.search, body });

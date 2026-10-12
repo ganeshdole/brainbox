@@ -1,7 +1,9 @@
 import { eq } from "drizzle-orm";
 
-import { db } from "../src/db/client.ts";
+import { getDb } from "../src/db/client.ts";
 import { projects, users } from "../src/db/schema/index.ts";
+
+const db = getDb();
 
 const EMAIL = "seed@brainbox.local";
 const KEY = "pk_test_local" as const;
