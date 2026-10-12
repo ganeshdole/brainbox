@@ -76,7 +76,7 @@ describe("POST /ingest", () => {
     const project = await makeProject(user.id);
     const identity = { id: "u1", email: "priya@acme.vet", name: "Priya Shah", phone: "+1 555 0100" };
     const fields = [
-      { label: "Clinic", value: "Acme Vet" },
+      { label: "Clinic", value: "Acme Vet", highlight: true },
       { label: "Tenant ID", value: "t-1", type: "id" },
     ];
     const json = payload(project.key);

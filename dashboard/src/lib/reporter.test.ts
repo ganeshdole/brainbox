@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { fieldHref, hasReporter, highlightLine, initials, reporterSummary } from "./reporter.ts";
+import {
+  cleanIdentity,
+  fieldHref,
+  hasReporter,
+  highlightLine,
+  initials,
+  reporterSummary,
+} from "./reporter.ts";
 
 const fields = [
   { label: "Clinic", value: "Acme Vet", highlight: true },
@@ -57,10 +64,18 @@ describe("initials", () => {
   });
 });
 
+describe("cleanIdentity", () => {
+  it("trims each part and drops blank ones, so the email shows instead of an empty name", () => {
+    expect(cleanIdentity({ name: "   ", email: " ana@acme.co " })).toEqual({ email: "ana@acme.co" });
+    expect(cleanIdentity(undefined)).toEqual({});
+  });
+});
+
 describe("hasReporter", () => {
   it("is false for an anonymous report", () => {
     expect(hasReporter(undefined)).toBe(false);
     expect(hasReporter({})).toBe(false);
+    expect(hasReporter({ name: "  " })).toBe(false);
     expect(hasReporter({ phone: "+1 555" })).toBe(true);
   });
 });

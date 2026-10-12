@@ -49,7 +49,19 @@ export function highlightLine(fields: ReportField[]): string {
     .join(" · ");
 }
 
+/** The identity with each part trimmed, and blank parts dropped: a name of
+ *  only spaces must not win over the email and leave the heading empty. */
+export function cleanIdentity(identity: Identity | undefined): Identity {
+  const clean: Identity = {};
+  for (const key of ["id", "email", "name", "phone"] as const) {
+    const value = identity?.[key]?.trim();
+    if (value) clean[key] = value;
+  }
+  return clean;
+}
+
 /** True when the report says anything about who filed it. */
 export function hasReporter(identity: Identity | undefined): identity is Identity {
-  return Boolean(identity?.name || identity?.email || identity?.phone || identity?.id);
+  const { name, email, phone, id } = cleanIdentity(identity);
+  return Boolean(name || email || phone || id);
 }

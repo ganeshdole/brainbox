@@ -2,7 +2,14 @@ import { useState } from "react";
 import { Check, Copy, Mail, Phone } from "lucide-react";
 import type { Identity, ReportField } from "@ganeshdole/brainbox-shared";
 
-import { fieldHref, hasReporter, highlightLine, initials, reporterSummary } from "../lib/reporter";
+import {
+  cleanIdentity,
+  fieldHref,
+  hasReporter,
+  highlightLine,
+  initials,
+  reporterSummary,
+} from "../lib/reporter";
 import { Eyebrow } from "./Eyebrow";
 
 /**
@@ -14,15 +21,16 @@ import { Eyebrow } from "./Eyebrow";
  * Renders nothing for a report that carries neither a person nor fields.
  */
 export function ReporterCard({
-  identity,
+  identity: sent,
   fields = [],
 }: {
   identity: Identity | undefined;
   fields: ReportField[] | undefined;
 }) {
+  const identity = cleanIdentity(sent);
   const known = hasReporter(identity);
   if (!known && fields.length === 0) return null;
-  const { name, email, phone, id } = identity ?? {};
+  const { name, email, phone, id } = identity;
   const title = name || email || phone || "Anonymous";
   const subtitle = highlightLine(fields) || (name ? email : undefined);
   const tiles: ReportField[] = [
