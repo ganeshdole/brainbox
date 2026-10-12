@@ -30,10 +30,15 @@ Everything else is in `backend/src/env.ts`.
 ## Keep the dashboard and the API on one site
 
 The dashboard signs in with a cookie the API sets, and browsers block that
-cookie between unrelated sites. Serve both from one site: either one domain, or
-two subdomains of it such as `feedback.example.com` and
-`api.feedback.example.com`. Build the dashboard with `VITE_API_URL` set to the
-API's address.
+cookie between unrelated sites. Serve both from one site, in one of two ways:
+
+- **From the API itself.** Copy the built dashboard next to the backend and set
+  `DASHBOARD_DIR` to that folder, relative to the backend package. The API then
+  answers the dashboard's pages too, on its own address, with no custom domain.
+- **On two subdomains** of one domain, such as `feedback.example.com` and
+  `api.feedback.example.com`.
+
+Either way, build the dashboard with `VITE_API_URL` set to the API's address.
 
 ## Docker with Postgres
 
@@ -71,14 +76,18 @@ static dashboard behind Caddy. See its header comment for the settings it reads.
 
    ```sh
    pnpm -F @ganeshdole/brainbox-backend build
+   VITE_API_URL=<PUBLIC_API_URL> pnpm -F @ganeshdole/brainbox-dashboard build
    pnpm deploy --filter @ganeshdole/brainbox-backend --prod --legacy out/
-   # pnpm deploy skips the git-ignored build, as in the Dockerfile.
+   # pnpm deploy skips the git-ignored builds, as in the Dockerfile.
    cp -r backend/dist backend/host.json out/
+   cp -r dashboard/dist out/dashboard
    cd out && func azure functionapp publish <app name>
    ```
 
-4. **Dashboard.** Build `dashboard/` with `VITE_API_URL=<PUBLIC_API_URL>` and
-   host the static files on the same site as the API. On Azure Static Web Apps,
+4. **Dashboard.** With `DASHBOARD_DIR=dashboard` in the settings, the function
+   app serves the dashboard on its own address, so no Static Web App or custom
+   domain is needed. To host the dashboard separately instead, put it on an
+   Azure Static Web App on the same parent domain as the API.
    `staticwebapp.config.json` (copied into the build) sends deep links such as
    `/projects/<id>/issues/<id>` to the app instead of a 404.
 
