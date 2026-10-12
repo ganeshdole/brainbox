@@ -6,6 +6,7 @@ import { env } from "../env.ts";
 import { deliverIssue } from "../integrations/dispatch.ts";
 import { cropRegion } from "../lib/crop.ts";
 import { transcribeAudio, transcriptionEnabled } from "../lib/transcription.ts";
+import { runInBackground } from "../runtime/background.ts";
 import { getStorage } from "../storage/index.ts";
 import type { Store } from "../store/index.ts";
 import type { AppEnv } from "../types.ts";
@@ -136,7 +137,7 @@ ingest.post("/", async (c) => {
     metadata: feedback.metadata,
   });
 
-  // Fire-and-forget: transcription must never delay or fail the submission.
+  // In the background: transcription must never delay or fail the submission.
   // Delivery waits for it so the ticket carries the transcript.
   const transcriptions: Promise<void>[] = [];
   if (audioBytes && willTranscribeAudio) {
@@ -145,9 +146,12 @@ ingest.post("/", async (c) => {
   if (videoBytes && willTranscribeVideo) {
     transcriptions.push(transcribeAndStore(store, issueId, videoBytes, "video"));
   }
-  void Promise.allSettled(transcriptions)
-    .then(() => deliverIssue(store, issueId))
-    .catch((err: unknown) => console.error(`[ingest] delivery failed for ${issueId}:`, err));
+  runInBackground(
+    c,
+    Promise.allSettled(transcriptions)
+      .then(() => deliverIssue(store, issueId))
+      .catch((err: unknown) => console.error(`[ingest] delivery failed for ${issueId}:`, err)),
+  );
 
   return c.json({ id: issueId }, 201);
 });

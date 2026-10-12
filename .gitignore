@@ -38,3 +38,6 @@ marketing/public/widget-capture.js
 
 # Local widget UI screenshots (scripts/shoot.mjs)
 widget/.shots/
+
+# Azure Functions local settings (secrets)
+local.settings.json

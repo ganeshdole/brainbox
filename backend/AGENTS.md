@@ -20,6 +20,22 @@ what's specific here.
 - Env is read once through `src/env.ts`. Add new vars there with an explicit
   required/optional decision, not ad-hoc `process.env` reads elsewhere.
 
+## Runtimes
+
+`src/app.ts` is a web-standard Hono app; each host gets a thin entry around it.
+
+- `src/index.ts` - the Node server (`pnpm start`, the Docker image).
+- `src/azure.ts` - Azure Functions. `package.json` `"main"` points at its build
+  and `host.json` clears the `/api` route prefix, so the backend folder is the
+  function app. `runtime/azure-http.ts` converts requests and responses; Azure
+  needs cookies in a separate field, so keep that path covered by its tests.
+
+Work that outlives the response (transcription, delivery) goes through
+`runInBackground(c, task)`, never a bare `void promise`: serverless hosts freeze
+the instance once it responds, and the Azure entry waits for these tasks before
+returning. Serverless filesystems are read-only, so `STORAGE_DRIVER=local` is
+for development only.
+
 ## The wire format is not here
 
 `/ingest` parses its upload with `parseIngest()` from `@ganeshdole/brainbox-server`: the
@@ -69,3 +85,6 @@ test files.
 - `pnpm -F @ganeshdole/brainbox-backend test` - run the suite (needs Postgres).
 - `pnpm -F @ganeshdole/brainbox-backend db:generate` then `db:migrate` - after a schema
   change. `db:seed` loads dev data.
+- `func start` in `backend/` after a build - run under the Azure Functions host
+  locally (Azure Functions Core Tools; settings in a git-ignored
+  `local.settings.json`).
