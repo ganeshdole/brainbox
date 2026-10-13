@@ -1,11 +1,20 @@
 import { StrictMode, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Transport } from "@ganeshdole/brainbox-core";
 import { BrainboxProvider } from "@ganeshdole/brainbox-react";
 import { BrainboxWidget } from "./widget.tsx";
 import { useBrainboxWidget } from "./use-brainbox-widget.ts";
 import { BRAINBOX_HOST_ID, isBrainboxEvent } from "./lib/shadow-host.ts";
+
+// jsdom has no mic. A recording that caught voice opens the composer with
+// its textarea already up (and autofocused), the case a focus trap catches.
+vi.mock("../../packages/core/src/audio.ts", () => ({
+  startAudioRecording: async () => ({
+    stream: { getAudioTracks: () => [], getTracks: () => [] },
+    stop: async () => new Blob(["voice"]),
+  }),
+}));
 
 const transport: Transport = { send: async () => ({ id: "r1" }) };
 const originalConsoleError = console.error;
@@ -229,6 +238,52 @@ describe("BrainboxWidget", () => {
       expect(host?.hasAttribute("aria-modal")).toBe(false);
     } finally {
       modal.remove();
+    }
+  });
+
+  it("is already a dialog when the composer takes focus after a recording", async () => {
+    // jsdom's Blob has no stream(); take the session's uncompressed path.
+    vi.stubGlobal("CompressionStream", undefined);
+    function HostRecord() {
+      const { start } = useBrainboxWidget();
+      return <button onClick={() => start("record")}>Record it</button>;
+    }
+    // What a host's focusin trap would see as focus lands in the widget.
+    const seen: (string | null)[] = [];
+    const onFocusIn = (e: FocusEvent) => {
+      if (e.target instanceof Element && e.target.id === BRAINBOX_HOST_ID) {
+        seen.push(e.target.getAttribute("aria-modal"));
+      }
+    };
+    document.addEventListener("focusin", onFocusIn, true);
+    try {
+      act(() => {
+        root.render(
+          <BrainboxProvider transport={transport}>
+            <HostRecord />
+            <BrainboxWidget trigger="manual" />
+          </BrainboxProvider>,
+        );
+      });
+      act(() => hostClick("Record it"));
+      await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+      // Recording: the user works in the host page, so not a dialog.
+      expect(document.getElementById(BRAINBOX_HOST_ID)?.hasAttribute("aria-modal")).toBe(false);
+
+      const stop = Array.from(shadow()?.querySelectorAll("button") ?? []).find((b) =>
+        b.textContent?.includes("Stop"),
+      );
+      await act(async () => {
+        stop?.click();
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      });
+
+      expect(shadow()?.activeElement?.tagName).toBe("TEXTAREA");
+      expect(seen).not.toHaveLength(0);
+      expect(seen.every((v) => v === "true")).toBe(true);
+    } finally {
+      document.removeEventListener("focusin", onFocusIn, true);
+      vi.unstubAllGlobals();
     }
   });
 });
