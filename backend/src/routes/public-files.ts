@@ -2,7 +2,6 @@ import { Hono } from "hono";
 
 import { fileKeyFromToken } from "../lib/public-files.ts";
 import { getStorage } from "../storage/index.ts";
-import { LocalStorage } from "../storage/local.ts";
 import { mimeForKey } from "../storage/mime.ts";
 
 // Public, read-only, one file per signed token. Mounted before the auth gate.
@@ -11,9 +10,7 @@ export const publicFiles = new Hono().get("/:token", async (c) => {
   if (!key) return c.json({ error: "Not found" }, 404);
 
   const storage = getStorage();
-  if (!(storage instanceof LocalStorage)) {
-    return c.redirect(await storage.presignGet(key), 302);
-  }
+  if (!storage.read) return c.redirect(await storage.presignGet(key), 302);
   let bytes: Uint8Array;
   try {
     bytes = await storage.read(key);

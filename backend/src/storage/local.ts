@@ -5,7 +5,7 @@ import { env } from "../env.ts";
 import type { Storage } from "./index.ts";
 
 // Dev driver: writes under backend/.storage/ (gitignored). Same key scheme as
-// R2, so the dashboard's read logic is driver-agnostic.
+// every driver, so the dashboard's read logic is driver-agnostic.
 const BASE = join(import.meta.dirname, "../../.storage");
 
 export class LocalStorage implements Storage {
