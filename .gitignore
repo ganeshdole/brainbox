@@ -41,3 +41,8 @@ widget/.shots/
 
 # Azure Functions local settings (secrets)
 local.settings.json
+
+# e2e (Playwright) output and seeded login
+e2e/test-results/
+e2e/playwright-report/
+e2e/.auth/

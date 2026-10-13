@@ -51,6 +51,15 @@ pass before a change is finished. Do not report a task complete on a red
 `verify`. While iterating, scope to one package - e.g. `pnpm -F @ganeshdole/brainbox-backend
 test` - but the full `verify` is the gate.
 
+## Browser tests
+
+`e2e/` drives the real backend and dashboard in Chromium over Postgres
+(`brainbox_e2e`, recreated every run by `backend/scripts/reset-e2e-db.ts`),
+and records a video of every person a test signs in into `e2e/test-results/`.
+It is not part of `verify`. Run it with `pnpm -F @ganeshdole/brainbox-e2e e2e`
+(once per machine: `pnpm -F @ganeshdole/brainbox-e2e exec playwright install
+chromium`); `SLOW_MO=500` slows it down enough to follow the video.
+
 ## Publishing
 
 Packages publish as `@ganeshdole/brainbox-*`: `brainbox` on npm is someone else's user
