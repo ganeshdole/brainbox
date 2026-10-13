@@ -37,6 +37,12 @@ describe("renderTicket title", () => {
     expect(title.endsWith("…")).toBe(true);
   });
 
+  it("says a wordless feature request is one in its fallback title", () => {
+    expect(renderTicket(ticket({ kind: "feature" })).title).toBe(
+      "Feature request from Billing · Example",
+    );
+  });
+
   it("falls back to the transcript, then to the page title, then to the URL", () => {
     expect(renderTicket(ticket({ transcript: "it crashed" })).title).toBe("it crashed");
     expect(renderTicket(ticket()).title).toBe("Feedback on Billing · Example");
@@ -163,6 +169,17 @@ describe("renderTicket body", () => {
     ).body;
     expect(body).toContain("| Page | [A \\| B C](https://app.example.com/billing) |");
     expect(body).toContain("| Browser | UA\\|1 |");
+  });
+
+  it("marks a feature request and its importance at the top of the details", () => {
+    const body = renderTicket(
+      ticket({ kind: "feature", importance: "critical", text: "Bulk export" }),
+    ).body;
+    expect(body).toContain(
+      ["|---|---|", "| Type | Feature request |", "| Importance | Blocking them |", "| Page |"].join("\n"),
+    );
+    expect(renderTicket(ticket({ kind: "feature" })).body).not.toContain("| Importance |");
+    expect(renderTicket(ticket()).body).not.toContain("| Type |");
   });
 
   it("caps console errors at 20 and says how many more there were", () => {

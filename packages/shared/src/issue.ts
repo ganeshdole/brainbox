@@ -1,3 +1,4 @@
+import type { Importance, IssueKind } from "./feedback.ts";
 import type { Delivery } from "./integrations.ts";
 import type { CapturedMetadata } from "./metadata.ts";
 import type { Region } from "./region.ts";
@@ -19,6 +20,10 @@ export interface Issue {
   id: string;
   projectId: string;
   createdAt: string;
+  /** A bug report or a feature request. */
+  kind: IssueKind;
+  /** How much a feature request matters to whoever asked; never on a bug. */
+  importance?: Importance;
   text?: string;
   /** Present for screenshot submissions (absent for screen recordings). */
   screenshot?: StoredFile;
