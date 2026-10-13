@@ -8,13 +8,16 @@ import {
   matchesIssue,
   newestFirst,
   pageLabel,
+  importanceLabel,
   pagePath,
+  shownFilters,
   visibleReports,
 } from "./issue";
 
 describe("visibleReports", () => {
   const issue = (overrides: Partial<Issue> & { id: string; projectId: string }): Issue => ({
     createdAt: "2026-07-24T10:00:00.000Z",
+    kind: "bug",
     metadata: meta(),
     ...overrides,
   });
@@ -33,6 +36,20 @@ describe("visibleReports", () => {
     expect(ids(visibleReports(issues, { filter: "replay", query: "" }))).toEqual(["1"]);
     expect(ids(visibleReports(issues, { filter: "video", query: "" }))).toEqual(["2"]);
     expect(ids(visibleReports(issues, { filter: "errors", query: "" }))).toEqual(["3"]);
+  });
+
+  it("filters by kind", () => {
+    const mixed = [...issues, issue({ id: "4", projectId: "p1", kind: "feature", text: "dark mode" })];
+    expect(ids(visibleReports(mixed, { filter: "features", query: "" }))).toEqual(["4"]);
+    expect(ids(visibleReports(mixed, { filter: "bugs", query: "" }))).toEqual(["1", "2", "3"]);
+  });
+
+  it("shows the kind pills only for a list with both kinds, and other pills when they match", () => {
+    const keys = (list: Issue[]) => shownFilters(list).map((f) => f.key);
+    expect(keys(issues)).toEqual(["all", "replay", "video", "errors"]);
+    const feature = issue({ id: "4", projectId: "p1", kind: "feature" });
+    expect(keys([...issues, feature])).toEqual(["all", "bugs", "features", "replay", "video", "errors"]);
+    expect(keys([feature])).toEqual(["all"]);
   });
 
   it("drops unticked projects in the all view", () => {
@@ -171,5 +188,13 @@ describe("matchesIssue", () => {
 
   it("survives a missing identity", () => {
     expect(matchesIssue({ metadata: meta() }, "billing")).toBe(true);
+  });
+});
+
+describe("importanceLabel", () => {
+  it("names each importance in the ticket's words", () => {
+    expect(importanceLabel("nice")).toBe("Nice to have");
+    expect(importanceLabel("important")).toBe("Important");
+    expect(importanceLabel("critical")).toBe("Blocking them");
   });
 });

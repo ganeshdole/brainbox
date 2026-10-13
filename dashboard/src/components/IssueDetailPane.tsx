@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, ExternalLink, ZoomIn } from "lucide-react";
+import { ArrowLeft, ExternalLink, Lightbulb, ZoomIn } from "lucide-react";
 import type { Issue } from "@ganeshdole/brainbox-shared";
 import { SessionReplay } from "@ganeshdole/brainbox-replay";
 
 import { api } from "../lib/api";
-import { issueTitle, pageLabel } from "../lib/issue";
+import { importanceLabel, issueTitle, pageLabel } from "../lib/issue";
 import { CopyButton } from "./CopyButton";
 import { Eyebrow } from "./Eyebrow";
 import { IssueDeliveries } from "./IssueDeliveries";
@@ -143,6 +143,13 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
           {issueTitle(issue)}
         </h2>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs text-muted">
+          {issue.kind === "feature" && (
+            <span className="flex items-center gap-1 text-emphasis">
+              <Lightbulb className="h-3.5 w-3.5" aria-hidden />
+              Feature request
+              {issue.importance && ` · ${importanceLabel(issue.importance)}`}
+            </span>
+          )}
           <span>{new Date(issue.createdAt).toLocaleString()}</span>
           <a
             href={m.url}

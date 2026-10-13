@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Camera, Mic, Play, Search, Video } from "lucide-react";
+import { Camera, Lightbulb, Mic, Play, Search, Video } from "lucide-react";
 import type { Issue } from "@ganeshdole/brainbox-shared";
 
 import { EmptyState } from "../components/EmptyState";
@@ -15,11 +15,13 @@ import { Skeleton } from "../components/ui/skeleton";
 import { api, isAuthRedirect } from "../lib/api";
 import { cleanIdentity } from "../lib/reporter";
 import {
+  importanceLabel,
   issueTitle,
   newestFirst,
   pagePath,
   REPORT_FILTERS,
   type ReportFilterKey,
+  shownFilters,
   visibleReports,
 } from "../lib/issue";
 import { ALL_PROJECTS, useProject } from "../lib/useProject";
@@ -87,7 +89,7 @@ function ReportRow({ issue, projectLabel }: { issue: Issue; projectLabel?: strin
           />
         ) : (
           <span className="grid h-full w-full place-items-center text-muted">
-            <Video className="h-4 w-4" />
+            {issue.kind === "feature" ? <Lightbulb className="h-4 w-4" /> : <Video className="h-4 w-4" />}
           </span>
         )}
         {(issue.session ?? issue.video) && (
@@ -107,6 +109,12 @@ function ReportRow({ issue, projectLabel }: { issue: Issue; projectLabel?: strin
         )}
       </span>
       <span className="hidden shrink-0 items-center gap-1.5 sm:flex">
+        {issue.kind === "feature" && (
+          <Chip>
+            <Lightbulb className="h-2.5 w-2.5" aria-hidden />
+            {issue.importance ? `feature · ${importanceLabel(issue.importance).toLowerCase()}` : "feature"}
+          </Chip>
+        )}
         {issue.session && (
           <Chip>
             <Play className="h-2.5 w-2.5" aria-hidden />
@@ -280,10 +288,9 @@ export function Reports() {
           )}
           {issues && issues.length > 0 && (
             <div className="ml-auto flex flex-wrap items-center gap-1">
-              {REPORT_FILTERS.map((f) => {
-                // presence keyed to everything fetched (stable while ticking
-                // projects); only the count reflects the ticked subset
-                if (f.key !== "all" && issues.filter(f.match).length === 0) return null;
+              {/* presence keyed to everything fetched (stable while ticking
+                  projects); only the count reflects the ticked subset */}
+              {shownFilters(issues).map((f) => {
                 const count = (scoped ?? []).filter(f.match).length;
                 return (
                   <button

@@ -1,4 +1,4 @@
-import type { Issue } from "@ganeshdole/brainbox-shared";
+import type { Importance, Issue } from "@ganeshdole/brainbox-shared";
 
 /** One-line label for a report: the end-user's note if they wrote one, else
  *  the page's document title. The bare host+path is a last resort - inside a
@@ -9,15 +9,41 @@ export function issueTitle(issue: Pick<Issue, "text" | "metadata">): string {
   return issue.metadata.title || pageLabel(issue.metadata.url) || "Untitled report";
 }
 
-/** The Reports-page filter pills: what each report carries. */
+/** The Reports-page filter pills: what kind each report is, and what it carries. */
 export const REPORT_FILTERS = [
   { key: "all", label: "All", match: () => true },
+  { key: "bugs", label: "Bugs", match: (i: Issue) => i.kind !== "feature" },
+  { key: "features", label: "Feature requests", match: (i: Issue) => i.kind === "feature" },
   { key: "replay", label: "Replays", match: (i: Issue) => Boolean(i.session) },
   { key: "video", label: "Recordings", match: (i: Issue) => Boolean(i.video) },
   { key: "errors", label: "With errors", match: (i: Issue) => i.metadata.consoleErrors.length > 0 },
 ] as const;
 
 export type ReportFilterKey = (typeof REPORT_FILTERS)[number]["key"];
+
+/** The pills worth showing for a list: each filter that matches something,
+ *  and the two kinds only when the list holds both, since a "Bugs" pill on a
+ *  list of bugs says nothing "All" doesn't. */
+export function shownFilters(issues: Issue[]): typeof REPORT_FILTERS[number][] {
+  const mixed = issues.some((i) => i.kind === "feature") && issues.some((i) => i.kind !== "feature");
+  return REPORT_FILTERS.filter((f) => {
+    if (f.key === "all") return true;
+    if (f.key === "bugs" || f.key === "features") return mixed;
+    return issues.some(f.match);
+  });
+}
+
+const IMPORTANCE_LABEL: Record<Importance, string> = {
+  nice: "Nice to have",
+  important: "Important",
+  critical: "Blocking them",
+};
+
+/** "Important", or "Blocking them" for a request the end-user can't work
+ *  without. The same words as the ticket. */
+export function importanceLabel(importance: Importance): string {
+  return IMPORTANCE_LABEL[importance];
+}
 
 /** The full list pipeline: project untick (all view) → type filter → search. */
 export function visibleReports(
