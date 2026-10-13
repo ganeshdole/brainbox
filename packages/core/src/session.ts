@@ -1,5 +1,12 @@
 import { startAudioRecording, type AudioRecorder } from "./audio.ts";
 import { loadRecorder } from "./lazy.ts";
+import {
+  BLOCK_CLASS,
+  IGNORE_CLASS,
+  MASK_CLASS,
+  recordMaskOptions,
+  type PrivacyOptions,
+} from "./privacy.ts";
 
 export interface SessionCapture {
   session: Blob;
@@ -24,11 +31,16 @@ export function canSessionRecord(): boolean {
 
 /** Record the host app's DOM as an rrweb session - captures only this page.
  *  Private by default: input values are masked before anything leaves the
- *  browser; customers can add `.rr-block` / `.rr-mask` / `.rr-ignore`.
+ *  browser; customers can add `.rr-block` / `.rr-mask` / `.rr-ignore`, or mask
+ *  more text through `privacy`.
  *  Voice narration via the mic is best-effort: the user may deny the prompt
  *  (or dismiss it) and the DOM recording carries on without audio.
  *  `onAutoStop` fires at the max-duration cap so the caller finalizes via stop(). */
-export function startSessionRecording(onAutoStop: () => void, maxMs = 60_000): SessionRecording {
+export function startSessionRecording(
+  onAutoStop: () => void,
+  maxMs = 60_000,
+  privacy?: PrivacyOptions,
+): SessionRecording {
   const events: unknown[] = [];
   let startedAt = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -55,9 +67,10 @@ export function startSessionRecording(onAutoStop: () => void, maxMs = 60_000): S
       // privacy: never let typed values (passwords, emails, PII) leave as plaintext
       maskAllInputs: true,
       maskInputOptions: { password: true, email: true, tel: true },
-      blockClass: "rr-block",
-      ignoreClass: "rr-ignore",
-      maskTextClass: "rr-mask",
+      blockClass: BLOCK_CLASS,
+      ignoreClass: IGNORE_CLASS,
+      maskTextClass: MASK_CLASS,
+      ...recordMaskOptions(privacy),
       recordCanvas: false,
       collectFonts: false,
     });

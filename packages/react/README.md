@@ -82,7 +82,8 @@ function Panel({ draft }: { draft: Draft }) {
   `useBrainbox()` is `null`.
 - `identity` changes call `identify()`, and `fields` changes call
   `setFields()`, on the live instance. The `fields` prop owns the instance's
-  fields: dropping it clears them. `onSubmitted`
-  may change freely. Only a new `transport` rebuilds the instance.
+  fields: dropping it clears them. `onSubmitted` and `beforeSend` may change
+  freely. `privacy` (see the core README) is read when the instance is created.
+  Only a new `transport` rebuilds the instance.
 - `<BrainboxProvider brainbox={instance}>` provides an instance you created
   and own. Shells outside React (the script-tag bundle) use this.

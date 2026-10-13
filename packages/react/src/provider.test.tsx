@@ -182,4 +182,54 @@ describe("BrainboxProvider", () => {
     expect(first).not.toHaveBeenCalled();
     expect(second).toHaveBeenCalledWith({ id: "r1" });
   });
+
+  it("runs the latest beforeSend without rebuilding the instance", async () => {
+    const instances: Brainbox[] = [];
+    const render = (tag: string) =>
+      act(() => {
+        root.render(
+          <BrainboxProvider
+            transport={transport}
+            privacy={{ maskAllText: true }}
+            beforeSend={(report) => ({ ...report, text: `${report.text ?? ""} ${tag}` })}
+          >
+            <Probe
+              onInstance={(bb) => {
+                if (bb) instances.push(bb);
+              }}
+            />
+          </BrainboxProvider>,
+        );
+      });
+
+    render("first");
+    render("scrubbed");
+    expect(new Set(instances).size).toBe(1);
+
+    await act(() => instances[0]!.draft().submit({ text: "x" }));
+    expect(sent[0]?.text).toBe("x scrubbed");
+  });
+
+  it("runs a beforeSend that only arrives on a later render", async () => {
+    const instances: Brainbox[] = [];
+    const render = (beforeSend?: (report: Report) => Report) =>
+      act(() => {
+        root.render(
+          <BrainboxProvider transport={transport} beforeSend={beforeSend}>
+            <Probe
+              onInstance={(bb) => {
+                if (bb) instances.push(bb);
+              }}
+            />
+          </BrainboxProvider>,
+        );
+      });
+
+    render();
+    render((report) => ({ ...report, text: "scrubbed" }));
+    expect(new Set(instances).size).toBe(1);
+
+    await act(() => instances[0]!.draft().submit({ text: "Jane Doe" }));
+    expect(sent[0]?.text).toBe("scrubbed");
+  });
 });

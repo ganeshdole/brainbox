@@ -1,5 +1,6 @@
 import { loadRasteriser } from "./lazy.ts";
 import { paintMarks, type Mark } from "./marks.ts";
+import { paintCovers, screenshotCovers, type PrivacyOptions } from "./privacy.ts";
 
 /** Never rendered, so never worth cloning or serialising - big inline <script>
  *  blobs and unmounted <template> markup are pure capture cost. <style> stays:
@@ -90,6 +91,8 @@ export interface CaptureOptions {
    *  shot (ADR 0001). It stays visible on the live page throughout: hiding it
    *  would blank the UI for the seconds a capture takes. */
   exclude?: HTMLElement;
+  /** With `maskScreenshots`, what to cover before the shot leaves the page. */
+  privacy?: PrivacyOptions;
 }
 
 /** Resolve after the next frame has painted, so UI shown just before a capture
@@ -133,9 +136,11 @@ export async function withReadableFonts<T>(
 }
 
 /** Render the current viewport to a canvas. */
-async function viewportCanvas({ exclude }: CaptureOptions): Promise<HTMLCanvasElement> {
+async function viewportCanvas({ exclude, privacy }: CaptureOptions): Promise<HTMLCanvasElement> {
   const { domToCanvas } = await loadRasteriser();
   await afterPaint();
+  // Measured from the live page as it is cloned, painted onto the crop below.
+  const covers = screenshotCovers(privacy, exclude);
   const box = document.documentElement.getBoundingClientRect();
   const scale = captureScale(window.devicePixelRatio, box.width * box.height);
   const full = await withReadableFonts(() =>
@@ -173,6 +178,7 @@ async function viewportCanvas({ exclude }: CaptureOptions): Promise<HTMLCanvasEl
     out.width,
     out.height,
   );
+  paintCovers(ctx, covers, scale);
   return out;
 }
 

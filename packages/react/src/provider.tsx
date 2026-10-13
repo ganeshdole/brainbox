@@ -2,8 +2,10 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import {
   createBrainbox,
   type Brainbox,
+  type BeforeSend,
   type BrainboxOptions,
   type Identity,
+  type PrivacyOptions,
   type ReportField,
   type SubmitResult,
   type Transport,
@@ -20,6 +22,11 @@ interface OwnedProps {
   /** Your app's own details for every report (clinic, plan, ...). Changing it
    *  calls `setFields()` on the live instance. */
   fields?: ReportField[];
+  /** Mask text in recordings, cover it in screenshots. Read when the instance
+   *  is created; a change takes effect with the next `transport`. */
+  privacy?: PrivacyOptions;
+  /** Scrub or drop each report before it is sent. May change between renders. */
+  beforeSend?: BeforeSend;
   /** Called after every successful submit. May change between renders. */
   onSubmitted?: (result: SubmitResult) => void;
   brainbox?: never;
@@ -33,6 +40,8 @@ interface GivenProps {
   transport?: never;
   identity?: never;
   fields?: never;
+  privacy?: never;
+  beforeSend?: never;
   onSubmitted?: never;
 }
 
@@ -60,6 +69,8 @@ function OwnedProvider({
   transport,
   identity,
   fields,
+  privacy,
+  beforeSend,
   onSubmitted,
   children,
 }: OwnedProps & { children?: ReactNode }) {
@@ -70,6 +81,14 @@ function OwnedProvider({
   useEffect(() => {
     onSubmittedRef.current = onSubmitted;
   }, [onSubmitted]);
+  const beforeSendRef = useRef(beforeSend);
+  useEffect(() => {
+    beforeSendRef.current = beforeSend;
+  }, [beforeSend]);
+  const privacyRef = useRef(privacy);
+  useEffect(() => {
+    privacyRef.current = privacy;
+  }, [privacy]);
   const identityRef = useRef(identity);
   useEffect(() => {
     identityRef.current = identity;
@@ -84,6 +103,10 @@ function OwnedProvider({
       transport,
       identity: identityRef.current,
       fields: fieldsRef.current,
+      privacy: privacyRef.current,
+      // Always installed, so a callback that arrives on a later render (a
+      // privacy policy loaded async) still runs on this instance.
+      beforeSend: (report) => (beforeSendRef.current ? beforeSendRef.current(report) : report),
       onSubmitted: (result) => onSubmittedRef.current?.(result),
     };
     const instance = createBrainbox(options);

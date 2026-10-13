@@ -64,6 +64,32 @@ await rec.stop();                     // attaches the session and voice, takes a
 `screenshotFailed`, `hasSession`, `hasVoice`. It is a new object on every
 change, so `useSyncExternalStore` and friends can compare by reference.
 
+## Privacy
+
+For a host that shows regulated data, everything a report carries can be cut
+down. None of it is on by default.
+
+```ts
+createBrainbox({
+  transport,
+  privacy: {
+    maskAllText: true,           // recordings: every piece of text, not only .rr-mask
+    maskTextSelector: ".phi",    // or just these elements (and their descendants)
+    maskScreenshots: true,       // screenshots follow the same rules
+  },
+  // The last word before upload: scrub what you may not send, or return null
+  // to send nothing (submit then rejects, so the UI doesn't claim it was sent).
+  beforeSend: (report) => ({
+    ...report,
+    metadata: { ...report.metadata, url: report.metadata.url.split("?")[0], consoleErrors: [] },
+  }),
+});
+```
+
+With `maskScreenshots`, a screenshot boxes out `.rr-block` elements and covers
+form field values and masked text, line by line. It is off by default because
+some hosts block heavy elements from recordings only to keep them small.
+
 ## Transport
 
 Core does not know about project keys or endpoints. `brainboxTransport()`
@@ -95,4 +121,4 @@ const mine: Transport = {
   The one shared thing is the `console.error` hook, installed when the first
   instance asks and removed when the last one goes.
 - Privacy defaults in recordings: inputs are masked; `.rr-block`, `.rr-mask`
-  and `.rr-ignore` on host elements are honoured.
+  and `.rr-ignore` on host elements are honoured. More is opt-in, see Privacy.
