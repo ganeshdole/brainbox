@@ -9,6 +9,7 @@ import {
   newestFirst,
   pageLabel,
   importanceLabel,
+  isBugReport,
   pagePath,
   shownFilters,
   visibleReports,
@@ -38,18 +39,15 @@ describe("visibleReports", () => {
     expect(ids(visibleReports(issues, { filter: "errors", query: "" }))).toEqual(["3"]);
   });
 
-  it("filters by kind", () => {
-    const mixed = [...issues, issue({ id: "4", projectId: "p1", kind: "feature", text: "dark mode" })];
-    expect(ids(visibleReports(mixed, { filter: "features", query: "" }))).toEqual(["4"]);
-    expect(ids(visibleReports(mixed, { filter: "bugs", query: "" }))).toEqual(["1", "2", "3"]);
-  });
-
-  it("shows the kind pills only for a list with both kinds, and other pills when they match", () => {
+  it("shows All, and the other pills only when they match something", () => {
     const keys = (list: Issue[]) => shownFilters(list).map((f) => f.key);
     expect(keys(issues)).toEqual(["all", "replay", "video", "errors"]);
-    const feature = issue({ id: "4", projectId: "p1", kind: "feature" });
-    expect(keys([...issues, feature])).toEqual(["all", "bugs", "features", "replay", "video", "errors"]);
-    expect(keys([feature])).toEqual(["all"]);
+    expect(keys([issue({ id: "4", projectId: "p1" })])).toEqual(["all"]);
+  });
+
+  it("tells a bug report from a feature request", () => {
+    expect(isBugReport({ kind: "bug" })).toBe(true);
+    expect(isBugReport({ kind: "feature" })).toBe(false);
   });
 
   it("drops unticked projects in the all view", () => {
