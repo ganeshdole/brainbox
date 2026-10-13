@@ -56,6 +56,8 @@ function page(): HTMLElement {
     <textarea data-at="10">notes</textarea>
     <div data-at="11" id="widget"><p data-at="12">the widget's own text</p><input data-at="13" /></div>
     <p data-at="14">   </p>
+    <input data-at="15" type="submit" value="Book for Jane Doe" />
+    <span class="rr-mask"><input data-at="16" type="button" value="Jane Doe" /></span>
   `;
   const widget = document.getElementById("widget");
   if (!widget) throw new Error("fixture");
@@ -72,17 +74,18 @@ describe("screenshotCovers", () => {
   it("boxes out blocks and form fields and covers .rr-mask text, leaving the widget alone", () => {
     const widget = page();
     // 5: the block (its contents go with it), 8 and 10: fields with values,
-    // 2 and 3: masked text and its descendants'. Not 9, a checkbox.
-    expect(covered({ maskScreenshots: true }, widget)).toEqual([2, 3, 5, 8, 10]);
+    // 2 and 3: masked text and its descendants', 16: a masked button's label.
+    // Not 9, a checkbox, nor 15, an unmasked button.
+    expect(covered({ maskScreenshots: true }, widget)).toEqual([2, 3, 5, 8, 10, 16]);
   });
 
   it("adds the host's own selector, or every line of text", () => {
     const widget = page();
     expect(covered({ maskScreenshots: true, maskTextSelector: ".phi" }, widget)).toEqual([
-      2, 3, 4, 5, 8, 10,
+      2, 3, 4, 5, 8, 10, 16,
     ]);
     expect(covered({ maskScreenshots: true, maskAllText: true }, widget)).toEqual([
-      1, 2, 3, 4, 5, 8, 10,
+      1, 2, 3, 4, 5, 8, 10, 15, 16,
     ]);
   });
 });

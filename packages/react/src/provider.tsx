@@ -104,10 +104,9 @@ function OwnedProvider({
       identity: identityRef.current,
       fields: fieldsRef.current,
       privacy: privacyRef.current,
-      // Present only when given, so an instance without one skips the step.
-      ...(beforeSendRef.current && {
-        beforeSend: (report) => (beforeSendRef.current ? beforeSendRef.current(report) : report),
-      }),
+      // Always installed, so a callback that arrives on a later render (a
+      // privacy policy loaded async) still runs on this instance.
+      beforeSend: (report) => (beforeSendRef.current ? beforeSendRef.current(report) : report),
       onSubmitted: (result) => onSubmittedRef.current?.(result),
     };
     const instance = createBrainbox(options);

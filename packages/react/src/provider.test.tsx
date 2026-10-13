@@ -209,4 +209,27 @@ describe("BrainboxProvider", () => {
     await act(() => instances[0]!.draft().submit({ text: "x" }));
     expect(sent[0]?.text).toBe("x scrubbed");
   });
+
+  it("runs a beforeSend that only arrives on a later render", async () => {
+    const instances: Brainbox[] = [];
+    const render = (beforeSend?: (report: Report) => Report) =>
+      act(() => {
+        root.render(
+          <BrainboxProvider transport={transport} beforeSend={beforeSend}>
+            <Probe
+              onInstance={(bb) => {
+                if (bb) instances.push(bb);
+              }}
+            />
+          </BrainboxProvider>,
+        );
+      });
+
+    render();
+    render((report) => ({ ...report, text: "scrubbed" }));
+    expect(new Set(instances).size).toBe(1);
+
+    await act(() => instances[0]!.draft().submit({ text: "Jane Doe" }));
+    expect(sent[0]?.text).toBe("scrubbed");
+  });
 });

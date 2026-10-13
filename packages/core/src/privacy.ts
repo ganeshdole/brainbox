@@ -41,6 +41,9 @@ export interface Cover {
 /** Inputs that show what was typed or picked. Buttons and toggles show nothing private. */
 const VALUE_INPUT = 'input:not([type="button"],[type="submit"],[type="reset"],[type="checkbox"],[type="radio"],[type="hidden"],[type="image"],[type="range"],[type="color"])';
 const FIELDS = `${VALUE_INPUT}, textarea, select`;
+/** Inputs whose label is their `value` attribute, not a text node: masked
+ *  like text, since that is what they show. */
+const LABEL_INPUT = 'input[type="button"], input[type="submit"], input[type="reset"]';
 
 /**
  * What a screenshot has to cover to match the recording's rules: blocked
@@ -68,6 +71,10 @@ export function screenshotCovers(privacy: PrivacyOptions = {}, exclude?: HTMLEle
   }
 
   const masked = [`.${MASK_CLASS}`, privacy.maskTextSelector].filter(Boolean).join(", ");
+  const isMasked = (el: Element) => !!privacy.maskAllText || el.closest(masked) !== null;
+  for (const el of Array.from(document.querySelectorAll(LABEL_INPUT))) {
+    if (outside(el) && !isBlocked(el) && isMasked(el)) add(el.getBoundingClientRect());
+  }
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   const range = document.createRange();
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -75,7 +82,7 @@ export function screenshotCovers(privacy: PrivacyOptions = {}, exclude?: HTMLEle
     if (!parent || !node.textContent?.trim() || !outside(parent) || isBlocked(parent)) continue;
     // a textarea's or select's text is already under the field's box
     if (parent.closest("textarea, select")) continue;
-    if (!privacy.maskAllText && !parent.closest(masked)) continue;
+    if (!isMasked(parent)) continue;
     range.selectNodeContents(node);
     for (const r of Array.from(range.getClientRects())) add(r);
   }
