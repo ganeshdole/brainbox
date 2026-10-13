@@ -25,8 +25,13 @@ function installHooks(): void {
   if (removeHooks) return;
   const original = console.error;
   const patched = (...args: unknown[]) => {
-    emit(args.map(stringify).join(" "));
+    // The host's log line comes first; capturing it must never be able to stop it.
     original.apply(console, args);
+    try {
+      emit(args.map(stringify).join(" "));
+    } catch {
+      // A value we couldn't read is a missed buffer entry, not the host's problem.
+    }
   };
   const onError = (e: ErrorEvent) => emit(e.message);
   const onRejection = (e: PromiseRejectionEvent) =>
@@ -95,8 +100,15 @@ function stringify(v: unknown): string {
   if (typeof v === "string") return v;
   if (v instanceof Error) return v.stack ?? v.message;
   try {
-    return JSON.stringify(v);
+    // `JSON.stringify` returns undefined for undefined, functions and symbols.
+    return JSON.stringify(v) ?? String(v);
   } catch {
-    return String(v);
+    // Circular, or a BigInt inside; `String` can throw too, on an object with
+    // no prototype (no `toString`), so the last resort is the tag.
+    try {
+      return String(v);
+    } catch {
+      return Object.prototype.toString.call(v);
+    }
   }
 }
