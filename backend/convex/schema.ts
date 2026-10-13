@@ -5,11 +5,13 @@ import {
   billingPeriod,
   deliveryStatus,
   destinationConfig,
+  inviteRole,
   issueFields,
   nullable,
   planId,
   provider,
   subscriptionStatus,
+  teamRole,
   waitlistEmailStatus,
 } from "./validators.ts";
 
@@ -58,9 +60,44 @@ export default defineSchema({
     attemptedAt: v.array(v.number()),
   }).index("by_identifier", ["identifier"]),
 
+  // A Team owns projects and connections; people reach them as its members.
+  teams: defineTable({
+    id: v.string(),
+    name: v.string(),
+    createdAt: v.number(),
+  }).index("with_id", ["id"]),
+
+  teamMembers: defineTable({
+    teamId: v.string(),
+    userId: v.string(),
+    role: teamRole,
+    createdAt: v.number(),
+  })
+    .index("by_team_user", ["teamId", "userId"])
+    .index("by_user", ["userId"]),
+
+  // Invites not yet accepted; accepting deletes one. One per (team, email).
+  teamInvites: defineTable({
+    id: v.string(),
+    teamId: v.string(),
+    email: v.string(),
+    role: inviteRole,
+    invitedBy: nullable(v.string()),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("with_id", ["id"])
+    .index("by_team_email", ["teamId", "email"])
+    .index("by_email", ["email"]),
+
+  // `ownerId` is how projects and connections were owned before Teams, and
+  // `teamId` is optional only so a deployment holding such rows still
+  // validates: migrations:teams moves them over. The store refuses a row
+  // without a teamId.
   projects: defineTable({
     id: v.string(),
-    ownerId: v.string(),
+    teamId: v.optional(v.string()),
+    ownerId: v.optional(v.string()),
     name: v.string(),
     key: v.string(),
     allowedOrigins: v.array(v.string()),
@@ -71,7 +108,7 @@ export default defineSchema({
   })
     .index("with_id", ["id"])
     .index("by_key", ["key"])
-    .index("by_owner", ["ownerId"]),
+    .index("by_team", ["teamId"]),
 
   issues: defineTable(issueFields)
     .index("with_id", ["id"])
@@ -79,15 +116,16 @@ export default defineSchema({
 
   connections: defineTable({
     id: v.string(),
-    ownerId: v.string(),
+    teamId: v.optional(v.string()),
+    ownerId: v.optional(v.string()),
     provider,
     externalId: v.string(),
     label: v.string(),
     createdAt: v.number(),
   })
     .index("with_id", ["id"])
-    .index("by_owner", ["ownerId"])
-    .index("by_owner_provider_external", ["ownerId", "provider", "externalId"])
+    .index("by_team", ["teamId"])
+    .index("by_team_provider_external", ["teamId", "provider", "externalId"])
     .index("by_provider_external", ["provider", "externalId"]),
 
   destinations: defineTable({

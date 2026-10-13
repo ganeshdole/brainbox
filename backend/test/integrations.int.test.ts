@@ -13,6 +13,7 @@ import {
   makeDestination,
   makeIssue,
   makeProject,
+  makeTeamProject,
   makeUser,
 } from "./helpers.ts";
 
@@ -136,7 +137,7 @@ describe("delivery after ingest", () => {
     const res = await app.request("/ingest", { method: "POST", body: ingestForm(project.key) });
     const { id } = (await res.json()) as { id: string };
 
-    const other = await makeProject(project.ownerId);
+    const other = await makeTeamProject(project.teamId);
     await makeDestination(other.id, conn.id, { enabled: false });
     const res2 = await app.request("/ingest", { method: "POST", body: ingestForm(other.key) });
     const { id: id2 } = (await res2.json()) as { id: string };

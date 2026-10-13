@@ -27,6 +27,7 @@ Everything else is in `backend/src/env.ts`.
 | Sign-in with Google | `GOOGLE_ID`, `GOOGLE_SECRET` |
 | Sign-in by email | `EMAIL_DRIVER=resend`, `RESEND_API_KEY`, `EMAIL_FROM` |
 | A code instead of a link | `AUTH_EMAIL_MODE=code`, or `both` for a code and a link in one email (default `link`) |
+| Only your company signs in | `AUTH_ALLOWED_EMAIL_DOMAINS=acme.com` (comma-separated; unset lets anyone in) |
 
 A code suits people who read email on a different device from the one they
 sign in on, or whose mail scanner opens links before they do. Only the newest
@@ -36,6 +37,47 @@ the code, and no code is accepted until earlier attempts are 15 minutes old.
 That also means anyone who knows an address can hold its email sign-in off
 for 15 minutes at a time; Google sign-in is unaffected. Link-only sign-in has
 no such limit, since its token cannot be guessed.
+
+## Teams, invites and who can sign in
+
+Projects belong to a Team, and everyone in the Team sees all of its projects.
+The first person to create a project gets a Team with themselves as Owner.
+From there, an Owner or Admin opens **Team** in the dashboard sidebar and
+invites people by email as Admin or Member.
+
+An invite is accepted only by someone signed in as the invited address, and
+works once within 7 days. With `EMAIL_DRIVER=resend` the invite is emailed.
+Without email (the default `console` driver, which only logs), the dashboard
+shows the invite link to copy and pass on by chat. Pending invites keep a
+**Copy link** button too. People who sign in without the link see their
+pending invites on the dashboard's home page.
+
+By default anyone who can reach the dashboard can sign in and start a Team of
+their own. To keep a company install to the company, set
+`AUTH_ALLOWED_EMAIL_DOMAINS` to your domains, such as `acme.com,acme.io`.
+Addresses on those domains can sign in. Anyone else can sign in only with an
+open invite or while they are in a Team, so an outside contractor is invited
+like anyone else, and removing them from every Team keeps them out. A
+refused address is told to ask a team admin for an invite, and no sign-in
+email is sent to it.
+
+### Upgrading an install from before Teams
+
+Projects and GitHub connections used to belong to the person who made them.
+The upgrade gives each such person a Team named after them, with them as
+Owner, and moves their projects and connections into it. Nothing changes for
+them until they invite someone.
+
+- **Postgres:** `pnpm -F @ganeshdole/brainbox-backend db:migrate` (migrations
+  0012 and 0013) does it.
+- **Convex:** after `npx convex deploy`, run once:
+
+  ```sh
+  npx convex run migrations:teams '{"secret":"<BRAINBOX_SERVER_SECRET>"}'
+  ```
+
+  Until it has run, the API refuses projects without a Team, and the error
+  says to run it. Running it again changes nothing.
 
 ## Keep the dashboard and the API on one site
 

@@ -22,7 +22,7 @@ interface Loaded {
   destination: ProjectDestination | null;
 }
 
-export function GithubDestination({ projectId }: { projectId: string }) {
+export function GithubDestination({ projectId, teamId }: { projectId: string; teamId: string }) {
   const [params, setParams] = useSearchParams();
   const [notice] = useState(() => installResult(params));
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -38,7 +38,7 @@ export function GithubDestination({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([api.getIntegrations(), api.listDestinations(projectId)])
+    Promise.all([api.getIntegrations(teamId), api.listDestinations(projectId)])
       .then(([state, list]) => {
         if (cancelled) return;
         setLoaded({ state, destination: list.find((d) => d.provider === "github") ?? null });
@@ -50,7 +50,7 @@ export function GithubDestination({ projectId }: { projectId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [projectId, reload]);
+  }, [projectId, teamId, reload]);
 
   async function connect() {
     try {

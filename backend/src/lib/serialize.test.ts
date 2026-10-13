@@ -24,20 +24,22 @@ const storage: Storage = {
 };
 
 describe("toProject", () => {
-  it("maps a row 1:1 with an ISO createdAt", () => {
+  it("maps a row 1:1 with an ISO createdAt and the caller's view of its team", () => {
     const row: ProjectRecord = {
       id: "p1",
-      ownerId: "o1",
+      teamId: "t1",
       name: "N",
       key: "pk_x",
       allowedOrigins: ["a.com"],
       createdAt: new Date("2024-01-01T00:00:00Z"),
     };
-    expect(toProject(row)).toEqual({
+    const team = { id: "t1", name: "Acme", role: "member" as const };
+    expect(toProject(row, team)).toEqual({
       id: "p1",
       name: "N",
       key: "pk_x",
       allowedOrigins: ["a.com"],
+      team,
       createdAt: "2024-01-01T00:00:00.000Z",
     });
   });

@@ -4,6 +4,7 @@ import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import type { Project } from "@ganeshdole/brainbox-shared";
 
 import { api } from "../lib/api";
+import { groupByTeam, newProjectTeam } from "../lib/team";
 import { cn } from "../lib/utils";
 
 export function ProjectSwitcher({
@@ -23,6 +24,7 @@ export function ProjectSwitcher({
   const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const groups = groupByTeam(projects);
 
   function close() {
     setOpen(false);
@@ -53,7 +55,8 @@ export function ProjectSwitcher({
     setBusy(true);
     setError(null);
     try {
-      const project = await api.createProject({ name: name.trim() });
+      const teamId = newProjectTeam(current, projects);
+      const project = await api.createProject({ name: name.trim(), ...(teamId ? { teamId } : {}) });
       onCreated(project);
       close();
       navigate(`/projects/${project.id}`);
@@ -102,24 +105,36 @@ export function ProjectSwitcher({
                 </button>
               </li>
             )}
-            {projects.map((p) => (
-              <li key={p.id}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={p.id === current?.id}
-                  onClick={() => {
-                    close();
-                    if (p.id !== current?.id) navigate(`/projects/${p.id}`);
-                  }}
-                  className={cn(
-                    "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition hover:bg-interactive-hover",
-                    p.id === current?.id ? "text-emphasis" : "text-default",
-                  )}
-                >
-                  <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                  {p.id === current?.id && <Check className="h-3.5 w-3.5 shrink-0 text-muted" />}
-                </button>
+            {groups.map(({ team, projects: inTeam }) => (
+              <li key={team.id} role="presentation">
+                {/* Headings only once there is more than one Team to tell apart. */}
+                {groups.length > 1 && (
+                  <p className="truncate px-3 pb-1 pt-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
+                    {team.name}
+                  </p>
+                )}
+                <ul role="group" aria-label={team.name}>
+                  {inTeam.map((p) => (
+                    <li key={p.id}>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={p.id === current?.id}
+                        onClick={() => {
+                          close();
+                          if (p.id !== current?.id) navigate(`/projects/${p.id}`);
+                        }}
+                        className={cn(
+                          "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition hover:bg-interactive-hover",
+                          p.id === current?.id ? "text-emphasis" : "text-default",
+                        )}
+                      >
+                        <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                        {p.id === current?.id && <Check className="h-3.5 w-3.5 shrink-0 text-muted" />}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </li>
             ))}
           </ul>

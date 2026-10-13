@@ -11,6 +11,9 @@ import type {
   ProjectRecord,
   Store,
   SubscriptionRecord,
+  TeamInviteRecord,
+  TeamMemberRecord,
+  TeamRecord,
   WaitlistSignupRecord,
 } from "./types.ts";
 
@@ -19,9 +22,56 @@ import type {
  *  milliseconds; records leave here with Dates like every other store. */
 export function createConvexStore(convex: ConvexCaller): Store {
   return {
+    teams: {
+      async create(input) {
+        return toTeam(await convex.mutation(api.teams.create, input));
+      },
+      async get(id) {
+        return maybe(await convex.query(api.teams.get, { id }), toTeam);
+      },
+      async rename(id, name) {
+        return maybe(await convex.mutation(api.teams.rename, { id, name }), toTeam);
+      },
+      async listForUser(userId) {
+        const rows = await convex.query(api.teams.listForUser, { userId });
+        return rows.map((row) => ({ ...toTeam(row), role: row.role }));
+      },
+      async membership(teamId, userId) {
+        return maybe(await convex.query(api.teams.membership, { teamId, userId }), toTeamMember);
+      },
+      async members(teamId) {
+        const rows = await convex.query(api.teams.members, { teamId });
+        return rows.map((row) => ({ ...row, createdAt: new Date(row.createdAt) }));
+      },
+      async setRole(teamId, userId, role) {
+        return convex.mutation(api.teams.setRole, { teamId, userId, role });
+      },
+      async removeMember(teamId, userId) {
+        return convex.mutation(api.teams.removeMember, { teamId, userId });
+      },
+      async createInvite({ expiresAt, ...input }) {
+        return toInvite(await convex.mutation(api.teams.createInvite, { ...input, expiresAt: expiresAt.getTime() }));
+      },
+      async getInvite(id) {
+        return maybe(await convex.query(api.teams.getInvite, { id }), toInvite);
+      },
+      async listInvites(teamId) {
+        return (await convex.query(api.teams.listInvites, { teamId })).map(toInvite);
+      },
+      async invitesForEmail(email) {
+        return (await convex.query(api.teams.invitesForEmail, { email })).map(toInvite);
+      },
+      async revokeInvite(teamId, id) {
+        await convex.mutation(api.teams.revokeInvite, { teamId, id });
+      },
+      async acceptInvite(id, userId, now) {
+        return convex.mutation(api.teams.acceptInvite, { id, userId, now: now.getTime() });
+      },
+    },
+
     projects: {
-      async listForOwner(ownerId) {
-        const rows = await convex.query(api.projects.listForOwner, { ownerId });
+      async listForTeams(teamIds) {
+        const rows = await convex.query(api.projects.listForTeams, { teamIds });
         return rows.map((row) => ({ ...toProject(row), issueCount: row.issueCount }));
       },
       async create(input) {
@@ -65,8 +115,8 @@ export function createConvexStore(convex: ConvexCaller): Store {
     },
 
     integrations: {
-      async listConnections(ownerId) {
-        return (await convex.query(api.integrations.listConnections, { ownerId })).map(toConnection);
+      async listConnections(teamId) {
+        return (await convex.query(api.integrations.listConnections, { teamId })).map(toConnection);
       },
       async getConnection(id) {
         return maybe(await convex.query(api.integrations.getConnection, { id }), toConnection);
@@ -173,10 +223,33 @@ function toProjectKey(key: string): ProjectKey {
 
 type Stamped<T, K extends keyof T> = Omit<T, K> & { [P in K]: T[P] extends Date ? number : number | null };
 
-function toProject(row: Stamped<Omit<ProjectRecord, "key">, "createdAt"> & { key: string }): ProjectRecord {
+/** The Team a project or connection belongs to. Rows from before Teams have
+ *  none until convex/migrations.ts has run. */
+function teamOf(row: { id: string; teamId?: string }): string {
+  if (row.teamId === undefined) {
+    throw new Error(`row ${row.id} has no team: run \`npx convex run migrations:teams\``);
+  }
+  return row.teamId;
+}
+
+function toTeam(row: Stamped<TeamRecord, "createdAt">): TeamRecord {
+  return { id: row.id, name: row.name, createdAt: new Date(row.createdAt) };
+}
+
+function toTeamMember(row: Stamped<TeamMemberRecord, "createdAt">): TeamMemberRecord {
+  return { ...row, createdAt: new Date(row.createdAt) };
+}
+
+function toInvite(row: Stamped<TeamInviteRecord, "createdAt" | "expiresAt">): TeamInviteRecord {
+  return { ...row, expiresAt: new Date(row.expiresAt), createdAt: new Date(row.createdAt) };
+}
+
+function toProject(
+  row: Stamped<Omit<ProjectRecord, "key" | "teamId">, "createdAt"> & { key: string; teamId?: string },
+): ProjectRecord {
   return {
     id: row.id,
-    ownerId: row.ownerId,
+    teamId: teamOf(row),
     name: row.name,
     key: toProjectKey(row.key),
     allowedOrigins: row.allowedOrigins,
@@ -188,8 +261,17 @@ function toIssue(row: Stamped<IssueRecord, "createdAt">): IssueRecord {
   return { ...row, createdAt: new Date(row.createdAt) };
 }
 
-function toConnection(row: Stamped<ConnectionRecord, "createdAt">): ConnectionRecord {
-  return { ...row, createdAt: new Date(row.createdAt) };
+function toConnection(
+  row: Stamped<Omit<ConnectionRecord, "teamId">, "createdAt"> & { teamId?: string; ownerId?: string },
+): ConnectionRecord {
+  return {
+    id: row.id,
+    teamId: teamOf(row),
+    provider: row.provider,
+    externalId: row.externalId,
+    label: row.label,
+    createdAt: new Date(row.createdAt),
+  };
 }
 
 function toDestination(row: Stamped<DestinationRecord, "createdAt" | "updatedAt">): DestinationRecord {

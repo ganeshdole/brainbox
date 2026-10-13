@@ -5,11 +5,13 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Billing } from "./pages/Billing";
 import { BillingReturn } from "./pages/BillingReturn";
 import { Home } from "./pages/Home";
+import { Invite } from "./pages/Invite";
 import { LegacyIssue } from "./pages/LegacyIssue";
 import { Login } from "./pages/Login";
 import { Report } from "./pages/Report";
 import { Reports } from "./pages/Reports";
 import { Settings } from "./pages/Settings";
+import { Team } from "./pages/Team";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <Login /> },
@@ -20,6 +22,8 @@ export const router = createBrowserRouter([
       // that redirects on 402, or the paywall would have no exit.
       { path: "/billing", element: <Billing /> },
       { path: "/billing/return", element: <BillingReturn /> },
+      // Joining a Team never needs a plan of one's own.
+      { path: "/invite/:inviteId", element: <Invite /> },
 
       { path: "/", element: <Home /> },
       {
@@ -29,6 +33,7 @@ export const router = createBrowserRouter([
           { index: true, element: <Reports /> },
           { path: "issues/:issueId", element: <Report /> },
           { path: "settings", element: <Settings /> },
+          { path: "team", element: <Team /> },
         ],
       },
       // old deep links from before the inbox routes

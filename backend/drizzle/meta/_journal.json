@@ -85,6 +85,20 @@
       "when": 1791803982790,
       "tag": "0011_sign_in_attempts",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791902245031,
+      "tag": "0012_teams",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791902257176,
+      "tag": "0013_team_owned",
+      "breakpoints": true
     }
   ]
 }

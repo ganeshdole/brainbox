@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 
 import { getDb } from "../src/db/client.ts";
-import { projects, users } from "../src/db/schema/index.ts";
+import { projects, teamMembers, teams, users } from "../src/db/schema/index.ts";
 
 const db = getDb();
 
@@ -22,6 +22,10 @@ async function seed() {
   }
   if (!user) throw new Error("Failed to create seed user");
 
+  // The seed user's own Team, under their id as migrated Accounts have.
+  await db.insert(teams).values({ id: user.id, name: "Seed User's team" }).onConflictDoNothing();
+  await db.insert(teamMembers).values({ teamId: user.id, userId: user.id, role: "owner" }).onConflictDoNothing();
+
   let [project] = await db
     .select()
     .from(projects)
@@ -31,7 +35,7 @@ async function seed() {
     [project] = await db
       .insert(projects)
       .values({
-        ownerId: user.id,
+        teamId: user.id,
         name: "Local Test Project",
         key: KEY,
         allowedOrigins: [],

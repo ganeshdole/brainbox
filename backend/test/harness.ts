@@ -31,7 +31,7 @@ const postgres: StoreInspector = {
   async reset() {
     await getDb().execute(
       sql.raw(
-        `truncate table sign_in_attempts, waitlist_signups, webhook_events, subscriptions, deliveries, project_destinations, integration_connections, issues, projects, accounts, sessions, "verificationTokens", users restart identity cascade`,
+        `truncate table team_invites, team_members, teams, sign_in_attempts, waitlist_signups, webhook_events, subscriptions, deliveries, project_destinations, integration_connections, issues, projects, accounts, sessions, "verificationTokens", users restart identity cascade`,
       ),
     );
   },
@@ -71,8 +71,8 @@ export const stored = {
   issues: async (id: string) => list(await getStore().issues.get(id)),
   deliveries: (issueId: string) => getStore().integrations.listDeliveries(issueId),
   subscriptions: async (userId: string) => list(await getStore().billing.subscriptionFor(userId)),
-  connections: async (ownerId?: string) =>
-    (await inspector.connections()).filter((c) => ownerId === undefined || c.ownerId === ownerId),
+  connections: async (teamId?: string) =>
+    (await inspector.connections()).filter((c) => teamId === undefined || c.teamId === teamId),
   destinations: () => inspector.destinations(),
   webhookEvents: async (id: string) => (await inspector.webhookEvents()).filter((e) => e.id === id),
   waitlistSignups: () => inspector.waitlistSignups(),

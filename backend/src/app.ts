@@ -16,11 +16,13 @@ import { filesRoute } from "./routes/files.ts";
 import { health } from "./routes/health.ts";
 import { ingest } from "./routes/ingest.ts";
 import { integrationsRoute } from "./routes/integrations.ts";
+import { invitesRoute } from "./routes/invites.ts";
 import { issuesRoute } from "./routes/issues.ts";
 import { me } from "./routes/me.ts";
 import { projectsRoute } from "./routes/projects.ts";
 import { publicFiles } from "./routes/public-files.ts";
 import { signInOptions } from "./routes/sign-in-options.ts";
+import { teamsRoute } from "./routes/teams.ts";
 import { waitlist } from "./routes/waitlist.ts";
 import { webhooks } from "./routes/webhooks.ts";
 import type { AppEnv } from "./types.ts";
@@ -57,9 +59,11 @@ app.use("/api/*", verifyAuth());
 
 // Session-only, no subscription needed: the dashboard shell has to render for
 // an unpaid Account, and checkout is how it stops being unpaid. Gating these
-// would leave the paywall with no exit.
+// would leave the paywall with no exit. Invites likewise: joining a paying
+// Team is the other way in.
 app.route("/api/me", me);
 app.route("/api/billing", billing);
+app.route("/api/invites", invitesRoute);
 
 // The paywall. Registered AFTER the two open routes above, so their handlers
 // have already answered by the time this is reached - which is why this can be
@@ -71,6 +75,7 @@ app.route("/api/projects", projectsRoute);
 app.route("/api/issues", issuesRoute);
 app.route("/api/files", filesRoute);
 app.route("/api/integrations", integrationsRoute);
+app.route("/api/teams", teamsRoute);
 
 // The dashboard, on deployments that serve it from the API (DASHBOARD_DIR).
 // Last, so every API route above answers first.

@@ -5,10 +5,12 @@ import type {
   DeliveryStatus,
   DestinationConfig,
   IntegrationProvider,
+  InviteRole,
   PlanId,
   ProjectKey,
   Region,
   SubscriptionStatus,
+  TeamRole,
   TranscriptStatus,
 } from "@ganeshdole/brainbox-shared";
 
@@ -20,10 +22,51 @@ import type {
 // assigns, except `issues.create`, whose id the caller picks so file keys can
 // be built before the row exists.
 
+export interface TeamRecord {
+  id: string;
+  name: string;
+  createdAt: Date;
+}
+
+export interface TeamMemberRecord {
+  teamId: string;
+  userId: string;
+  role: TeamRole;
+  createdAt: Date;
+}
+
+/** A member with what the dashboard shows of them. */
+export type TeamMemberProfile = TeamMemberRecord & {
+  email: string;
+  name: string | null;
+  image: string | null;
+};
+
+export interface TeamInviteRecord {
+  id: string;
+  teamId: string;
+  /** Lower-cased. */
+  email: string;
+  role: InviteRole;
+  /** Null once the inviter's Account is gone. */
+  invitedBy: string | null;
+  expiresAt: Date;
+  createdAt: Date;
+}
+
+/** How a change to a membership went. A Team always keeps an Owner, so the
+ *  change that would leave it with none is refused as `last_owner`. */
+export type MembershipChange = "done" | "not_found" | "last_owner";
+
+export type InviteAcceptance =
+  | { status: "accepted"; teamId: string }
+  | { status: "not_found" }
+  | { status: "expired" };
+
 export interface ProjectRecord {
   id: string;
-  /** The Account (`users` row) that owns it. */
-  ownerId: string;
+  /** The Team that owns it. */
+  teamId: string;
   name: string;
   key: ProjectKey;
   /** Ingest origin allowlist; empty allows every origin. */
@@ -59,7 +102,8 @@ export type NewIssue = Omit<IssueRecord, "createdAt" | "audioTranscript" | "vide
 
 export interface ConnectionRecord {
   id: string;
-  ownerId: string;
+  /** The Team whose projects can use it. */
+  teamId: string;
   provider: IntegrationProvider;
   /** The provider's id for the link, e.g. a GitHub App installation id. */
   externalId: string;
@@ -165,9 +209,37 @@ export interface GithubEvent {
 export type WebhookResult = "applied" | "duplicate";
 
 export interface Store {
+  readonly teams: {
+    /** A new Team with `ownerId` as its Owner, in one step. */
+    create(input: { name: string; ownerId: string }): Promise<TeamRecord>;
+    get(id: string): Promise<TeamRecord | null>;
+    rename(id: string, name: string): Promise<TeamRecord | null>;
+    /** Every Team the user belongs to, oldest first, with their role in it. */
+    listForUser(userId: string): Promise<Array<TeamRecord & { role: TeamRole }>>;
+    membership(teamId: string, userId: string): Promise<TeamMemberRecord | null>;
+    /** Oldest first. */
+    members(teamId: string): Promise<TeamMemberProfile[]>;
+    setRole(teamId: string, userId: string, role: TeamRole): Promise<MembershipChange>;
+    removeMember(teamId: string, userId: string): Promise<MembershipChange>;
+
+    /** Insert, or replace the invite already open for (team, email), which
+     *  gets a new id: the old link stops working. */
+    createInvite(input: Omit<TeamInviteRecord, "id" | "createdAt">): Promise<TeamInviteRecord>;
+    getInvite(id: string): Promise<TeamInviteRecord | null>;
+    /** Newest first, expired ones included. */
+    listInvites(teamId: string): Promise<TeamInviteRecord[]>;
+    /** Invites sent to this (lower-cased) address, expired ones included. */
+    invitesForEmail(email: string): Promise<TeamInviteRecord[]>;
+    revokeInvite(teamId: string, id: string): Promise<void>;
+    /** Joins the user to the invite's Team with its role and deletes the
+     *  invite, in one step, unless it is past `now`. Someone already a member
+     *  keeps the role they have. */
+    acceptInvite(id: string, userId: string, now: Date): Promise<InviteAcceptance>;
+  };
+
   readonly projects: {
     /** Newest first, each with its issue count. */
-    listForOwner(ownerId: string): Promise<Array<ProjectRecord & { issueCount: number }>>;
+    listForTeams(teamIds: string[]): Promise<Array<ProjectRecord & { issueCount: number }>>;
     create(input: Omit<ProjectRecord, "id" | "createdAt">): Promise<ProjectRecord>;
     get(id: string): Promise<ProjectRecord | null>;
     getByKey(key: ProjectKey): Promise<ProjectRecord | null>;
@@ -189,9 +261,9 @@ export interface Store {
 
   readonly integrations: {
     /** Newest first. */
-    listConnections(ownerId: string): Promise<ConnectionRecord[]>;
+    listConnections(teamId: string): Promise<ConnectionRecord[]>;
     getConnection(id: string): Promise<ConnectionRecord | null>;
-    /** Insert, or refresh the label of the same (owner, provider, externalId). */
+    /** Insert, or refresh the label of the same (team, provider, externalId). */
     saveConnection(input: Omit<ConnectionRecord, "id" | "createdAt">): Promise<void>;
     /** Also removes its destinations; their deliveries keep their links. */
     deleteConnection(id: string): Promise<void>;

@@ -6,7 +6,7 @@ import { stored } from "./harness.ts";
 import { verify } from "../src/lib/signed.ts";
 import { fakeGithub } from "./github-fake.ts";
 import { testEnv } from "./env.ts";
-import { authCookie, makeConnection, makeDestination, makeProject, makeUser } from "./helpers.ts";
+import { authCookie, makeConnection, makeDestination, makeProject, makeUser, teamOf } from "./helpers.ts";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -33,16 +33,21 @@ function callback(cookie: string, params: Record<string, string>) {
 }
 
 describe("GET /api/integrations", () => {
-  it("reports GitHub as available and lists only the caller's connections", async () => {
+  it("reports GitHub as available and lists only the team's connections", async () => {
     const me = await makeUser();
     const other = await makeUser();
     await makeConnection(me.id, "1", "acme");
     await makeConnection(other.id, "2", "evil");
+    const cookie = await authCookie(me.id);
 
-    const res = await app.request("/api/integrations", { headers: { cookie: await authCookie(me.id) } });
+    const res = await app.request(`/api/integrations?teamId=${await teamOf(me.id)}`, { headers: { cookie } });
     const body = (await res.json()) as { github: { available: boolean }; connections: { label: string }[] };
     expect(body.github.available).toBe(true);
     expect(body.connections.map((c) => c.label)).toEqual(["acme"]);
+
+    expect((await app.request("/api/integrations", { headers: { cookie } })).status).toBe(400);
+    const theirs = await app.request(`/api/integrations?teamId=${await teamOf(other.id)}`, { headers: { cookie } });
+    expect(theirs.status).toBe(404);
   });
 });
 
@@ -76,7 +81,7 @@ describe("GitHub App install round-trip", () => {
     expect(res.headers.get("location")).toBe(
       `${testEnv.DASHBOARD_ORIGIN ?? "http://localhost:5173"}/projects/${project.id}/settings?github=connected`,
     );
-    const rows = await stored.connections(me.id);
+    const rows = await stored.connections(await teamOf(me.id));
     expect(rows).toMatchObject([{ provider: "github", externalId: "4242", label: "acme" }]);
 
     await callback(cookie, { installation_id: "4242", code: "good-code", state });

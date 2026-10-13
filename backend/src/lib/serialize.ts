@@ -5,6 +5,11 @@ import type {
   Issue,
   Project,
   ProjectDestination,
+  ProjectTeam,
+  Team,
+  TeamInvite,
+  TeamMember,
+  TeamRole,
 } from "@ganeshdole/brainbox-shared";
 
 import type { Storage } from "../storage/index.ts";
@@ -14,7 +19,11 @@ import type {
   DestinationRecord as DestinationRow,
   IssueRecord as IssueRow,
   ProjectRecord as ProjectRow,
+  TeamInviteRecord as TeamInviteRow,
+  TeamMemberProfile,
+  TeamRecord as TeamRow,
 } from "../store/index.ts";
+import { inviteUrl } from "./teams.ts";
 
 /** Map a DB issue row → the shared Issue, minting file URLs via storage. */
 export async function toIssue(
@@ -65,12 +74,40 @@ export async function toIssue(
   };
 }
 
-export function toProject(row: ProjectRow): Project {
+/** `team` is the project's Team as the caller sees it. */
+export function toProject(row: ProjectRow, team: ProjectTeam): Project {
   return {
     id: row.id,
     name: row.name,
     key: row.key,
     allowedOrigins: row.allowedOrigins,
+    team,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export function toTeam(row: TeamRow, role: TeamRole): Team {
+  return { id: row.id, name: row.name, role, createdAt: row.createdAt.toISOString() };
+}
+
+export function toTeamMember(row: TeamMemberProfile): TeamMember {
+  return {
+    userId: row.userId,
+    email: row.email,
+    name: row.name,
+    image: row.image,
+    role: row.role,
+    joinedAt: row.createdAt.toISOString(),
+  };
+}
+
+export function toTeamInvite(row: TeamInviteRow): TeamInvite {
+  return {
+    id: row.id,
+    email: row.email,
+    role: row.role,
+    url: inviteUrl(row.id),
+    expiresAt: row.expiresAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
   };
 }

@@ -1,16 +1,23 @@
 import type {
   BillingPeriod,
   BillingState,
+  CreatedInvite,
   Delivery,
   DestinationConfig,
   IntegrationProvider,
   IntegrationRepo,
   IntegrationsState,
+  InviteRole,
   Issue,
   PlanId,
   Project,
   ProjectDestination,
+  ReceivedInvite,
   SignInOptions,
+  Team,
+  TeamInvite,
+  TeamMember,
+  TeamRole,
 } from "@ganeshdole/brainbox-shared";
 
 import { API_URL } from "./authConfig";
@@ -27,6 +34,27 @@ export class AuthRedirectError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "AuthRedirectError";
+  }
+}
+
+/** What the API says when it refuses. `code` names refusals a page handles
+ *  itself, such as an invite meant for another address ("wrong_account"). */
+export interface ApiErrorBody {
+  error?: string;
+  code?: string;
+  email?: string;
+}
+
+/** A request the API answered with an error. */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly body: ApiErrorBody;
+
+  constructor(message: string, status: number, body: ApiErrorBody) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.body = body;
   }
 }
 
@@ -77,8 +105,8 @@ async function req<T>(path: string, init?: RequestInit, { redirects = true } = {
     redirectOnce("/billing", "Subscription required");
   }
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? `HTTP ${res.status}`);
+    const body = (await res.json().catch(() => null)) as ApiErrorBody | null;
+    throw new ApiError(body?.error ?? `HTTP ${res.status}`, res.status, body ?? {});
   }
   return res.json() as Promise<T>;
 }
@@ -88,7 +116,9 @@ export const api = {
   // older than this endpoint answers 401, which must not redirect.
   getSignInOptions: () => req<SignInOptions>("/api/sign-in-options", undefined, { redirects: false }),
   listProjects: () => req<Project[]>("/api/projects"),
-  createProject: (body: { name: string; allowedOrigins?: string[] }) =>
+  /** Into `teamId` when given; otherwise into the Team the caller owns, made
+   *  for them when they own none. */
+  createProject: (body: { name: string; allowedOrigins?: string[]; teamId?: string }) =>
     req<Project>("/api/projects", { method: "POST", body: JSON.stringify(body) }),
   getProject: (id: string) => req<Project>(`/api/projects/${id}`),
   updateProject: (id: string, body: { name?: string; allowedOrigins?: string[] }) =>
@@ -98,7 +128,8 @@ export const api = {
   getIssue: (id: string) => req<Issue>(`/api/issues/${id}`),
   sendIssue: (id: string) => req<Delivery[]>(`/api/issues/${id}/deliveries`, { method: "POST" }),
 
-  getIntegrations: () => req<IntegrationsState>("/api/integrations"),
+  getIntegrations: (teamId: string) =>
+    req<IntegrationsState>(`/api/integrations?teamId=${encodeURIComponent(teamId)}`),
   /** Returns the GitHub App install url to send the browser to. */
   startGithubInstall: (projectId: string) =>
     req<{ url: string }>("/api/integrations/github/install", {
@@ -124,6 +155,34 @@ export const api = {
     req<{ ok: boolean }>(`/api/projects/${projectId}/destinations/${provider}`, {
       method: "DELETE",
     }),
+
+  listTeams: () => req<Team[]>("/api/teams"),
+  renameTeam: (teamId: string, name: string) =>
+    req<Team>(`/api/teams/${teamId}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+  listMembers: (teamId: string) => req<TeamMember[]>(`/api/teams/${teamId}/members`),
+  setMemberRole: (teamId: string, userId: string, role: TeamRole) =>
+    req<{ ok: boolean }>(`/api/teams/${teamId}/members/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    }),
+  /** Removes someone; with your own id, leaves the Team. */
+  removeMember: (teamId: string, userId: string) =>
+    req<{ ok: boolean }>(`/api/teams/${teamId}/members/${userId}`, { method: "DELETE" }),
+  listInvites: (teamId: string) => req<TeamInvite[]>(`/api/teams/${teamId}/invites`),
+  /** Inviting an address again replaces its invite, which is how to resend one. */
+  createInvite: (teamId: string, email: string, role: InviteRole) =>
+    req<CreatedInvite>(`/api/teams/${teamId}/invites`, {
+      method: "POST",
+      body: JSON.stringify({ email, role }),
+    }),
+  revokeInvite: (teamId: string, inviteId: string) =>
+    req<{ ok: boolean }>(`/api/teams/${teamId}/invites/${inviteId}`, { method: "DELETE" }),
+
+  // The invited person's side. Never behind the paywall.
+  myInvites: () => req<ReceivedInvite[]>("/api/invites"),
+  getInvite: (inviteId: string) => req<ReceivedInvite>(`/api/invites/${inviteId}`),
+  acceptInvite: (inviteId: string) =>
+    req<{ teamId: string }>(`/api/invites/${inviteId}/accept`, { method: "POST" }),
 
   getBillingState: () => req<BillingState>("/api/billing/subscription"),
   /** Returns the hosted Dodo checkout url to send the browser to. */

@@ -6,11 +6,11 @@ import { destinationConfig, provider } from "./validators.ts";
 // Store.integrations. See src/store/types.ts for the contract.
 
 export const listConnections = serverQuery({
-  args: { ownerId: v.string() },
-  handler: async (ctx, { ownerId }) => {
+  args: { teamId: v.string() },
+  handler: async (ctx, { teamId }) => {
     const rows = await ctx.db
       .query("connections")
-      .withIndex("by_owner", (q) => q.eq("ownerId", ownerId))
+      .withIndex("by_team", (q) => q.eq("teamId", teamId))
       .collect();
     return newestFirst(rows).map(strip);
   },
@@ -27,14 +27,14 @@ export const getConnection = serverQuery({
   },
 });
 
-/** Insert, or refresh the label of the same (owner, provider, externalId). */
+/** Insert, or refresh the label of the same (team, provider, externalId). */
 export const saveConnection = serverMutation({
-  args: { ownerId: v.string(), provider, externalId: v.string(), label: v.string() },
+  args: { teamId: v.string(), provider, externalId: v.string(), label: v.string() },
   handler: async (ctx, input) => {
     const existing = await ctx.db
       .query("connections")
-      .withIndex("by_owner_provider_external", (q) =>
-        q.eq("ownerId", input.ownerId).eq("provider", input.provider).eq("externalId", input.externalId),
+      .withIndex("by_team_provider_external", (q) =>
+        q.eq("teamId", input.teamId).eq("provider", input.provider).eq("externalId", input.externalId),
       )
       .unique();
     if (existing) {
