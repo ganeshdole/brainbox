@@ -27,6 +27,13 @@ const labels = () =>
     (b) => b.getAttribute("aria-label") ?? b.textContent?.trim() ?? "",
   );
 
+/** Let the widget's lazily loaded UI chunk (`ui.tsx`) arrive and render. */
+const uiReady = () =>
+  act(async () => {
+    await import("./ui.tsx");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
 let widget: WidgetHandle | null = null;
 
 afterEach(() => {
@@ -35,10 +42,11 @@ afterEach(() => {
 });
 
 describe("mount", () => {
-  it("puts the widget on the page and takes everything down again on destroy", () => {
+  it("puts the widget on the page and takes everything down again on destroy", async () => {
     act(() => {
       widget = mount({ transport });
     });
+    await uiReady();
 
     expect(document.getElementById("brainbox-widget")).not.toBeNull();
     expect(document.querySelector("[data-brainbox-root]")).not.toBeNull();
@@ -52,13 +60,14 @@ describe("mount", () => {
     expect(console.error).toBe(originalConsoleError);
   });
 
-  it("opens and closes through the handle", () => {
+  it("opens and closes through the handle", async () => {
     act(() => {
       widget = mount({ transport, trigger: "manual", position: "top-left" });
     });
     expect(labels()).toEqual([]);
 
     act(() => widget?.open());
+    await uiReady();
     expect(labels().some((l) => l.startsWith("Screenshot"))).toBe(true);
 
     act(() => widget?.close());
@@ -90,6 +99,7 @@ describe("mount", () => {
       widget = mount({ transport, trigger: "manual" });
       widget.start("screenshot");
     });
+    await uiReady();
 
     // The markup toolbar, not the chooser.
     expect(labels()).toContain("Next");

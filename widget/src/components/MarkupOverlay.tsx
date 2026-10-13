@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ImageOff, Loader2 } from "lucide-react";
+import { ImageOff, Loader2 } from "./icons.tsx";
 import {
   boundsOf,
   hitTest,

@@ -37,6 +37,12 @@ function HostControls() {
     </>
   );
 }
+/** Let the widget's lazily loaded UI chunk (`ui.tsx`) arrive and render. */
+const uiReady = () =>
+  act(async () => {
+    await import("./ui.tsx");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
 const hostSees = () => container.querySelector("output")?.textContent;
 const hostClick = (label: string) =>
   Array.from(container.querySelectorAll("button"))
@@ -58,7 +64,7 @@ afterEach(() => {
 });
 
 describe("BrainboxWidget", () => {
-  it("renders into a shadow host on <body> that recordings skip, and removes it on unmount", () => {
+  it("renders into a shadow host on <body> that recordings skip, and removes it on unmount", async () => {
     act(() => {
       root.render(
         <StrictMode>
@@ -68,6 +74,7 @@ describe("BrainboxWidget", () => {
         </StrictMode>,
       );
     });
+    await uiReady();
 
     const host = document.getElementById("brainbox-widget");
     expect(host?.parentElement).toBe(document.body);
@@ -80,7 +87,7 @@ describe("BrainboxWidget", () => {
     expect(console.error).toBe(originalConsoleError);
   });
 
-  it("opens from a host button anywhere under the provider, and closes again", () => {
+  it("opens from a host button anywhere under the provider, and closes again", async () => {
     act(() => {
       root.render(
         <BrainboxProvider transport={transport}>
@@ -94,6 +101,7 @@ describe("BrainboxWidget", () => {
     expect(hostSees()).toBe("closed");
 
     act(() => hostClick("Report a problem"));
+    await uiReady();
     expect(hostSees()).toBe("open");
     expect(buttons()).toContain("Close");
     expect(buttons().some((b) => b.startsWith("Screenshot"))).toBe(true);
@@ -103,7 +111,7 @@ describe("BrainboxWidget", () => {
     expect(buttons()).toEqual([]);
   });
 
-  it("starts a screenshot straight from a host's own control, skipping the chooser", () => {
+  it("starts a screenshot straight from a host's own control, skipping the chooser", async () => {
     function HostScreenshot() {
       const { start } = useBrainboxWidget();
       return <button onClick={() => start("screenshot")}>Screenshot it</button>;
@@ -119,6 +127,7 @@ describe("BrainboxWidget", () => {
     });
 
     act(() => hostClick("Screenshot it"));
+    await uiReady();
     expect(hostSees()).toBe("open");
     // The markup toolbar, not the chooser's two options.
     expect(buttons()).toContain("Select");
@@ -126,7 +135,7 @@ describe("BrainboxWidget", () => {
     expect(buttons().some((b) => b.startsWith("Screenshot"))).toBe(false);
   });
 
-  it("keeps its clicks from the host page, so the host's open menus stay open", () => {
+  it("keeps its clicks from the host page, so the host's open menus stay open", async () => {
     let outsideClicks = 0;
     const closeMenusOnOutsideClick = () => {
       outsideClicks += 1;
@@ -142,6 +151,7 @@ describe("BrainboxWidget", () => {
         );
       });
       act(() => hostClick("Report a problem"));
+      await uiReady();
 
       const close = shadow()?.querySelector<HTMLButtonElement>('[aria-label="Close"]');
       act(() => {
@@ -159,7 +169,7 @@ describe("BrainboxWidget", () => {
     }
   });
 
-  it("reports open when the user opens it from our launcher", () => {
+  it("reports open when the user opens it from our launcher", async () => {
     act(() => {
       root.render(
         <BrainboxProvider transport={transport}>
@@ -168,6 +178,7 @@ describe("BrainboxWidget", () => {
         </BrainboxProvider>,
       );
     });
+    await uiReady();
     act(() => shadow()?.querySelector<HTMLButtonElement>('[aria-label="Send feedback"]')?.click());
     expect(hostSees()).toBe("open");
 

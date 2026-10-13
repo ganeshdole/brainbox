@@ -1,5 +1,3 @@
-import { shadowCss } from "./shadow-css.ts";
-
 /** The widget's foothold in the host page: one element for `<body>` with a
  *  shadow root, and inside it the container the React tree renders into. */
 export interface ShadowHost {
@@ -42,10 +40,11 @@ function stopAtHost(event: Event): void {
   event.stopPropagation();
 }
 
-/** Build the shadow host with the widget stylesheet injected (ADR 0001: host
- *  CSS cannot reach in, ours cannot leak out). Detached: the caller appends
- *  `element` to `<body>` when it is ready to show it. */
-export function createShadowHost(css: string): ShadowHost {
+/** Build the shadow host (ADR 0001: host CSS cannot reach in, ours cannot leak
+ *  out). The stylesheet arrives with the UI chunk (`ui.tsx`), which renders it
+ *  into `container`. Detached: the caller appends `element` to `<body>` when
+ *  it is ready to show it. */
+export function createShadowHost(): ShadowHost {
   const element = document.createElement("div");
   element.id = BRAINBOX_HOST_ID;
   // keep the widget's own UI out of rrweb session recordings (core's blockClass)
@@ -63,10 +62,6 @@ export function createShadowHost(css: string): ShadowHost {
   for (const type of ISOLATED_EVENTS) element.addEventListener(type, stopAtHost);
 
   const shadow = element.attachShadow({ mode: "open" });
-
-  const style = document.createElement("style");
-  style.textContent = shadowCss(css);
-  shadow.appendChild(style);
 
   const container = document.createElement("div");
   container.className = "bb-root dark";

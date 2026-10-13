@@ -1,12 +1,16 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { TriggerMode, WidgetTheme } from "@ganeshdole/brainbox-shared";
 import { useBrainbox } from "@ganeshdole/brainbox-react";
-import { App } from "./App.tsx";
 import type { Position } from "./lib/position.ts";
 import { createShadowHost, type ShadowHost } from "./lib/shadow-host.ts";
 import { applyTheme } from "./lib/theme.ts";
-import css from "./index.css?inline";
+import { useBrainboxWidget } from "./use-brainbox-widget.ts";
+
+// The screens and their stylesheet are most of the widget's weight, and most
+// page views never open it. A bundler host gets them as a split chunk; the
+// script-tag build inlines it.
+const WidgetUi = lazy(() => import("./ui.tsx"));
 
 export interface BrainboxWidgetProps {
   /** `floating` renders our launcher button; `manual` waits for
@@ -33,8 +37,14 @@ export function BrainboxWidget({
   // Built detached during render (nothing on the page changes yet, and there
   // is no document on the server), attached by the effect below.
   const [host] = useState<ShadowHost | null>(() =>
-    typeof document === "undefined" ? null : createShadowHost(css),
+    typeof document === "undefined" ? null : createShadowHost(),
   );
+  // Our launcher has to show, so `floating` loads the UI straight away;
+  // `manual` waits until the host first opens or starts a capture, and keeps
+  // it from then on (the UI's own state, e.g. a draft, outlives a close).
+  const { isOpen } = useBrainboxWidget();
+  const [wanted, setWanted] = useState(false);
+  if (!wanted && (trigger === "floating" || isOpen)) setWanted(true);
 
   useEffect(() => {
     if (!host) return;
@@ -47,9 +57,11 @@ export function BrainboxWidget({
     return applyTheme(host.container, theme);
   }, [host, theme]);
 
-  if (!brainbox || !host) return null;
+  if (!brainbox || !host || !wanted) return null;
   return createPortal(
-    <App brainbox={brainbox} hostEl={host.element} trigger={trigger} position={position} />,
+    <Suspense fallback={null}>
+      <WidgetUi brainbox={brainbox} hostEl={host.element} trigger={trigger} position={position} />
+    </Suspense>,
     host.container,
   );
 }

@@ -11,6 +11,13 @@ const labels = () =>
     (b) => b.getAttribute("aria-label") ?? b.textContent?.trim() ?? "",
   );
 
+/** Let the widget's lazily loaded UI chunk (`ui.tsx`) arrive and render. */
+const uiReady = () =>
+  act(async () => {
+    await import("./ui.tsx");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
 describe("widget.js", () => {
   it("honours data-mode=mount and data-mount, and publishes window.Brainbox", async () => {
     document.body.innerHTML = `
@@ -26,6 +33,7 @@ describe("widget.js", () => {
     expect(labels()).toEqual([]);
 
     act(() => document.getElementById("trigger")?.click());
+    await uiReady();
     expect(labels().some((l) => l.startsWith("Screenshot"))).toBe(true);
 
     act(() => window.Brainbox.close());

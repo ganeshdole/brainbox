@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Mic, Pause, Play, Square, Trash2 } from "lucide-react";
+import { Mic, Pause, Play, Square, Trash2 } from "./icons.tsx";
 import { startAudioRecording, type AudioRecorder } from "@ganeshdole/brainbox-core";
 import { downsample, peakLevel } from "../lib/multiband.ts";
 import { useMultibandVolume } from "../lib/use-multiband.ts";

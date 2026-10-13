@@ -46,13 +46,8 @@
     "@ganeshdole/brainbox-core": "workspace:*",
     "@ganeshdole/brainbox-react": "workspace:*",
     "@ganeshdole/brainbox-shared": "workspace:*",
-    "@radix-ui/colors": "^3.0.0",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "lucide-react": "^1.17.0",
     "modern-screenshot": "^4.6.0",
-    "rrweb": "^2.1.0",
-    "tailwind-merge": "^3.6.0"
+    "rrweb": "^2.1.0"
   },
   "peerDependencies": {
     "react": "^19.0.0",
@@ -60,6 +55,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@radix-ui/colors": "^3.0.0",
     "@tailwindcss/vite": "^4.3.0",
     "@types/node": "catalog:",
     "@types/react": "^19.2.16",
