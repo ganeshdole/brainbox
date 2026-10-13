@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
-import type { Project, TeamRole } from "@ganeshdole/brainbox-shared";
+import type { Project, Team, TeamRole } from "@ganeshdole/brainbox-shared";
 
-import { assignableRoles, canAdmin, groupByTeam, inviteExpired, mayManage, newProjectTeam } from "./team.ts";
+import {
+  assignableRoles,
+  canAdmin,
+  groupByTeam,
+  inviteExpired,
+  mayManage,
+  newProjectTeam,
+  onboardingTeam,
+} from "./team.ts";
 
 function project(id: string, teamId: string, role: TeamRole): Project {
   return {
@@ -71,5 +79,18 @@ describe("newProjectTeam", () => {
   it("leaves it to the API when the caller administers no Team", () => {
     expect(newProjectTeam(theirs, [theirs])).toBeUndefined();
     expect(newProjectTeam(null, [])).toBeUndefined();
+  });
+});
+
+describe("onboardingTeam", () => {
+  const team = (id: string, role: TeamRole): Team => ({ id, name: id, role, createdAt: "2026-07-01T00:00:00Z" });
+
+  it("picks the first Team the caller administers, even an empty one", () => {
+    expect(onboardingTeam([team("theirs", "member"), team("acme", "admin")])?.id).toBe("acme");
+  });
+
+  it("leaves it to the API when the caller administers none", () => {
+    expect(onboardingTeam([team("theirs", "member")])).toBeUndefined();
+    expect(onboardingTeam([])).toBeUndefined();
   });
 });

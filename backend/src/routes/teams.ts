@@ -101,7 +101,9 @@ export const teamsRoute = new Hono<AppEnv>()
     if (existing && (await store.teams.membership(access.team.id, existing.id))) {
       return c.json({ error: `${email} is already in this team` }, 409);
     }
-    const open = await store.teams.listInvites(access.team.id);
+    // Expired invites are kept for the admins to see, but are not open.
+    const now = new Date();
+    const open = (await store.teams.listInvites(access.team.id)).filter((i) => i.expiresAt > now);
     if (open.length >= MAX_OPEN_INVITES && !open.some((i) => i.email === email)) {
       return c.json({ error: "This team has too many open invites. Revoke some first." }, 409);
     }

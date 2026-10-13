@@ -164,3 +164,68 @@ test("only the company's domain signs in, unless a Team invites someone", async 
   await owner.context.close();
   await outsider.context.close();
 });
+
+test("a Team with no projects left stays reachable, and an Admin restocks it", async ({ browser }, testInfo) => {
+  const owner = await person(browser, testInfo, "Owner", "boss@acme.test");
+  const admin = await person(browser, testInfo, "Admin", "kim@acme.test");
+
+  await ownerWithProject(owner, "Old Site", "Studio");
+  const link = await invite(owner, admin.email, "Admin");
+  await admin.page.goto(link);
+  await signIn(admin);
+  await admin.page.getByRole("button", { name: "Join Studio" }).click();
+  await expect(admin.page).toHaveURL(/\/projects\//);
+
+  await test.step("the Owner deletes the Team's only project, and can still manage the Team", async () => {
+    await nav(owner.page, "Settings").click();
+    await owner.say("deletes the team's only project");
+    await owner.page.getByRole("button", { name: "Delete project" }).click();
+    await owner.page.getByPlaceholder("Old Site").fill("Old Site");
+    await owner.page.getByRole("button", { name: "Delete this project" }).click();
+    await expect(owner.page.getByRole("heading", { name: "Create a project in Studio" })).toBeVisible();
+
+    await owner.say("still reaches the empty team");
+    await owner.page.getByRole("link", { name: "Manage Studio" }).click();
+    await expect(owner.page).toHaveURL(/\/teams\//);
+    await expect(memberRow(owner.page, admin.email)).toBeVisible();
+  });
+
+  await test.step("the Admin creates the replacement project in the same Team", async () => {
+    await admin.page.goto("/");
+    await admin.say("creates the replacement project in Studio");
+    await expect(admin.page.getByRole("heading", { name: "Create a project in Studio" })).toBeVisible();
+    await admin.page.getByPlaceholder("Project name - e.g. Nidana").fill("New Site");
+    await admin.page.getByRole("button", { name: "Create project" }).click();
+    await expect(admin.page).toHaveURL(/\/projects\/[0-9a-f-]+$/);
+
+    await owner.page.goto("/");
+    await expect(owner.page.getByRole("button", { name: "New Site" }).first()).toBeVisible();
+  });
+
+  await owner.context.close();
+  await admin.context.close();
+});
+
+test("joining a Team that has no projects lands on the Team", async ({ browser }, testInfo) => {
+  const owner = await person(browser, testInfo, "Owner", "founder@acme.test");
+  const mate = await person(browser, testInfo, "Teammate", "lee@acme.test");
+  owner.page.on("dialog", (dialog) => void dialog.accept());
+
+  await ownerWithProject(owner, "Temp", "Labs");
+  const link = await invite(owner, mate.email);
+  await nav(owner.page, "Settings").click();
+  await owner.page.getByRole("button", { name: "Delete project" }).click();
+  await owner.page.getByPlaceholder("Temp").fill("Temp");
+  await owner.page.getByRole("button", { name: "Delete this project" }).click();
+  await expect(owner.page.getByRole("heading", { name: "Create a project in Labs" })).toBeVisible();
+
+  await mate.page.goto(link);
+  await signIn(mate);
+  await mate.page.getByRole("button", { name: "Join Labs" }).click();
+  await expect(mate.page).toHaveURL(/\/teams\//);
+  await expect(mate.page.getByText("Everyone here sees every project in Labs")).toBeVisible();
+  await expect(memberRow(mate.page, owner.email)).toContainText("Owner");
+
+  await owner.context.close();
+  await mate.context.close();
+});

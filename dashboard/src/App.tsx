@@ -11,7 +11,7 @@ import { Login } from "./pages/Login";
 import { Report } from "./pages/Report";
 import { Reports } from "./pages/Reports";
 import { Settings } from "./pages/Settings";
-import { Team } from "./pages/Team";
+import { StandaloneTeam, Team } from "./pages/Team";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <Login /> },
@@ -24,6 +24,7 @@ export const router = createBrowserRouter([
       { path: "/billing/return", element: <BillingReturn /> },
       // Joining a Team never needs a plan of one's own.
       { path: "/invite/:inviteId", element: <Invite /> },
+      { path: "/teams/:teamId", element: <StandaloneTeam /> },
 
       { path: "/", element: <Home /> },
       {

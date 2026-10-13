@@ -1,4 +1,4 @@
-import type { Project, TeamRole } from "@ganeshdole/brainbox-shared";
+import type { Project, Team, TeamRole } from "@ganeshdole/brainbox-shared";
 
 // What the dashboard shows each role. The API enforces the same rules
 // (backend/src/lib/teams.ts); these only decide which controls to offer.
@@ -61,4 +61,13 @@ export function groupByTeam(projects: Project[]): Array<{ team: Project["team"];
 export function newProjectTeam(current: Project | null, projects: Project[]): string | undefined {
   if (current && canAdmin(current.team.role)) return current.team.id;
   return projects.find((p) => canAdmin(p.team.role))?.team.id;
+}
+
+/**
+ * Where a project made from the empty home page goes: the oldest Team the
+ * caller administers, such as one whose projects were all deleted or one they
+ * were invited to before it had any. Undefined lets the API make them a Team.
+ */
+export function onboardingTeam(teams: Team[]): Team | undefined {
+  return teams.find((t) => canAdmin(t.role));
 }

@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { useSession } from "@hono/auth-js/react";
-import type { CreatedInvite, InviteRole, TeamInvite, TeamMember, TeamRole } from "@ganeshdole/brainbox-shared";
+import type {
+  CreatedInvite,
+  InviteRole,
+  ProjectTeam,
+  TeamInvite,
+  TeamMember,
+  TeamRole,
+} from "@ganeshdole/brainbox-shared";
 
 import { CopyButton } from "../components/CopyButton";
 import { Eyebrow } from "../components/Eyebrow";
@@ -9,6 +16,8 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Skeleton } from "../components/ui/skeleton";
+import { Spinner } from "../components/ui/spinner";
+import { Wordmark } from "../components/Wordmark";
 import { api, isAuthRedirect } from "../lib/api";
 import { assignableRoles, canAdmin, inviteExpired, mayManage, ROLE_HINTS, ROLE_LABELS } from "../lib/team";
 import { LAST_PROJECT_KEY, useProject } from "../lib/useProject";
@@ -151,8 +160,8 @@ function InviteForm({ teamId, onInvited }: { teamId: string; onInvited: (created
   );
 }
 
-export function Team() {
-  const { project, setTeamName } = useProject();
+/** The Team page, for whichever Team it is given. */
+function TeamSettings({ team, onRenamed }: { team: ProjectTeam; onRenamed: (name: string) => void }) {
   const { data: session } = useSession();
   const [members, setMembers] = useState<TeamMember[] | null>(null);
   const [invites, setInvites] = useState<TeamInvite[]>([]);
@@ -161,17 +170,13 @@ export function Team() {
   const [busy, setBusy] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
 
-  const team = project?.team;
-  const currentTeamId = team?.id;
-  const admin = team ? canAdmin(team.role) : false;
+  const teamId = team.id;
+  const actor = team.role;
+  const admin = canAdmin(actor);
 
   useEffect(() => {
-    if (!currentTeamId) return;
     let cancelled = false;
-    Promise.all([
-      api.listMembers(currentTeamId),
-      admin ? api.listInvites(currentTeamId) : Promise.resolve([]),
-    ])
+    Promise.all([api.listMembers(teamId), admin ? api.listInvites(teamId) : Promise.resolve([])])
       .then(([nextMembers, nextInvites]) => {
         if (cancelled) return;
         setMembers(nextMembers);
@@ -183,12 +188,8 @@ export function Team() {
     return () => {
       cancelled = true;
     };
-  }, [currentTeamId, admin, reload]);
+  }, [teamId, admin, reload]);
 
-  // The Team is per-project; the all view has none to show.
-  if (!project || !team) return <Navigate to="/projects/all" replace />;
-  const teamId = team.id;
-  const actor = team.role;
   const myEmail = session?.user?.email?.toLowerCase();
 
   async function run(key: string, action: () => Promise<unknown>, after?: () => void) {
@@ -206,7 +207,7 @@ export function Team() {
   }
 
   function leave(userId: string) {
-    if (!window.confirm(`Leave ${team?.name}? You'll lose access to its projects.`)) return;
+    if (!window.confirm(`Leave ${team.name}? You'll lose access to its projects.`)) return;
     void run(`remove:${userId}`, () => api.removeMember(teamId, userId), () => {
       localStorage.removeItem(LAST_PROJECT_KEY);
       // A full load, so the project list is fetched again without this Team.
@@ -224,7 +225,7 @@ export function Team() {
 
         <div className="mt-8">
           <Section label="Name" hint="Shown to everyone in the team.">
-            <TeamName key={team.name} teamId={teamId} name={team.name} editable={admin} onRenamed={(name) => setTeamName(teamId, name)} />
+            <TeamName key={team.name} teamId={teamId} name={team.name} editable={admin} onRenamed={onRenamed} />
           </Section>
 
           {admin && (
@@ -350,6 +351,67 @@ export function Team() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** `/projects/:projectId/team` - the Team of the project being viewed. */
+export function Team() {
+  const { project, setTeamName } = useProject();
+  // The all view spans Teams, so has no one Team to show.
+  if (!project) return <Navigate to="/projects/all" replace />;
+  return (
+    <TeamSettings
+      key={project.team.id}
+      team={project.team}
+      onRenamed={(name) => setTeamName(project.team.id, name)}
+    />
+  );
+}
+
+/** `/teams/:teamId` - a Team reached without one of its projects: one with
+ *  none yet, or none left, which the project pages cannot reach. */
+export function StandaloneTeam() {
+  const { teamId } = useParams<{ teamId: string }>();
+  const [team, setTeam] = useState<ProjectTeam | null>();
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .listTeams()
+      .then((teams) => {
+        if (!cancelled) setTeam(teams.find((t) => t.id === teamId) ?? null);
+      })
+      .catch((e: Error) => {
+        if (!cancelled && !isAuthRedirect(e)) setError(e.message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId]);
+
+  return (
+    <div className="flex min-h-dvh flex-col bg-background">
+      <header className="border-b border-default">
+        <div className="mx-auto flex h-14 w-full max-w-2xl items-center justify-between px-4 sm:px-6">
+          <Wordmark />
+          <Link to="/" className="text-sm text-muted transition hover:text-emphasis">
+            Your projects
+          </Link>
+        </div>
+      </header>
+      {error ? (
+        <p className="p-8 text-center text-sm text-error">{error}</p>
+      ) : team === undefined ? (
+        <div className="grid flex-1 place-items-center">
+          <Spinner />
+        </div>
+      ) : team === null ? (
+        <p className="p-8 text-center text-sm text-default">This team doesn't exist, or you're not in it.</p>
+      ) : (
+        <TeamSettings key={team.name} team={team} onRenamed={(name) => setTeam({ ...team, name })} />
+      )}
     </div>
   );
 }

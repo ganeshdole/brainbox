@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { app } from "../src/app.ts";
 import { signInAllowed } from "../src/auth/allowed.ts";
+import { MAX_OPEN_INVITES } from "../src/lib/teams.ts";
 import { getStore } from "../src/store/index.ts";
 import {
   addMember,
@@ -197,6 +198,33 @@ describe("invites", () => {
     expect((await send(admin, "not an email")).status).toBe(400);
     expect((await send(admin, "x@example.com", "owner")).status).toBe(400);
     expect((await as(member, `/api/teams/${teamId}/invites`)).status).toBe(403);
+  });
+
+  it("caps open invites, not expired ones", async () => {
+    const { admin, teamId } = await team();
+    const store = getStore();
+    const seed = (n: number, expiresAt: Date) =>
+      Promise.all(
+        Array.from({ length: n }, (_, i) =>
+          store.teams.createInvite({
+            teamId,
+            email: `old-${expiresAt.getTime()}-${i}@example.com`,
+            role: "member",
+            invitedBy: admin.id,
+            expiresAt,
+          }),
+        ),
+      );
+    const send = (email: string) =>
+      as(admin, `/api/teams/${teamId}/invites`, { method: "POST", ...json({ email }) });
+
+    await seed(MAX_OPEN_INVITES, new Date(Date.now() - 1000));
+    expect((await send("new@example.com")).status).toBe(201);
+
+    await seed(MAX_OPEN_INVITES - 1, new Date(Date.now() + 60_000));
+    expect((await send("newer@example.com")).status).toBe(409);
+    // Re-inviting an open address replaces it, so is never capped.
+    expect((await send("new@example.com")).status).toBe(201);
   });
 });
 

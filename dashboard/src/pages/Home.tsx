@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useSession } from "@hono/auth-js/react";
-import type { Project, ReceivedInvite } from "@ganeshdole/brainbox-shared";
+import type { Project, ReceivedInvite, Team } from "@ganeshdole/brainbox-shared";
 
 import { Wordmark } from "../components/Wordmark";
 import { Button } from "../components/ui/button";
@@ -11,11 +11,14 @@ import { api, isAuthRedirect } from "../lib/api";
 import { landingFor } from "../lib/invites";
 import { logout } from "../lib/logout";
 import { homeTarget, LAST_PROJECT_KEY } from "../lib/useProject";
-import { ROLE_LABELS } from "../lib/team";
+import { onboardingTeam, ROLE_LABELS } from "../lib/team";
 import { normalizeOrigin } from "../lib/utils";
 
-/** First-run screen: name the project, optionally lock it to a domain. */
-function Onboarding() {
+/** First-run screen: name the project, optionally lock it to a domain. It goes
+ *  into a Team the caller administers when they have one with no projects (all
+ *  deleted, or joined before it had any); otherwise the API makes them one. */
+function Onboarding({ teams }: { teams: Team[] }) {
+  const into = onboardingTeam(teams);
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
@@ -36,6 +39,7 @@ function Onboarding() {
       const project = await api.createProject({
         name: name.trim(),
         ...(origin ? { allowedOrigins: [origin] } : {}),
+        ...(into ? { teamId: into.id } : {}),
       });
       navigate(`/projects/${project.id}`, { replace: true });
     } catch (err) {
@@ -51,7 +55,7 @@ function Onboarding() {
           <span className="h-2.5 w-2.5 rounded-full bg-background" />
         </span>
         <h1 className="mt-6 text-center text-xl font-semibold tracking-tight text-emphasis">
-          Create your project
+          {into ? `Create a project in ${into.name}` : "Create your project"}
         </h1>
         <p className="mt-2 text-center text-sm text-muted">
           One per site or app. You'll get the install snippet right after.
@@ -77,6 +81,17 @@ function Onboarding() {
           </Button>
         </form>
         {error && <p className="mt-3 text-center text-sm text-error">{error}</p>}
+        {teams.length > 0 && (
+          <ul className="mt-8 space-y-1 border-t border-default pt-4 text-center text-xs text-muted">
+            {teams.map((t) => (
+              <li key={t.id}>
+                <Link to={`/teams/${t.id}`} className="hover:text-emphasis">
+                  Manage {t.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
@@ -146,6 +161,7 @@ export function Home() {
   const { data: session } = useSession();
   const [invites, setInvites] = useState<ReceivedInvite[] | null>(null);
   const [projects, setProjects] = useState<Project[] | null>(null);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   // Invites first: they sit outside the paywall, and listing projects would
@@ -168,10 +184,12 @@ export function Home() {
   useEffect(() => {
     if (!invites || invites.length > 0) return;
     let cancelled = false;
-    api
-      .listProjects()
-      .then((next) => {
-        if (!cancelled) setProjects(next);
+    // Teams too: one may have no projects, and only these show it.
+    Promise.all([api.listProjects(), api.listTeams()])
+      .then(([nextProjects, nextTeams]) => {
+        if (cancelled) return;
+        setTeams(nextTeams);
+        setProjects(nextProjects);
       })
       .catch((e: Error) => {
         // A 401/402 is already navigating away; rendering it just flashes a
@@ -224,7 +242,7 @@ export function Home() {
       ) : invites && invites.length > 0 ? (
         <PendingInvites invites={invites} onSkip={() => setInvites([])} />
       ) : projects?.length === 0 ? (
-        <Onboarding />
+        <Onboarding teams={teams} />
       ) : (
         <div className="flex flex-1 items-center justify-center">
           <Spinner />
