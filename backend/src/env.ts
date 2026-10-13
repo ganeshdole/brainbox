@@ -26,6 +26,14 @@ const DATABASE_DRIVER = oneOf("DATABASE_DRIVER", ["postgres", "convex", "custom"
 const STORAGE_DRIVER = oneOf("STORAGE_DRIVER", ["local", "s3", "r2", "convex", "custom"], "local");
 const USES_CONVEX = DATABASE_DRIVER === "convex" || STORAGE_DRIVER === "convex";
 
+// Both S3 keys, or neither (the SDK's own credential chain). One alone would
+// boot fine and then fail, or quietly sign as someone else, on the first upload.
+const S3_ACCESS_KEY_ID = process.env.S3_ACCESS_KEY_ID ?? "";
+const S3_SECRET_ACCESS_KEY = process.env.S3_SECRET_ACCESS_KEY ?? "";
+if (STORAGE_DRIVER === "s3" && !S3_ACCESS_KEY_ID !== !S3_SECRET_ACCESS_KEY) {
+  throw new Error("Set both S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY, or neither to use an IAM role");
+}
+
 // AUTH_SECRET and the chosen store's settings are infra and must be present to
 // boot. GOOGLE_* are optional so the server can boot for inspection before the
 // OAuth client exists; Google sign-in obviously won't work until they're set.
@@ -61,8 +69,8 @@ export const env = {
   S3_BUCKET: STORAGE_DRIVER === "s3" ? required("S3_BUCKET") : "",
   S3_REGION: STORAGE_DRIVER === "s3" ? required("S3_REGION") : "",
   S3_ENDPOINT: process.env.S3_ENDPOINT ?? "",
-  S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID ?? "",
-  S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY ?? "",
+  S3_ACCESS_KEY_ID,
+  S3_SECRET_ACCESS_KEY,
   S3_FORCE_PATH_STYLE: process.env.S3_FORCE_PATH_STYLE === "true",
   R2_ENDPOINT: STORAGE_DRIVER === "r2" ? required("R2_ENDPOINT") : "",
   R2_ACCESS_KEY_ID: STORAGE_DRIVER === "r2" ? required("R2_ACCESS_KEY_ID") : "",
