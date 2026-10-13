@@ -83,11 +83,15 @@ const REPRO_STEPS = "Microsoft.VSTS.TCM.ReproSteps";
 const SYSTEM_INFO = "Microsoft.VSTS.TCM.SystemInfo";
 const PRIORITY = "Microsoft.VSTS.Common.Priority";
 const FILLED = new Set([PRIORITY, REPRO_STEPS, SYSTEM_INFO]);
+const PAGE_SIZE = 500;
+/** A guard against a server that never stops paging: 10,000 rows is past any picker. */
+const MAX_PAGES = 20;
 
 export function azureDevops(options: AzureDevopsCatalogOptions): AzureDevopsCatalog {
   const base = options.baseUrl ?? AZURE_DEVOPS_URL;
   const profile = options.profileUrl ?? AZURE_DEVOPS_PROFILE_URL;
-  const get = async (url: string) => adoGet(url, await authorizationHeader(options.auth), options.fetch);
+  const page = async (url: string) => adoGet(url, await authorizationHeader(options.auth), options.fetch);
+  const get = async (url: string) => (await page(url)).body;
 
   return {
     async organizations() {
@@ -101,14 +105,37 @@ export function azureDevops(options: AzureDevopsCatalogOptions): AzureDevopsCata
         .sort(byName);
     },
 
+    // Projects page with a continuation token in a response header.
     async projects(organization) {
-      const body = await get(adoUrl(base, [organization, "_apis/projects"], { $top: "500" }));
-      return named(listOf(body)).sort((a, b) => byName(a.name, b.name));
+      const rows: Record<string, unknown>[] = [];
+      let continuationToken: string | undefined;
+      for (let i = 0; i < MAX_PAGES; i++) {
+        const res = await page(
+          adoUrl(base, [organization, "_apis/projects"], { $top: String(PAGE_SIZE), continuationToken }),
+        );
+        rows.push(...listOf(res.body));
+        continuationToken = res.headers.get("x-ms-continuationtoken") ?? undefined;
+        if (!continuationToken) break;
+      }
+      return named(rows).sort((a, b) => byName(a.name, b.name));
     },
 
+    // Teams page with $skip until a short page.
     async teams(organization, project) {
-      const body = await get(adoUrl(base, [organization, "_apis/projects", project, "teams"], { $top: "500" }));
-      return named(listOf(body)).sort((a, b) => byName(a.name, b.name));
+      const rows: Record<string, unknown>[] = [];
+      for (let i = 0; i < MAX_PAGES; i++) {
+        const batch = listOf(
+          await get(
+            adoUrl(base, [organization, "_apis/projects", project, "teams"], {
+              $top: String(PAGE_SIZE),
+              $skip: String(i * PAGE_SIZE),
+            }),
+          ),
+        );
+        rows.push(...batch);
+        if (batch.length < PAGE_SIZE) break;
+      }
+      return named(rows).sort((a, b) => byName(a.name, b.name));
     },
 
     async teamSettings(organization, project, team) {

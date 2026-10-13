@@ -116,7 +116,7 @@ async function createWorkItem(
 
   const crop = validateOnly ? null : await upload(ctx, ticket.files?.crop);
   const screenshot = validateOnly ? null : await upload(ctx, ticket.files?.screenshot);
-  const rendered = renderTicketHtml(ticket, { imageUrl: crop?.url ?? screenshot?.url });
+  const rendered = renderTicketHtml(ticket, { crop: crop?.url, screenshot: screenshot?.url });
 
   const ops: PatchOp[] = [
     add("/fields/System.Title", rendered.title),
@@ -196,13 +196,13 @@ async function iterationPath(ctx: Ctx): Promise<{ ok: true; path?: string } | { 
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
   }
-  // A team with no sprint running answers 404 or an empty list: the item goes to the backlog.
-  if (res.status === 404) return { ok: true };
+  // A 404 is a team that no longer exists: fail rather than file into the backlog unnoticed.
   if (res.status !== 200) return { ok: false, status: res.status, error: adoErrorMessage(res.status, res.body) };
+  // No sprint running is an empty list: the item goes to the backlog.
   return { ok: true, path: str(listOf(res.body)[0]?.path) };
 }
 
-/** Uploads one image. A failure is not fatal: the body falls back to the public link. */
+/** Uploads one image. A failure is not fatal: that image falls back to its public link. */
 async function upload(ctx: Ctx, file: TicketFile | undefined): Promise<Uploaded | null> {
   if (!file) return null;
   try {

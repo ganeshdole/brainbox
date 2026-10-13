@@ -35,7 +35,33 @@ describe("azureDevops catalog", () => {
     ]);
     expect(await ado.teams("acme", "p-1")).toEqual([{ id: "t", name: "Web Team" }]);
     expect(fetch.calls[0]!.url).toBe("https://dev.azure.com/acme/_apis/projects?%24top=500&api-version=7.1");
-    expect(fetch.calls[1]!.url).toBe("https://dev.azure.com/acme/_apis/projects/p-1/teams?%24top=500&api-version=7.1");
+    expect(fetch.calls[1]!.url).toBe(
+      "https://dev.azure.com/acme/_apis/projects/p-1/teams?%24top=500&%24skip=0&api-version=7.1",
+    );
+  });
+
+  it("follows the continuation token through every page of projects", async () => {
+    const fetch = fakeFetch(
+      { status: 200, body: { value: [{ id: "1", name: "A" }] }, headers: { "x-ms-continuationtoken": "next-1" } },
+      { status: 200, body: { value: [{ id: "2", name: "B" }] } },
+    );
+    expect(await azureDevops({ auth: { pat: "p" }, fetch }).projects("acme")).toEqual([
+      { id: "1", name: "A" },
+      { id: "2", name: "B" },
+    ]);
+    expect(fetch.calls[1]!.url).toBe(
+      "https://dev.azure.com/acme/_apis/projects?%24top=500&continuationToken=next-1&api-version=7.1",
+    );
+  });
+
+  it("pages through teams until a short page", async () => {
+    const full = Array.from({ length: 500 }, (_, i) => ({ id: `t${i}`, name: `Team ${String(i).padStart(3, "0")}` }));
+    const fetch = fakeFetch({ status: 200, body: { value: full } }, { status: 200, body: { value: [{ id: "last", name: "Zed" }] } });
+    const teams = await azureDevops({ auth: { pat: "p" }, fetch }).teams("acme", "p-1");
+    expect(teams).toHaveLength(501);
+    expect(teams.at(-1)).toEqual({ id: "last", name: "Zed" });
+    expect(fetch.calls[1]!.url).toContain("%24skip=500");
+    expect(fetch.calls).toHaveLength(2);
   });
 
   it("reads a team's areas, bug setting, backlog and sprints", async () => {

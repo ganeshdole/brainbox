@@ -34,6 +34,7 @@ export interface AdoRequest {
 export interface AdoResponse {
   status: number;
   body: unknown;
+  headers: Headers;
 }
 
 export class AzureDevopsApiError extends Error {
@@ -70,7 +71,7 @@ export async function adoRequest(req: AdoRequest): Promise<AdoResponse> {
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
   if (res.status === 203 || (res.status >= 300 && res.status < 400)) {
-    return { status: 401, body: { message: "Azure DevOps rejected the credentials" } };
+    return { status: 401, body: { message: "Azure DevOps rejected the credentials" }, headers: res.headers };
   }
   const text = await res.text();
   let body: unknown = null;
@@ -81,14 +82,14 @@ export async function adoRequest(req: AdoRequest): Promise<AdoResponse> {
       body = text;
     }
   }
-  return { status: res.status, body };
+  return { status: res.status, body, headers: res.headers };
 }
 
-/** GET a JSON body, throwing `AzureDevopsApiError` on anything but a 200. */
-export async function adoGet(url: string, authorization: string, fetch?: FetchLike): Promise<unknown> {
+/** GET, throwing `AzureDevopsApiError` on anything but a 200. */
+export async function adoGet(url: string, authorization: string, fetch?: FetchLike): Promise<AdoResponse> {
   const res = await adoRequest({ method: "GET", url, authorization, fetch });
   if (res.status !== 200) throw new AzureDevopsApiError(res.status, res.body);
-  return res.body;
+  return res;
 }
 
 export function adoErrorMessage(status: number, body: unknown): string {

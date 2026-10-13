@@ -109,6 +109,7 @@ describe("azureDevopsWorkItems", () => {
 
     await azureDevopsWorkItems({ ...base, fetch }).deliver({
       ...ticket,
+      links: { ...ticket.links, screenshot: "https://api.brainbox.sh/f/shot" },
       files: { crop: file("crop.png"), screenshot: file("screenshot.png") },
     });
 
@@ -120,7 +121,11 @@ describe("azureDevopsWorkItems", () => {
     expect(field(create!, "System.Description")).toContain(
       '<img src="https://dev.azure.com/acme/_apis/wit/attachments/c"',
     );
-    expect(field(create!, "System.Description")).not.toContain("api.brainbox.sh/f/crop");
+    // Uploaded images stay behind Azure DevOps sign-in: no public link to either.
+    expect(field(create!, "System.Description")).not.toContain("api.brainbox.sh/f/");
+    expect(field(create!, "System.Description")).toContain(
+      '<a href="https://dev.azure.com/acme/_apis/wit/attachments/s">Full screenshot</a>',
+    );
     const attached = ops(create!).filter((o) => (o.value as { rel?: string }).rel === "AttachedFile");
     expect(attached.map((o) => (o.value as { url: string }).url)).toEqual([
       "https://dev.azure.com/acme/_apis/wit/attachments/c",
@@ -166,6 +171,13 @@ describe("azureDevopsWorkItems", () => {
     const fetch = fakeFetch({ status: 200, body: { value: [] } }, created);
     await azureDevopsWorkItems({ ...base, iteration: { currentFor: "t" }, fetch }).deliver(ticket);
     expect(field(fetch.calls[1]!, "System.IterationPath")).toBeUndefined();
+  });
+
+  it("fails rather than filing into the backlog when the team is gone", async () => {
+    const fetch = fakeFetch({ status: 404, body: { message: "VS800075: The team Web Team does not exist." } });
+    const result = await azureDevopsWorkItems({ ...base, iteration: { currentFor: "Web Team" }, fetch }).deliver(ticket);
+    expect(result).toEqual({ ok: false, status: 404, error: "VS800075: The team Web Team does not exist." });
+    expect(fetch.calls).toHaveLength(1);
   });
 
   it("sends an Entra token as Bearer, resolved at send time", async () => {

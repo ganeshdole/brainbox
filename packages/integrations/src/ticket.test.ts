@@ -228,15 +228,24 @@ describe("renderTicketHtml", () => {
     expect(body).toContain('<a href="#">Billing · Example</a>');
   });
 
-  it("uses the tracker's own image when given one, and splits out the environment", () => {
+  it("uses the tracker's own copies in place of every public link, and splits out the environment", () => {
     const { body, environment } = renderTicketHtml(
-      ticket({ links: { dashboard: "d", crop: "https://x/crop" } }),
-      { imageUrl: "https://dev.azure.com/o/_apis/wit/attachments/1" },
+      ticket({ links: { dashboard: "d", crop: "https://x/crop", screenshot: "https://x/shot" } }),
+      { crop: "https://dev.azure.com/o/_apis/wit/attachments/c", screenshot: "https://dev.azure.com/o/_apis/wit/attachments/s" },
     );
-    expect(body).toContain('<img src="https://dev.azure.com/o/_apis/wit/attachments/1"');
-    expect(body).not.toContain("https://x/crop");
+    expect(body).toContain('<img src="https://dev.azure.com/o/_apis/wit/attachments/c" alt="Highlighted region"');
+    expect(body).toContain('<a href="https://dev.azure.com/o/_apis/wit/attachments/s">Full screenshot</a>');
+    expect(body).not.toContain("https://x/");
     expect(environment).toContain(">Viewport</th><td>1440 × 900 @2x</td>");
     expect(environment).toContain(">Locale</th>");
     expect(environment).not.toContain(">User<");
+  });
+
+  it("keeps the public link for an image the tracker has no copy of", () => {
+    const { body } = renderTicketHtml(
+      ticket({ links: { dashboard: "d", crop: "https://x/crop", screenshot: "https://x/shot" } }),
+      { crop: "https://dev.azure.com/o/_apis/wit/attachments/c" },
+    );
+    expect(body).toContain('<a href="https://x/shot">Full screenshot</a>');
   });
 });

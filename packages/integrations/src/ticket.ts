@@ -46,9 +46,11 @@ export interface RenderedHtmlTicket {
   environment: string;
 }
 
+/** The tracker's own copies of the images. Each replaces the public link
+ *  everywhere it appears, so an uploaded image is never also linked publicly. */
 export interface HtmlRenderOptions {
-  /** Replaces the inline image URL, e.g. with the tracker's own copy. */
-  imageUrl?: string;
+  crop?: string;
+  screenshot?: string;
 }
 
 const TITLE_MAX = 72;
@@ -61,11 +63,12 @@ export function renderTicket(ticket: Ticket): RenderedTicket {
 
 /** The same ticket as HTML. Every value from the report is escaped. */
 export function renderTicketHtml(ticket: Ticket, options: HtmlRenderOptions = {}): RenderedHtmlTicket {
-  const content = contentOf(ticket);
-  if (options.imageUrl) {
-    const crop = ticket.links.crop ?? ticket.files?.crop;
-    content.image = { url: options.imageUrl, alt: crop ? "Highlighted region" : "Screenshot" };
-  }
+  const links = {
+    ...ticket.links,
+    ...(options.crop ? { crop: options.crop } : {}),
+    ...(options.screenshot ? { screenshot: options.screenshot } : {}),
+  };
+  const content = contentOf({ ...ticket, links });
   return {
     title: titleFor(ticket),
     body: htmlBody(content),

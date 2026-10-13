@@ -69,9 +69,11 @@ sends: the first line of the end-user's words as the title; the cropped
 screenshot, the text, the transcript, a table of page/viewport/browser/user,
 console errors in a `<details>`, and a link back to the dashboard. It is plain
 Markdown, so a Linear or Jira destination can reuse it unchanged.
-`renderTicketHtml(ticket, { imageUrl? })` says the same as escaped HTML, for
-trackers whose rich text is HTML, plus an `environment` table (page, browser,
-viewport, locale) on its own.
+`renderTicketHtml(ticket, { crop?, screenshot? })` says the same as escaped
+HTML, for trackers whose rich text is HTML, plus an `environment` table (page,
+browser, viewport, locale) on its own. `crop` and `screenshot` are the
+tracker's own copies of the images; each replaces the public link everywhere
+it would appear.
 
 A ticket can carry `files: { crop?, screenshot? }`, each
 `{ name, contentType, load() }`, for destinations that keep their own copy of
@@ -140,8 +142,13 @@ Server.
 `azureDevopsWorkItems()` opens one work item per ticket. It uploads the
 ticket's `files` as attachments first, shows the crop inline and attaches
 both, then creates the item, its fields and a link back to Brainbox in one
-call, so a work item is never half-made. An upload that fails falls back to
-the public link in `links`.
+call, so a work item is never half-made. An uploaded image is never also
+linked publicly; one whose upload fails falls back to its public link in
+`links`. A current-sprint lookup for a team that no longer exists fails the
+delivery rather than filing into the backlog.
+
+Projects and teams are read page by page, so large organizations list in
+full.
 
 ```ts
 import { azureDevopsWorkItems } from "@ganeshdole/brainbox-integrations";

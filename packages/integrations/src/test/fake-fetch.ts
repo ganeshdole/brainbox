@@ -7,7 +7,7 @@ export interface RecordedCall {
   body: unknown;
 }
 
-export type QueuedResponse = { status: number; body?: unknown } | Error;
+export type QueuedResponse = { status: number; body?: unknown; headers?: Record<string, string> } | Error;
 
 /** Records every call and answers from a queue; an `Error` entry is thrown. */
 export function fakeFetch(...queue: QueuedResponse[]): FetchLike & { calls: RecordedCall[] } {
@@ -25,7 +25,7 @@ export function fakeFetch(...queue: QueuedResponse[]): FetchLike & { calls: Reco
     if (next instanceof Error) throw next;
     return new Response(next.body === undefined ? null : JSON.stringify(next.body), {
       status: next.status,
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...next.headers },
     });
   };
   return Object.assign(fn, { calls });
