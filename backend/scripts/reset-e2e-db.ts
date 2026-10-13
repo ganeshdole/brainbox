@@ -6,13 +6,14 @@ import postgres from "postgres";
 
 // Recreates the end-to-end suite's database from the migrations, so every run
 // of e2e/ starts empty and also proves the migrations apply from scratch.
-// Refuses any database whose name does not end in _e2e: dropping is the point.
+// e2e/env.ts names it per checkout (brainbox_e2e_<folder>). Dropping is the
+// point, so it refuses any database without an "e2e" word in its name.
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required");
 const name = new URL(url).pathname.slice(1);
-if (!/^[a-z0-9_]+_e2e$/.test(name)) {
-  throw new Error(`refusing to reset "${name}": only a database named *_e2e may be reset`);
+if (!/^[a-z0-9_]+$/.test(name) || !/(^|_)e2e(_|$)/.test(name)) {
+  throw new Error(`refusing to reset "${name}": only an e2e database (brainbox_e2e_<checkout>) may be reset`);
 }
 
 const adminUrl = new URL(url);
