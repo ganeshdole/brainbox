@@ -7,6 +7,7 @@ import type {
   ConnectionRecord,
   DeliveryRecord,
   DestinationRecord,
+  IssueEventRecord,
   IssueRecord,
   ProjectRecord,
   Store,
@@ -111,6 +112,12 @@ export function createConvexStore(convex: ConvexCaller): Store {
           status: outcome.status,
           ...(outcome.status === "done" && { text: outcome.text }),
         });
+      },
+      async triage(ids, patch, actorId) {
+        return (await convex.mutation(api.issues.triage, { ids: [...ids], patch, actorId })).map(toIssue);
+      },
+      async listEvents(issueId) {
+        return (await convex.query(api.issues.listEvents, { issueId })).map(toIssueEvent);
       },
     },
 
@@ -257,7 +264,29 @@ function toProject(
   };
 }
 
-function toIssue(row: Stamped<IssueRecord, "createdAt">): IssueRecord {
+type IssueDoc = Omit<
+  Stamped<IssueRecord, "createdAt">,
+  "status" | "priority" | "closeReason" | "statusChangedAt"
+> &
+  Partial<Pick<IssueRecord, "status" | "priority">> & {
+    closeReason?: IssueRecord["closeReason"];
+    statusChangedAt?: number | null;
+  };
+
+// Issues stored before triage have none of its fields: they read as "open",
+// as the Postgres migration backfilled them.
+function toIssue({ status, priority, closeReason, statusChangedAt, ...row }: IssueDoc): IssueRecord {
+  return {
+    ...row,
+    createdAt: new Date(row.createdAt),
+    status: status ?? "open",
+    priority: priority ?? "none",
+    closeReason: closeReason ?? null,
+    statusChangedAt: statusChangedAt == null ? null : new Date(statusChangedAt),
+  };
+}
+
+function toIssueEvent(row: Stamped<IssueEventRecord, "createdAt">): IssueEventRecord {
   return { ...row, createdAt: new Date(row.createdAt) };
 }
 

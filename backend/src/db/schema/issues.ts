@@ -1,5 +1,15 @@
-import { jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
-import type { CapturedMetadata, Region, TranscriptStatus } from "@ganeshdole/brainbox-shared";
+import { index, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import type {
+  CapturedMetadata,
+  IssueCloseReason,
+  IssueEvent,
+  IssuePriority,
+  IssueStatus,
+  Region,
+  TranscriptStatus,
+} from "@ganeshdole/brainbox-shared";
+
+import { users } from "./auth-schema.ts";
 
 import { projects } from "./projects.ts";
 
@@ -21,6 +31,12 @@ export const issues = pgTable("issues", {
   createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
     .notNull()
     .defaultNow(),
+  // Triage. New reports arrive as "new"; the migration that added these set
+  // older issues to "open", so nobody opens an inbox of every report ever sent.
+  status: text("status").$type<IssueStatus>().notNull().default("new"),
+  priority: text("priority").$type<IssuePriority>().notNull().default("none"),
+  closeReason: text("close_reason").$type<IssueCloseReason>(),
+  statusChangedAt: timestamp("status_changed_at", { mode: "date", withTimezone: true }),
   text: text("text"),
   // A submission is a screenshot OR a screen recording - so screenshot_key,
   // crop_key and region are all nullable (a recording has a last-frame
@@ -46,3 +62,25 @@ export const issues = pgTable("issues", {
   region: jsonb("region").$type<Region>(),
   metadata: jsonb("metadata").$type<CapturedMetadata>().notNull(),
 });
+
+// Append-only log of triage changes, written in the same transaction as the
+// change itself. A deleted Account leaves its events with `actor_id` null.
+export const issueEvents = pgTable(
+  "issue_events",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    issueId: text("issue_id")
+      .notNull()
+      .references(() => issues.id, { onDelete: "cascade" }),
+    actorId: text("actor_id").references(() => users.id, { onDelete: "set null" }),
+    kind: text("kind").$type<IssueEvent["kind"]>().notNull(),
+    from: text("from"),
+    to: text("to"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("issue_events_issue_idx").on(t.issueId, t.createdAt)],
+);

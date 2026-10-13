@@ -3,6 +3,7 @@ import type {
   Delivery,
   IntegrationConnection,
   Issue,
+  IssueEvent,
   Project,
   ProjectDestination,
   ProjectTeam,
@@ -17,6 +18,7 @@ import type {
   ConnectionRecord as ConnectionRow,
   DeliveryRecord as DeliveryRow,
   DestinationRecord as DestinationRow,
+  IssueEventRecord as IssueEventRow,
   IssueRecord as IssueRow,
   ProjectRecord as ProjectRow,
   TeamInviteRecord as TeamInviteRow,
@@ -62,6 +64,10 @@ export async function toIssue(
     id: row.id,
     projectId: row.projectId,
     createdAt: row.createdAt.toISOString(),
+    status: row.status,
+    priority: row.priority,
+    closeReason: row.closeReason ?? undefined,
+    statusChangedAt: row.statusChangedAt?.toISOString(),
     text: row.text ?? undefined,
     screenshot,
     crop,
@@ -71,6 +77,21 @@ export async function toIssue(
     region: row.region ?? undefined,
     metadata: row.metadata,
     ...(deliveryRows && { deliveries: deliveryRows.map(toDelivery) }),
+  };
+}
+
+/** `names` maps actor ids to display names; an actor missing from it shows
+ *  by id alone. */
+export function toIssueEvent(row: IssueEventRow, names: ReadonlyMap<string, string>): IssueEvent {
+  const name = row.actorId ? names.get(row.actorId) : undefined;
+  return {
+    id: row.id,
+    issueId: row.issueId,
+    kind: row.kind,
+    from: row.from,
+    to: row.to,
+    ...(row.actorId && { actor: { id: row.actorId, ...(name && { name }) } }),
+    createdAt: row.createdAt.toISOString(),
   };
 }
 

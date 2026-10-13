@@ -3,7 +3,7 @@ import type { CapturedMetadata, Region } from "@ganeshdole/brainbox-shared";
 
 import type { IssueRecord, ProjectRecord } from "../store/index.ts";
 import type { Storage } from "../storage/index.ts";
-import { toIssue, toProject } from "./serialize.ts";
+import { toIssue, toIssueEvent, toProject } from "./serialize.ts";
 
 const region: Region = { x: 0, y: 0, width: 10, height: 10 };
 const metadata: CapturedMetadata = {
@@ -50,6 +50,10 @@ describe("toIssue", () => {
     id: "i1",
     projectId: "p1",
     createdAt: new Date("2024-01-01T00:00:00Z"),
+    status: "new",
+    priority: "none",
+    closeReason: null,
+    statusChangedAt: null,
     text: "hi",
     screenshotKey: "p1/i1/s.png",
     cropKey: null,
@@ -149,8 +153,54 @@ describe("toIssue", () => {
     });
   });
 
+  it("passes triage through, omitting a close reason and change time it lacks", async () => {
+    const issue = await toIssue(base, storage);
+    expect(issue.status).toBe("new");
+    expect(issue.priority).toBe("none");
+    expect(issue.closeReason).toBeUndefined();
+    expect(issue.statusChangedAt).toBeUndefined();
+  });
+
+  it("maps a closed issue's reason and when it changed", async () => {
+    const issue = await toIssue(
+      { ...base, status: "closed", closeReason: "duplicate", statusChangedAt: new Date("2024-01-02T00:00:00Z") },
+      storage,
+    );
+    expect(issue.closeReason).toBe("duplicate");
+    expect(issue.statusChangedAt).toBe("2024-01-02T00:00:00.000Z");
+  });
+
   it("maps null text to undefined", async () => {
     const issue = await toIssue({ ...base, text: null }, storage);
     expect(issue.text).toBeUndefined();
+  });
+});
+
+describe("toIssueEvent", () => {
+  const row = {
+    id: "e1",
+    issueId: "i1",
+    actorId: "u1",
+    kind: "status" as const,
+    from: "new",
+    to: "open",
+    createdAt: new Date("2024-01-01T00:00:00Z"),
+  };
+
+  it("names the actor when the name is known", () => {
+    expect(toIssueEvent(row, new Map([["u1", "Ada"]]))).toEqual({
+      id: "e1",
+      issueId: "i1",
+      kind: "status",
+      from: "new",
+      to: "open",
+      actor: { id: "u1", name: "Ada" },
+      createdAt: "2024-01-01T00:00:00.000Z",
+    });
+  });
+
+  it("keeps an unnamed actor by id, and leaves a system change without one", () => {
+    expect(toIssueEvent(row, new Map()).actor).toEqual({ id: "u1" });
+    expect(toIssueEvent({ ...row, actorId: null }, new Map())).not.toHaveProperty("actor");
   });
 });
