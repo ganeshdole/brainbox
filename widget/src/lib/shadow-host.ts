@@ -10,6 +10,23 @@ export interface ShadowHost {
   container: HTMLElement;
 }
 
+/** The `id` of the widget's element on the host page. Exported so a host can
+ *  exempt it (see `isBrainboxEvent`) without hard-coding the string. */
+export const BRAINBOX_HOST_ID = "brainbox-widget";
+
+/**
+ * Whether an event came from inside the widget. Its UI lives in a shadow root,
+ * so outside it `event.target` is our host element, never the textarea or
+ * button underneath: to a focus trap on `document` the widget looks like page
+ * background. A trap that cancels keys aimed outside its modal can call this
+ * first and let the widget's events through.
+ */
+export function isBrainboxEvent(event: Event): boolean {
+  const path = event.composedPath();
+  const nodes = path.length > 0 ? path : [event.target];
+  return nodes.some((n) => n instanceof Element && n.id === BRAINBOX_HOST_ID);
+}
+
 /** Pointer events a host commonly treats as "clicked outside". */
 export const ISOLATED_EVENTS = [
   "pointerdown",
@@ -30,7 +47,7 @@ function stopAtHost(event: Event): void {
  *  `element` to `<body>` when it is ready to show it. */
 export function createShadowHost(css: string): ShadowHost {
   const element = document.createElement("div");
-  element.id = "brainbox-widget";
+  element.id = BRAINBOX_HOST_ID;
   // keep the widget's own UI out of rrweb session recordings (core's blockClass)
   element.classList.add("rr-block");
   element.style.position = "relative";

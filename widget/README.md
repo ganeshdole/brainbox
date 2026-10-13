@@ -24,6 +24,7 @@ For a page with no build step. Paste before `</body>`:
 | `data-theme` | `dark`, `light`, or `system` to follow the visitor's OS | `dark` |
 
 The tag publishes `window.Brainbox` with `open()`, `start(mode)`, `close()`,
+`isBrainboxEvent(e)` (see [Focus traps](#focus-traps)),
 `identify({ id, email, name, phone })` and `setFields([{ label, value, type }])`
 (your app's own details for every report; see the React package README), and fires a `brainbox:submitted` event on `window`
 (`event.detail.id`) after each report.
@@ -60,6 +61,31 @@ in your tree, so your styles cannot reach it and no ancestor's `overflow` or
 bundle one. Clicks on the widget stop at its shadow host, so a menu your page
 closes on an outside click stays open while the user reports it (a listener in
 the capture phase still sees them).
+
+### Focus traps
+
+Keys are not stopped, but a modal of yours can still swallow them. Outside its
+shadow root, a key typed in the widget has `event.target` set to the widget's
+host element (`#brainbox-widget`), so a focus trap that cancels Space, Enter
+and Tab aimed outside your modal cancels them in our composer too. That
+happens most after a recording, when the composer opens over a modal the user
+opened to reproduce the bug.
+
+While a panel is open the host element carries `role="dialog"` and
+`aria-modal="true"`, which traps that let other dialogs through already
+respect. If yours doesn't, exempt the widget explicitly:
+
+```ts
+import { isBrainboxEvent } from "@ganeshdole/brainbox-widget";
+
+document.addEventListener("keydown", (e) => {
+  if (isBrainboxEvent(e) || modal.contains(e.target as Node)) return;
+  // ...your trap
+}, true);
+```
+
+`BRAINBOX_HOST_ID` is the element's id, if you'd rather match on that. With the
+script tag, the same check is `window.Brainbox.isBrainboxEvent(e)`.
 
 ## Without React, from a bundler
 

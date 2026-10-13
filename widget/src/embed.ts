@@ -5,6 +5,7 @@ import {
   type ReportField,
 } from "@ganeshdole/brainbox-core";
 import { readConfig } from "./lib/config.ts";
+import { isBrainboxEvent } from "./lib/shadow-host.ts";
 import type { CaptureMode } from "./lib/widget-store.ts";
 import { mount, type WidgetHandle } from "./mount.tsx";
 
@@ -46,6 +47,9 @@ const api = {
   close() {
     widget?.close();
   },
+  /** True for an event from inside the widget, for a host's focus trap to let
+   *  through: outside its shadow root the target is only the host element. */
+  isBrainboxEvent,
 };
 
 declare global {

@@ -5,6 +5,7 @@ import type { Transport } from "@ganeshdole/brainbox-core";
 import { BrainboxProvider } from "@ganeshdole/brainbox-react";
 import { BrainboxWidget } from "./widget.tsx";
 import { useBrainboxWidget } from "./use-brainbox-widget.ts";
+import { BRAINBOX_HOST_ID, isBrainboxEvent } from "./lib/shadow-host.ts";
 
 const transport: Transport = { send: async () => ({ id: "r1" }) };
 const originalConsoleError = console.error;
@@ -164,5 +165,70 @@ describe("BrainboxWidget", () => {
     act(() => shadow()?.querySelector<HTMLButtonElement>('[aria-label="Close"]')?.click());
     expect(hostSees()).toBe("closed");
     expect(buttons()).toEqual(["Send feedback"]);
+  });
+
+  it("gets its keys past a host modal's focus trap (#100)", () => {
+    const modal = document.createElement("div");
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    document.body.appendChild(modal);
+    const cancelled: string[] = [];
+    // The usual trap: cancel Space, Enter and Tab aimed outside its modal.
+    // A careful one also lets other dialogs through; a host can use ours.
+    const trap = (exempt: (e: KeyboardEvent) => boolean) => (e: KeyboardEvent) => {
+      if (e.target instanceof Node && modal.contains(e.target)) return;
+      if (exempt(e)) return;
+      if ([" ", "Enter", "Tab"].includes(e.key)) {
+        e.preventDefault();
+        cancelled.push(e.key);
+      }
+    };
+    const inAnotherDialog = trap(
+      (e) => e.target instanceof Element && e.target.closest('[aria-modal="true"]') !== null,
+    );
+    const viaHelper = trap(isBrainboxEvent);
+    try {
+      act(() => {
+        root.render(
+          <BrainboxProvider transport={transport}>
+            <HostControls />
+            <BrainboxWidget trigger="manual" />
+          </BrainboxProvider>,
+        );
+      });
+      const host = document.getElementById(BRAINBOX_HOST_ID);
+      expect(host?.getAttribute("aria-modal")).toBeNull();
+
+      act(() => hostClick("Report a problem"));
+      expect(host?.getAttribute("role")).toBe("dialog");
+      expect(host?.getAttribute("aria-modal")).toBe("true");
+
+      const press = (key: string) => {
+        const target = shadow()?.querySelector("button");
+        const ev = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, composed: true });
+        target?.dispatchEvent(ev);
+        return ev;
+      };
+      for (const listener of [inAnotherDialog, viaHelper]) {
+        document.addEventListener("keydown", listener, true);
+        press(" ");
+        press("Enter");
+        press("Tab");
+        document.removeEventListener("keydown", listener, true);
+      }
+      expect(cancelled).toEqual([]);
+
+      // The helper still says no to the host's own keys, even after dispatch.
+      const outside = new KeyboardEvent("keydown", { key: " ", bubbles: true });
+      container.dispatchEvent(outside);
+      expect(isBrainboxEvent(outside)).toBe(false);
+      expect(isBrainboxEvent(press("x"))).toBe(true);
+
+      act(() => hostClick("Never mind"));
+      expect(host?.hasAttribute("role")).toBe(false);
+      expect(host?.hasAttribute("aria-modal")).toBe(false);
+    } finally {
+      modal.remove();
+    }
   });
 });
