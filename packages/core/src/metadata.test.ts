@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { captureErrors, captureMetadata, type ErrorLog } from "./metadata.ts";
 
 const original = console.error;
@@ -36,6 +36,40 @@ describe("captureErrors", () => {
     console.error("both");
     expect(a.snapshot()).toEqual(["only-a", "both"]);
     expect(b.snapshot()).toEqual(["both"]);
+  });
+
+  it("never throws on a value it can't stringify (#99)", () => {
+    const log = start();
+    const o = Object.create(null) as Record<string, unknown>;
+    o.self = o;
+    expect(() => console.error("bad", o, undefined)).not.toThrow();
+    expect(log.snapshot()).toEqual(["bad [object Object] undefined"]);
+  });
+
+  it("still calls the original console.error when capture fails", () => {
+    const spy = vi.fn();
+    console.error = spy;
+    try {
+      const log = start();
+      const fail = () => {
+        throw new Error("unreadable");
+      };
+      // Every way of turning this into text throws, even the tag.
+      const hostile = {
+        toJSON: fail,
+        toString: fail,
+        get [Symbol.toStringTag]() {
+          return fail();
+        },
+      };
+      expect(() => console.error(hostile)).not.toThrow();
+      // by identity: the matchers would try to print it and throw themselves
+      expect(spy.mock.calls[0]?.[0] === hostile).toBe(true);
+      expect(log.snapshot()).toEqual([]);
+    } finally {
+      for (const log of live.splice(0)) log.stop();
+      console.error = original;
+    }
   });
 
   it("restores console.error once the last log stops", () => {
