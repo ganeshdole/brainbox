@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { canSessionRecord, preloadCapture, type Brainbox, type Mark, type Recording } from "@ganeshdole/brainbox-core";
 import { useDraft } from "@ganeshdole/brainbox-react";
 import type { TriggerMode } from "@ganeshdole/brainbox-shared";
@@ -63,6 +63,9 @@ export function App({
   useEffect(() => {
     if (open) preloadCapture();
   }, [open]);
+
+  // Not a dialog while recording: then the user is working in the host page.
+  const modal = open && status !== "recording";
 
   const startMarkup = useCallback(() => {
     draft.captureScreenshot();
@@ -150,6 +153,8 @@ export function App({
 
   return (
     <>
+      {/* First, so it commits before any panel below autofocuses. */}
+      <DialogMark hostEl={hostEl} active={modal} />
       {trigger === "floating" && status === "idle" && (
         <Launcher position={position} onClick={ui.open} />
       )}
@@ -200,4 +205,31 @@ export function App({
       )}
     </>
   );
+}
+
+/**
+ * While a panel is up the widget is a dialog over the page, and says so on the
+ * shadow host, the one element the host's document can see. Many focus traps
+ * already let events from another dialog through, so a host modal left open
+ * behind the composer stops eating its spaces, Enters and Tabs.
+ *
+ * The timing matters. A trap that pulls focus back on `focusin` judges the
+ * composer's `autoFocus`, which React applies while committing the textarea,
+ * before any passive effect, and before its ancestors' layout effects too. A
+ * layout effect in an earlier sibling is committed ahead of it, so this
+ * renders before every panel.
+ */
+function DialogMark({ hostEl, active }: { hostEl: HTMLElement; active: boolean }) {
+  useLayoutEffect(() => {
+    if (!active) return;
+    hostEl.setAttribute("role", "dialog");
+    hostEl.setAttribute("aria-modal", "true");
+    hostEl.setAttribute("aria-label", "Brainbox feedback");
+    return () => {
+      hostEl.removeAttribute("role");
+      hostEl.removeAttribute("aria-modal");
+      hostEl.removeAttribute("aria-label");
+    };
+  }, [hostEl, active]);
+  return null;
 }
