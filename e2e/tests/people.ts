@@ -62,7 +62,7 @@ export async function person(
     [name, CAPTION_KEY] as const,
   );
   const page = await context.newPage();
-  return {
+  const who: Person = {
     name,
     email,
     context,
@@ -80,6 +80,10 @@ export async function person(
         .catch(() => undefined);
     },
   };
+  // Start on the sign-in page, so a recording never opens on a blank tab.
+  await page.goto("/login");
+  await who.say("is signed out");
+  return who;
 }
 
 /** The newest sign-in code the console email driver logged for `email`, once
