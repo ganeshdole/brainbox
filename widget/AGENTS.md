@@ -14,7 +14,8 @@ Root rules in `/AGENTS.md` apply.
 - `<BrainboxWidget />` and `useBrainboxWidget()` are for a host's own React
   tree, under a `<BrainboxProvider>`.
 
-All three render `src/App.tsx`, which holds a core `Draft` and shows screens
+All three render `src/App.tsx` (through `src/ui.tsx`, the lazily loaded chunk
+that also carries the stylesheet), which holds a core `Draft` and shows screens
 off its state. Whether the UI is open lives in `src/lib/widget-store.ts`, one
 store per instance, so a host button and the widget agree without a second
 provider. Core has no idea of "open".
@@ -46,7 +47,7 @@ It runs inside a **host app you don't control**, so isolation is the whole game:
 IIFE with React bundled; `dist/widget-capture.js`, rrweb and modern-screenshot
 as a second IIFE that `widget.js` injects on first open (core's `lazy.ts` is
 swapped for `src/lib/load-capture.ts` in that build - keep the two in step);
-and `dist/index.js`, an ES module of
+and `dist/index.js` plus a split `ui-*.js` chunk, an ES module of
 the library entry with React and the other `@ganeshdole/brainbox-*` packages external.
 Inside the monorepo the package is consumed from source (`src/index.ts`).
 

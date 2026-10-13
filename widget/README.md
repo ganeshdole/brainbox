@@ -116,8 +116,11 @@ Brainbox Cloud; see `@ganeshdole/brainbox-core` for pointing one at your own bac
 `pnpm build` emits `dist/widget.js` (the script-tag IIFE, everything bundled
 except the capture libraries), `dist/widget-capture.js` (rrweb and
 modern-screenshot, which `widget.js` loads from beside itself the first time the
-widget opens - serve the two files from the same folder), `dist/index.js` (an ES module of the library entry with React, `lucide-react`
-and the other `@ganeshdole/brainbox-*` packages external) and the `.d.ts` files. Inside
+widget opens - serve the two files from the same folder), `dist/index.js` (an ES module of the library entry with React and the other
+`@ganeshdole/brainbox-*` packages external) and the `.d.ts` files. The library
+entry is a few KB: the screens and their stylesheet are a split chunk that
+`<BrainboxWidget />` loads when its launcher first shows or, with
+`trigger="manual"`, when you first `open()` or `start()` it. Inside
 the monorepo the package is consumed from source; the published package's
 `exports` point at `dist/` (`publishConfig`). `react` and `react-dom` are peer
 dependencies of the library; the IIFE still bundles them.

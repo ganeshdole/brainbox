@@ -1,4 +1,4 @@
-import { Camera, Video, X } from "lucide-react";
+import { Camera, Video, X } from "./icons.tsx";
 import { posClass, type Position } from "../lib/position.ts";
 
 export function Chooser({

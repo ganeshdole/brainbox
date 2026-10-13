@@ -9,7 +9,7 @@ import {
   Trash2,
   Type,
   Undo2,
-} from "lucide-react";
+} from "./icons.tsx";
 import { DEFAULT_COLOR, nextColor, type Annotations, type Mark, type Tool } from "@ganeshdole/brainbox-core";
 import { isDragTool, nextMarkId, useDrawing } from "../lib/use-drawing.ts";
 import { fmtDuration } from "../lib/time.ts";

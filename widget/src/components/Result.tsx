@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Check, Loader2, X } from "lucide-react";
+import { Check, Loader2, X } from "./icons.tsx";
 import { posClass, type Position } from "../lib/position.ts";
 
 const SUCCESS_DISMISS_MS = 3000;
