@@ -136,6 +136,43 @@ describe("delivery after ingest", () => {
     expect((gh.issueCalls()[1]?.body as { labels: string[] }).labels).toEqual(["idea"]);
   });
 
+  it("links a voice-only feature request's note in the ticket when nothing transcribed it", async () => {
+    const gh = fakeGithub();
+    const { project, conn } = await setup();
+    await makeDestination(project.id, conn.id);
+    const fd = new FormData();
+    fd.append(
+      "json",
+      JSON.stringify({
+        projectKey: project.key,
+        kind: "feature",
+        metadata: {
+          url: "http://host/app",
+          title: "App",
+          viewport: { width: 800, height: 600 },
+          devicePixelRatio: 1,
+          userAgent: "UA",
+          language: "en",
+          timezone: "UTC",
+          consoleErrors: [],
+        },
+      }),
+    );
+    fd.append("audio", new File([new Uint8Array([1, 2, 3])], "v.webm", { type: "audio/webm" }));
+
+    const res = await app.request("/ingest", { method: "POST", body: fd });
+    expect(res.status).toBe(201);
+    const { id } = (await res.json()) as { id: string };
+    await settled(id);
+
+    const body = (gh.issueCalls()[0]?.body as { body: string }).body;
+    const link = body.match(/\[Listen to the voice note\]\((http:\/\/localhost:8787\/f\/[^)]+)\)/)?.[1];
+    expect(link).toBeTruthy();
+    const voice = await app.request(new URL(link!).pathname);
+    expect(voice.status).toBe(200);
+    expect(voice.headers.get("content-type")).toBe("audio/webm");
+  });
+
   it("waits for transcription so the ticket carries the transcript", async () => {
     const gh = fakeGithub();
     transcriptionEnabledMock.mockReturnValue(true);

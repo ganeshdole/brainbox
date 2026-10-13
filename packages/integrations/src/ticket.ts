@@ -25,6 +25,9 @@ export interface TicketLinks {
   screenshot?: string;
   crop?: string;
   replay?: string;
+  /** The voice note. Without a transcript it is the only place a spoken
+   *  report's words are, so the ticket links it. */
+  audio?: string;
 }
 
 export interface RenderedTicket {
@@ -67,6 +70,7 @@ function bodyFor(t: Ticket): string {
 
   const transcript = t.transcript?.trim();
   if (transcript) parts.push(`**Voice note**\n\n${quote(transcript)}`);
+  else if (t.links.audio) parts.push(`**Voice note**\n\n[Listen to the voice note](${t.links.audio})`);
 
   parts.push(detailsTable(t));
 
@@ -139,6 +143,7 @@ function footer(t: Ticket): string {
   const links = [`[Open in Brainbox](${t.links.dashboard})`];
   if (t.links.replay) links.push(`[Session replay](${t.links.replay})`);
   if (t.links.screenshot && t.links.crop) links.push(`[Full screenshot](${t.links.screenshot})`);
+  if (t.links.audio && t.transcript?.trim()) links.push(`[Voice note](${t.links.audio})`);
   return links.join(" · ");
 }
 

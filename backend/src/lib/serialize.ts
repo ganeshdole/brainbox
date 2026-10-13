@@ -133,6 +133,7 @@ export function toTicket(row: IssueRow, links: TicketLinkOptions): Ticket {
       dashboard: `${links.dashboardOrigin}/projects/${row.projectId}/issues/${row.id}`,
       screenshot: row.screenshotKey ? links.fileUrl(row.screenshotKey) : undefined,
       crop: row.cropKey ? links.fileUrl(row.cropKey) : undefined,
+      audio: row.audioKey ? links.fileUrl(row.audioKey) : undefined,
     },
   };
 }

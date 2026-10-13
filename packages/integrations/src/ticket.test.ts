@@ -171,6 +171,22 @@ describe("renderTicket body", () => {
     expect(body).toContain("| Browser | UA\\|1 |");
   });
 
+  it("links a voice note with no transcript, so a spoken request still reaches the ticket", () => {
+    const body = renderTicket(
+      ticket({ kind: "feature", links: { dashboard: "d", audio: "https://x/voice" } }),
+    ).body;
+    expect(body.startsWith("**Voice note**\n\n[Listen to the voice note](https://x/voice)")).toBe(true);
+  });
+
+  it("quotes a transcribed voice note and links the recording in the footer", () => {
+    const body = renderTicket(
+      ticket({ transcript: "add CSV export", links: { dashboard: "d", audio: "https://x/voice" } }),
+    ).body;
+    expect(body).toContain("> add CSV export");
+    expect(body).not.toContain("Listen to the voice note");
+    expect(body).toContain("[Open in Brainbox](d) · [Voice note](https://x/voice)");
+  });
+
   it("marks a feature request and its importance at the top of the details", () => {
     const body = renderTicket(
       ticket({ kind: "feature", importance: "critical", text: "Bulk export" }),
