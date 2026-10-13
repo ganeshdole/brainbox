@@ -144,3 +144,27 @@ describe("loading rrweb", () => {
     recorderGate = Promise.resolve();
   });
 });
+
+/** What the n-th `record()` call was given (the mock is declared without parameters). */
+const recordOptions = (n: number) => (record.mock.calls as unknown[][])[n]?.[0];
+
+describe("privacy", () => {
+  it("masks no more text than .rr-mask unless asked", async () => {
+    record.mockClear();
+    const rec = startSessionRecording(() => {});
+    await micUp();
+    await rec.stop();
+    expect(recordOptions(0)).not.toHaveProperty("maskTextSelector");
+  });
+
+  it("passes the text masking through to rrweb", async () => {
+    record.mockClear();
+    for (const privacy of [{ maskTextSelector: ".phi" }, { maskAllText: true, maskTextSelector: ".phi" }]) {
+      const rec = startSessionRecording(() => {}, undefined, privacy);
+      await micUp();
+      await rec.stop();
+    }
+    expect(recordOptions(0)).toMatchObject({ maskTextSelector: ".phi", maskAllInputs: true });
+    expect(recordOptions(1)).toMatchObject({ maskTextSelector: "*" });
+  });
+});

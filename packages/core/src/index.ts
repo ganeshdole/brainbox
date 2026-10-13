@@ -4,7 +4,8 @@
 // everything it sets up is undone by `destroy()`.
 
 export { createBrainbox, type Brainbox, type BrainboxOptions } from "./brainbox.ts";
-export type { Draft, DraftOptions, DraftState, Recording } from "./draft.ts";
+export type { BeforeSend, Draft, DraftOptions, DraftState, Recording } from "./draft.ts";
+export type { PrivacyOptions } from "./privacy.ts";
 export { brainboxTransport, type Report, type SubmitResult, type Transport } from "./transport.ts";
 export type { Annotations } from "./annotate.ts";
 export { canSessionRecord } from "./session.ts";

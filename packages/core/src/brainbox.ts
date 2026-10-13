@@ -1,6 +1,7 @@
 import type { Identity, ReportField } from "@ganeshdole/brainbox-shared";
-import { createDraft, type Draft, type DraftOptions } from "./draft.ts";
+import { createDraft, type BeforeSend, type Draft, type DraftOptions } from "./draft.ts";
 import { captureErrors } from "./metadata.ts";
+import type { PrivacyOptions } from "./privacy.ts";
 import type { SubmitResult, Transport } from "./transport.ts";
 
 export interface BrainboxOptions {
@@ -11,6 +12,14 @@ export interface BrainboxOptions {
   /** Your app's own details for every report (clinic, plan, ...). Can be set
    *  later with `setFields()`. */
   fields?: ReportField[];
+  /** Hold back more of the page: mask text in recordings, cover it in
+   *  screenshots. All off by default. */
+  privacy?: PrivacyOptions;
+  /** Sees every finished report before it goes to the transport, to scrub what
+   *  the host may not send (console errors, the URL's query string, identity)
+   *  or return null to drop it. Submit then rejects, so the UI does not claim
+   *  it was sent. */
+  beforeSend?: BeforeSend;
   /** Called after every successful submit. */
   onSubmitted?: (result: SubmitResult) => void;
 }
@@ -25,7 +34,14 @@ export interface Brainbox {
   destroy(): void;
 }
 
-export function createBrainbox({ transport, identity, fields, onSubmitted }: BrainboxOptions): Brainbox {
+export function createBrainbox({
+  transport,
+  identity,
+  fields,
+  privacy,
+  beforeSend,
+  onSubmitted,
+}: BrainboxOptions): Brainbox {
   let who = identity;
   let details = fields;
   const errors = captureErrors();
@@ -45,6 +61,8 @@ export function createBrainbox({ transport, identity, fields, onSubmitted }: Bra
           identity: () => who,
           fields: () => details,
           consoleErrors: () => errors.snapshot(),
+          privacy,
+          beforeSend,
           onSubmitted,
         },
         options,

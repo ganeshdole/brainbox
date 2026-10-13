@@ -303,6 +303,51 @@ describe("Draft submit", () => {
   });
 });
 
+describe("Draft privacy", () => {
+  it("lets beforeSend scrub the report on its way to the transport", async () => {
+    const scrubbing = createBrainbox({
+      transport,
+      beforeSend: async (report) => ({
+        ...report,
+        metadata: {
+          ...report.metadata,
+          url: report.metadata.url.split("?")[0] ?? "",
+          consoleErrors: [],
+          identity: undefined,
+        },
+      }),
+    });
+    scrubbing.identify({ email: "patient@clinic.example" });
+    console.error("MRN 12345 not found");
+    await scrubbing.draft().submit({ text: "x" });
+    scrubbing.destroy();
+
+    expect(sent[0]?.text).toBe("x");
+    expect(sent[0]?.metadata.consoleErrors).toEqual([]);
+    expect(sent[0]?.metadata.identity).toBeUndefined();
+    expect(sent[0]?.metadata.url).not.toContain("?");
+  });
+
+  it("sends nothing, and says so, when beforeSend drops the report", async () => {
+    const onSubmitted = vi.fn();
+    const dropping = createBrainbox({ transport, beforeSend: () => null, onSubmitted });
+    await expect(dropping.draft().submit({ text: "x" })).rejects.toThrow("not sent");
+    dropping.destroy();
+    expect(send).not.toHaveBeenCalled();
+    expect(onSubmitted).not.toHaveBeenCalled();
+  });
+
+  it("hands the privacy options to every screenshot", async () => {
+    const privacy = { maskAllText: true, maskScreenshots: true };
+    const masked = createBrainbox({ transport, privacy });
+    capture.captureViewport.mockResolvedValue(blob("shot"));
+    const exclude = document.createElement("div");
+    masked.draft({ exclude }).captureScreenshot();
+    masked.destroy();
+    expect(capture.captureViewport).toHaveBeenCalledWith({ exclude, privacy });
+  });
+});
+
 describe("Brainbox destroy", () => {
   it("restores console.error and cancels live drafts", async () => {
     const shot = deferred<Blob>();

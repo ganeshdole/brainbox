@@ -3,6 +3,7 @@ import { createAnnotations, type Annotations } from "./annotate.ts";
 import { bakeMarks, captureViewport, pickScreenshot } from "./capture.ts";
 import { unionBounds, type Mark } from "./marks.ts";
 import { captureMetadata } from "./metadata.ts";
+import type { PrivacyOptions } from "./privacy.ts";
 import { cssPath, elementAt } from "./selector.ts";
 import {
   startSessionRecording,
@@ -74,7 +75,8 @@ export interface Draft {
    *  UI can call `stop()`. */
   startRecording(options?: { onAutoStop?: () => void; maxMs?: number }): Recording;
   /** Send the report. Waits for a bake in flight rather than sending the
-   *  un-marked shot. Rejects if there is nothing to send or the transport fails. */
+   *  un-marked shot. Rejects if there is nothing to send, `beforeSend` drops
+   *  it, or the transport fails. */
   submit(input: { text?: string; audio?: Blob | null }): Promise<SubmitResult>;
   /** Throw the report away. Late screenshots are dropped, object URLs revoked,
    *  a recording stopped and its marks removed. The draft can be used again. */
@@ -87,10 +89,17 @@ export interface DraftContext {
   identity(): Identity | undefined;
   fields(): ReportField[] | undefined;
   consoleErrors(): string[];
+  privacy?: PrivacyOptions;
+  beforeSend?: BeforeSend;
   onSubmitted?: (result: SubmitResult) => void;
 }
 
+/** Sees every report before the transport does. Return it, changed or not, to
+ *  send it, or null to send nothing. */
+export type BeforeSend = (report: Report) => Report | null | Promise<Report | null>;
+
 export function createDraft(ctx: DraftContext, { exclude }: DraftOptions = {}): Draft {
+  const { privacy } = ctx;
   const listeners = new Set<() => void>();
   let state = EMPTY;
   const set = (patch: Partial<DraftState>) => {
@@ -162,7 +171,7 @@ export function createDraft(ctx: DraftContext, { exclude }: DraftOptions = {}): 
       set({ screenshotFailed: false });
       // A failed screenshot must not sink the report - the text and voice
       // note are still worth filing.
-      track(captureViewport({ exclude }), () => set({ screenshotFailed: true }));
+      track(captureViewport({ exclude, privacy }), () => set({ screenshotFailed: true }));
     },
 
     markUp(marks) {
@@ -181,7 +190,7 @@ export function createDraft(ctx: DraftContext, { exclude }: DraftOptions = {}): 
 
     startRecording({ onAutoStop, maxMs } = {}) {
       const annotations = createAnnotations();
-      const rec = startSessionRecording(() => onAutoStop?.(), maxMs);
+      const rec = startSessionRecording(() => onAutoStop?.(), maxMs, privacy);
       const r = run;
 
       const handle: Recording = {
@@ -216,7 +225,7 @@ export function createDraft(ctx: DraftContext, { exclude }: DraftOptions = {}): 
           // report's screenshot so a list view gets a real preview. Best-effort,
           // and a failed bake still leaves the plain frame.
           try {
-            const thumb = await captureViewport({ exclude });
+            const thumb = await captureViewport({ exclude, privacy });
             const baked = await bakeMarks(thumb, marks).catch(() => thumb);
             if (run === r) setShot(baked);
           } catch {
@@ -248,7 +257,10 @@ export function createDraft(ctx: DraftContext, { exclude }: DraftOptions = {}): 
         session: session ?? undefined,
         audio: voiceNote,
       };
-      const result = await ctx.transport.send(report);
+      // The host's last word: scrub what it may not send, or drop the report.
+      const outgoing = ctx.beforeSend ? await ctx.beforeSend(report) : report;
+      if (!outgoing) throw new Error("This report was not sent");
+      const result = await ctx.transport.send(outgoing);
       ctx.onSubmitted?.(result);
       return result;
     },
