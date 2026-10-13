@@ -1,5 +1,11 @@
 import { jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
-import type { CapturedMetadata, Region, TranscriptStatus } from "@ganeshdole/brainbox-shared";
+import type {
+  CapturedMetadata,
+  Importance,
+  IssueKind,
+  Region,
+  TranscriptStatus,
+} from "@ganeshdole/brainbox-shared";
 
 import { projects } from "./projects.ts";
 
@@ -21,6 +27,10 @@ export const issues = pgTable("issues", {
   createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
     .notNull()
     .defaultNow(),
+  // A bug report or a feature request; rows from before feature requests are bugs.
+  kind: text("kind").$type<IssueKind>().notNull().default("bug"),
+  // How much a feature request matters to whoever asked; null on bugs.
+  importance: text("importance").$type<Importance>(),
   text: text("text"),
   // A submission is a screenshot OR a screen recording - so screenshot_key,
   // crop_key and region are all nullable (a recording has a last-frame

@@ -45,6 +45,8 @@ export const capturedMetadata = v.object({
   ),
 });
 
+export const issueKind = v.union(v.literal("bug"), v.literal("feature"));
+export const importance = v.union(v.literal("nice"), v.literal("important"), v.literal("critical"));
 export const transcriptStatus = v.union(v.literal("pending"), v.literal("done"), v.literal("failed"));
 export const provider = v.literal("github");
 export const deliveryStatus = v.union(v.literal("pending"), v.literal("sent"), v.literal("failed"));
@@ -52,6 +54,7 @@ export const destinationConfig = v.object({
   owner: v.string(),
   repo: v.string(),
   labels: v.array(v.string()),
+  featureLabels: v.optional(v.array(v.string())),
 });
 
 export const planId = v.union(v.literal("pro"), v.literal("business"));
@@ -73,6 +76,10 @@ export const issueFields = {
   id: v.string(),
   projectId: v.string(),
   createdAt: v.number(),
+  // Optional because issues stored before feature requests have neither; the
+  // backend's Convex store reads a missing kind as "bug".
+  kind: v.optional(issueKind),
+  importance: v.optional(nullable(importance)),
   text: nullable(v.string()),
   screenshotKey: nullable(v.string()),
   cropKey: nullable(v.string()),

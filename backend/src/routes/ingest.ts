@@ -123,6 +123,8 @@ ingest.post("/", async (c) => {
   await store.issues.create({
     id: issueId,
     projectId: project.id,
+    kind: feedback.kind ?? "bug",
+    importance: feedback.kind === "feature" ? (feedback.importance ?? null) : null,
     text: feedback.text ?? null,
     screenshotKey,
     cropKey,

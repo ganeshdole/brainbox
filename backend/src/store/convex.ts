@@ -184,8 +184,17 @@ function toProject(row: Stamped<Omit<ProjectRecord, "key">, "createdAt"> & { key
   };
 }
 
-function toIssue(row: Stamped<IssueRecord, "createdAt">): IssueRecord {
-  return { ...row, createdAt: new Date(row.createdAt) };
+/** Issues stored before feature requests have no kind or importance. */
+type StoredIssue = Omit<Stamped<IssueRecord, "createdAt">, "kind" | "importance"> &
+  Partial<Pick<IssueRecord, "kind" | "importance">>;
+
+function toIssue(row: StoredIssue): IssueRecord {
+  return {
+    ...row,
+    kind: row.kind ?? "bug",
+    importance: row.importance ?? null,
+    createdAt: new Date(row.createdAt),
+  };
 }
 
 function toConnection(row: Stamped<ConnectionRecord, "createdAt">): ConnectionRecord {

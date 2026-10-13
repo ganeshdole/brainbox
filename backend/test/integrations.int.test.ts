@@ -108,6 +108,34 @@ describe("delivery after ingest", () => {
     expect(sent.body).toContain(`/projects/${project.id}/issues/${id}`);
   });
 
+  it("labels a feature request with the destination's feature labels, else enhancement", async () => {
+    const gh = fakeGithub();
+    const { project, conn } = await setup();
+    await makeDestination(project.id, conn.id, {
+      config: { owner: "acme", repo: "web", labels: ["feedback"] },
+    });
+    const feature = await makeIssue(project.id, {
+      kind: "feature",
+      importance: "nice",
+      text: "Dark mode",
+      screenshotKey: null,
+      region: null,
+    });
+    await deliverIssue(getStore(), feature.id);
+    const sent = gh.issueCalls()[0]?.body as { title: string; body: string; labels: string[] };
+    expect(sent.title).toBe("Dark mode");
+    expect(sent.labels).toEqual(["enhancement"]);
+    expect(sent.body).toContain("| Type | Feature request |");
+    expect(sent.body).toContain("| Importance | Nice to have |");
+
+    await makeDestination(project.id, conn.id, {
+      config: { owner: "acme", repo: "web", labels: ["feedback"], featureLabels: ["idea"] },
+    });
+    const next = await makeIssue(project.id, { kind: "feature", text: "SSO" });
+    await deliverIssue(getStore(), next.id);
+    expect((gh.issueCalls()[1]?.body as { labels: string[] }).labels).toEqual(["idea"]);
+  });
+
   it("waits for transcription so the ticket carries the transcript", async () => {
     const gh = fakeGithub();
     transcriptionEnabledMock.mockReturnValue(true);
@@ -267,6 +295,18 @@ describe("project destinations API", () => {
       }),
     });
     expect(await updated.json()).toMatchObject({ config: { repo: "api", labels: ["bug"] }, enabled: false });
+
+    const withFeatures = await app.request(url, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({
+        connectionId: conn.id,
+        config: { owner: "acme", repo: "api", labels: ["bug"], featureLabels: ["enhancement", "idea"] },
+      }),
+    });
+    expect(await withFeatures.json()).toMatchObject({
+      config: { labels: ["bug"], featureLabels: ["enhancement", "idea"] },
+    });
 
     const list = await app.request(`/api/projects/${project.id}/destinations`, { headers });
     expect(await list.json()).toHaveLength(1);

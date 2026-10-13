@@ -4,7 +4,9 @@ import type {
   CapturedMetadata,
   DeliveryStatus,
   DestinationConfig,
+  Importance,
   IntegrationProvider,
+  IssueKind,
   PlanId,
   ProjectKey,
   Region,
@@ -35,6 +37,9 @@ export interface IssueRecord {
   id: string;
   projectId: string;
   createdAt: Date;
+  kind: IssueKind;
+  /** Only on a feature request, and only when the end-user picked one. */
+  importance: Importance | null;
   text: string | null;
   screenshotKey: string | null;
   cropKey: string | null;

@@ -36,6 +36,7 @@ const destinationSchema = z.object({
     owner: ghName,
     repo: ghName,
     labels: z.array(z.string().min(1).max(50)).max(10).default([]),
+    featureLabels: z.array(z.string().min(1).max(50)).max(10).optional(),
   }),
   enabled: z.boolean().default(true),
 });

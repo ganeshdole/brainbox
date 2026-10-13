@@ -48,6 +48,8 @@ describe("toIssue", () => {
     id: "i1",
     projectId: "p1",
     createdAt: new Date("2024-01-01T00:00:00Z"),
+    kind: "bug",
+    importance: null,
     text: "hi",
     screenshotKey: "p1/i1/s.png",
     cropKey: null,
@@ -74,6 +76,13 @@ describe("toIssue", () => {
       mime: "audio/webm",
     });
     expect(issue.text).toBe("hi");
+  });
+
+  it("carries the kind, and a feature request's importance", async () => {
+    expect(await toIssue(base, storage)).toMatchObject({ kind: "bug" });
+    expect((await toIssue(base, storage)).importance).toBeUndefined();
+    const feature = await toIssue({ ...base, kind: "feature", importance: "critical" }, storage);
+    expect(feature).toMatchObject({ kind: "feature", importance: "critical" });
   });
 
   it("omits audio when there is no audioKey", async () => {

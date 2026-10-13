@@ -53,6 +53,8 @@ export async function toIssue(
     id: row.id,
     projectId: row.projectId,
     createdAt: row.createdAt.toISOString(),
+    kind: row.kind,
+    importance: row.importance ?? undefined,
     text: row.text ?? undefined,
     screenshot,
     crop,
@@ -121,6 +123,8 @@ export function toTicket(row: IssueRow, links: TicketLinkOptions): Ticket {
   return {
     id: row.id,
     createdAt: row.createdAt.toISOString(),
+    kind: row.kind,
+    importance: row.importance ?? undefined,
     text: row.text ?? undefined,
     transcript: row.audioTranscript ?? row.videoTranscript ?? undefined,
     metadata: row.metadata,
