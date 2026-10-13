@@ -37,6 +37,14 @@ The product has three distinct surfaces - keep them separate:
   request** tells what the end-user wishes the app did: text or a voice note,
   an optional screenshot, and how much it matters to them (importance: nice
   to have, important, or blocking them). A report with no kind is a bug.
+- **Feature** - one thing the customer's users want built, as the customer
+  tracks it: a title, a description and a status (under review, planned, in
+  progress, shipped, declined). It collects **requests**, the feature-request
+  Issues end-users file through the widget; the number of requests is its
+  demand. A new request waits unsorted until the customer attaches it to a
+  Feature, starts a new one from it, or merges duplicates. The Feature's own
+  words are the customer's and are meant to be shown publicly one day; its
+  requests carry who asked and their app's details, and never are.
 - **Trigger** - whatever opens the widget. Two modes:
   - **Floating trigger** - the bottom-right button the widget renders itself
     (default).
@@ -62,6 +70,8 @@ The product has three distinct surfaces - keep them separate:
 Account ──< Project ──< Issue ──< Delivery
    │            │                    │
    └──< Connection ──< Destination ──┘
+
+Project ──< Feature ──< Issue   (feature requests only; a new one has no Feature yet)
 ```
 
 - **Account** - a customer's login (email/password). Owns many projects.

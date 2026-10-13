@@ -46,7 +46,13 @@ export const projectsRoute = new Hono<AppEnv>()
     const uid = c.get("authUser").token?.sub;
     if (!uid) return c.json({ error: "Unauthorized" }, 401);
     const rows = await c.get("store").projects.listForOwner(uid);
-    return c.json(rows.map((r) => ({ ...toProject(r), issueCount: r.issueCount })));
+    return c.json(
+      rows.map((r) => ({
+        ...toProject(r),
+        issueCount: r.issueCount,
+        featureRequestCount: r.featureRequestCount,
+      })),
+    );
   })
   .post("/", async (c) => {
     const uid = c.get("authUser").token?.sub;

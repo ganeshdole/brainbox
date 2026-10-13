@@ -16,5 +16,7 @@ export interface Project {
   key: ProjectKey;
   allowedOrigins: string[];
   createdAt: string; // ISO 8601
-  issueCount?: number; // present on the list endpoint
+  issueCount?: number; // present on the list endpoint, bugs and feature requests
+  /** How many of `issueCount` are feature requests; on the list endpoint. */
+  featureRequestCount?: number;
 }
