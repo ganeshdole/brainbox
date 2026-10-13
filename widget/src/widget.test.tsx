@@ -187,7 +187,7 @@ describe("BrainboxWidget", () => {
     expect(buttons()).toEqual(["Send feedback"]);
   });
 
-  it("gets its keys past a host modal's focus trap (#100)", () => {
+  it("gets its keys past a host modal's focus trap (#100)", async () => {
     const modal = document.createElement("div");
     modal.setAttribute("role", "dialog");
     modal.setAttribute("aria-modal", "true");
@@ -220,6 +220,7 @@ describe("BrainboxWidget", () => {
       expect(host?.getAttribute("aria-modal")).toBeNull();
 
       act(() => hostClick("Report a problem"));
+      await uiReady();
       expect(host?.getAttribute("role")).toBe("dialog");
       expect(host?.getAttribute("aria-modal")).toBe("true");
 
@@ -277,6 +278,7 @@ describe("BrainboxWidget", () => {
         );
       });
       act(() => hostClick("Record it"));
+      await uiReady();
       await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
       // Recording: the user works in the host page, so not a dialog.
       expect(document.getElementById(BRAINBOX_HOST_ID)?.hasAttribute("aria-modal")).toBe(false);
