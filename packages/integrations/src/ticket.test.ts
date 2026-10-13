@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CapturedMetadata } from "@ganeshdole/brainbox-shared";
 
-import { renderTicket, type Ticket } from "./ticket.ts";
+import { renderTicket, renderTicketHtml, type Ticket } from "./ticket.ts";
 
 const metadata: CapturedMetadata = {
   url: "https://app.example.com/billing",
@@ -172,5 +172,71 @@ describe("renderTicket body", () => {
     expect(body).toContain("err 19");
     expect(body).not.toContain("err 20\n");
     expect(body).toContain("… and 3 more");
+  });
+});
+
+describe("renderTicketHtml", () => {
+  it("says what the Markdown says, as HTML", () => {
+    const { title, body } = renderTicketHtml(
+      ticket({
+        text: "Clicking save does nothing.\n\nSecond paragraph",
+        transcript: "I pressed save\nand nothing happened",
+        region: { x: 1, y: 2, width: 3, height: 4, selector: "form > button.save" },
+        metadata: { ...metadata, identity: { email: "jane@example.com" }, consoleErrors: ["TypeError: x"] },
+        links: {
+          dashboard: "https://app.brainbox.sh/i/1",
+          screenshot: "https://api.brainbox.sh/f/shot",
+          crop: "https://api.brainbox.sh/f/crop",
+          replay: "https://app.brainbox.sh/i/1#replay",
+        },
+      }),
+    );
+    expect(title).toBe("Clicking save does nothing.");
+    expect(body).toContain('<img src="https://api.brainbox.sh/f/crop" alt="Highlighted region"');
+    expect(body).toContain("<p>Clicking save does nothing.</p>\n<p>Second paragraph</p>");
+    expect(body).toContain("<blockquote>I pressed save<br>and nothing happened</blockquote>");
+    expect(body).toContain('<tr><th align="left">Page</th><td><a href="https://app.example.com/billing">Billing · Example</a></td></tr>');
+    expect(body).toContain("<td><code>form &gt; button.save</code></td>");
+    expect(body).toContain("<strong>1 console error</strong></p>\n<pre>TypeError: x</pre>");
+    expect(body).toContain(
+      '<a href="https://app.brainbox.sh/i/1">Open in Brainbox</a> · <a href="https://app.brainbox.sh/i/1#replay">Session replay</a> · <a href="https://api.brainbox.sh/f/shot">Full screenshot</a>',
+    );
+  });
+
+  it("escapes everything the end-user and host app wrote", () => {
+    const { body } = renderTicketHtml(
+      ticket({
+        text: '<script>alert("x")</script>',
+        metadata: {
+          ...metadata,
+          title: "<b>T</b>",
+          userAgent: "UA & co",
+          fields: [{ label: "<i>Plan</i>", value: "'pro'" }],
+          consoleErrors: ["<img onerror=x>"],
+        },
+      }),
+    );
+    expect(body).not.toMatch(/<script|<b>|<i>|<img onerror/);
+    expect(body).toContain("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;");
+    expect(body).toContain("UA &amp; co");
+    expect(body).toContain("<th align=\"left\">&lt;i&gt;Plan&lt;/i&gt;</th><td>&#39;pro&#39;</td>");
+  });
+
+  it("does not link a page URL that isn't http(s)", () => {
+    const { body } = renderTicketHtml(ticket({ metadata: { ...metadata, url: "javascript:alert(1)" } }));
+    expect(body).not.toContain("javascript:");
+    expect(body).toContain('<a href="#">Billing · Example</a>');
+  });
+
+  it("uses the tracker's own image when given one, and splits out the environment", () => {
+    const { body, environment } = renderTicketHtml(
+      ticket({ links: { dashboard: "d", crop: "https://x/crop" } }),
+      { imageUrl: "https://dev.azure.com/o/_apis/wit/attachments/1" },
+    );
+    expect(body).toContain('<img src="https://dev.azure.com/o/_apis/wit/attachments/1"');
+    expect(body).not.toContain("https://x/crop");
+    expect(environment).toContain(">Viewport</th><td>1440 × 900 @2x</td>");
+    expect(environment).toContain(">Locale</th>");
+    expect(environment).not.toContain(">User<");
   });
 });

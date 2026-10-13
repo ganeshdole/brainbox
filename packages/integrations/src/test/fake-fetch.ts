@@ -18,7 +18,7 @@ export function fakeFetch(...queue: QueuedResponse[]): FetchLike & { calls: Reco
       url: String(input),
       method: init?.method ?? "GET",
       headers,
-      body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
+      body: bodyOf(init?.body),
     });
     const next = queue.shift();
     if (!next) throw new Error(`fakeFetch: no response queued for ${String(input)}`);
@@ -29,4 +29,14 @@ export function fakeFetch(...queue: QueuedResponse[]): FetchLike & { calls: Reco
     });
   };
   return Object.assign(fn, { calls });
+}
+
+/** JSON bodies parsed, form and other text kept as a string, bytes as they are. */
+function bodyOf(body: RequestInit["body"]): unknown {
+  if (typeof body !== "string") return body ?? undefined;
+  try {
+    return JSON.parse(body) as unknown;
+  } catch {
+    return body;
+  }
 }
