@@ -18,6 +18,7 @@ const TABLES: TableNames[] = [
   "signInAttempts",
   "projects",
   "issues",
+  "features",
   "connections",
   "destinations",
   "deliveries",

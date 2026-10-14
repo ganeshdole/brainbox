@@ -9,11 +9,14 @@ export function issueTitle(issue: Pick<Issue, "text" | "metadata">): string {
   return issue.metadata.title || pageLabel(issue.metadata.url) || "Untitled report";
 }
 
-/** The Reports-page filter pills: what kind each report is, and what it carries. */
+/** Reports is for what's broken; feature requests live under Features. */
+export function isBugReport(issue: Pick<Issue, "kind">): boolean {
+  return issue.kind !== "feature";
+}
+
+/** The Reports-page filter pills: what each report carries. */
 export const REPORT_FILTERS = [
   { key: "all", label: "All", match: () => true },
-  { key: "bugs", label: "Bugs", match: (i: Issue) => i.kind !== "feature" },
-  { key: "features", label: "Feature requests", match: (i: Issue) => i.kind === "feature" },
   { key: "replay", label: "Replays", match: (i: Issue) => Boolean(i.session) },
   { key: "video", label: "Recordings", match: (i: Issue) => Boolean(i.video) },
   { key: "errors", label: "With errors", match: (i: Issue) => i.metadata.consoleErrors.length > 0 },
@@ -21,16 +24,10 @@ export const REPORT_FILTERS = [
 
 export type ReportFilterKey = (typeof REPORT_FILTERS)[number]["key"];
 
-/** The pills worth showing for a list: each filter that matches something,
- *  and the two kinds only when the list holds both, since a "Bugs" pill on a
- *  list of bugs says nothing "All" doesn't. */
+/** The pills worth showing for a list: All, and each filter that matches
+ *  something. */
 export function shownFilters(issues: Issue[]): typeof REPORT_FILTERS[number][] {
-  const mixed = issues.some((i) => i.kind === "feature") && issues.some((i) => i.kind !== "feature");
-  return REPORT_FILTERS.filter((f) => {
-    if (f.key === "all") return true;
-    if (f.key === "bugs" || f.key === "features") return mixed;
-    return issues.some(f.match);
-  });
+  return REPORT_FILTERS.filter((f) => f.key === "all" || issues.some(f.match));
 }
 
 const IMPORTANCE_LABEL: Record<Importance, string> = {

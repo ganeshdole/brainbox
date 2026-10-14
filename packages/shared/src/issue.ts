@@ -24,6 +24,9 @@ export interface Issue {
   kind: IssueKind;
   /** How much a feature request matters to whoever asked; never on a bug. */
   importance?: Importance;
+  /** The Feature a feature request is attached to. Absent means it is new
+   *  and waiting to be sorted into one. Never on a bug. */
+  featureId?: string;
   text?: string;
   /** Present for screenshot submissions (absent for screen recordings). */
   screenshot?: StoredFile;

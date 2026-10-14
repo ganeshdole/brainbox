@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Camera, Lightbulb, Mic, Play, Search, Video } from "lucide-react";
+import { Camera, Mic, Play, Search, Video } from "lucide-react";
 import type { Issue } from "@ganeshdole/brainbox-shared";
 
 import { EmptyState } from "../components/EmptyState";
@@ -15,7 +15,7 @@ import { Skeleton } from "../components/ui/skeleton";
 import { api, isAuthRedirect } from "../lib/api";
 import { cleanIdentity } from "../lib/reporter";
 import {
-  importanceLabel,
+  isBugReport,
   issueTitle,
   newestFirst,
   pagePath,
@@ -89,7 +89,7 @@ function ReportRow({ issue, projectLabel }: { issue: Issue; projectLabel?: strin
           />
         ) : (
           <span className="grid h-full w-full place-items-center text-muted">
-            {issue.kind === "feature" ? <Lightbulb className="h-4 w-4" /> : <Video className="h-4 w-4" />}
+            <Video className="h-4 w-4" />
           </span>
         )}
         {(issue.session ?? issue.video) && (
@@ -109,12 +109,6 @@ function ReportRow({ issue, projectLabel }: { issue: Issue; projectLabel?: strin
         )}
       </span>
       <span className="hidden shrink-0 items-center gap-1.5 sm:flex">
-        {issue.kind === "feature" && (
-          <Chip>
-            <Lightbulb className="h-2.5 w-2.5" aria-hidden />
-            {issue.importance ? `feature · ${importanceLabel(issue.importance).toLowerCase()}` : "feature"}
-          </Chip>
-        )}
         {issue.session && (
           <Chip>
             <Play className="h-2.5 w-2.5" aria-hidden />
@@ -187,7 +181,8 @@ export function Reports() {
       : Promise.all(projects.map((p) => api.listIssues(p.id))).then((lists) => lists.flat());
     load
       .then((issues) => {
-        if (!cancelled) setResult({ scope, issues: newestFirst(issues) });
+        // feature requests are tracked under Features
+        if (!cancelled) setResult({ scope, issues: newestFirst(issues.filter(isBugReport)) });
       })
       .catch((e: Error) => {
         // A 401/402 is already navigating away; rendering it just flashes a

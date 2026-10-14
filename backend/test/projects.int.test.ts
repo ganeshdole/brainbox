@@ -159,4 +159,18 @@ describe("GET /api/projects issue counts", () => {
     const rows = (await res.json()) as { id: string; issueCount: number }[];
     expect(rows.find((r) => r.id === p.id)?.issueCount).toBe(2);
   });
+
+  it("says how many of them are feature requests", async () => {
+    const me = await makeUser();
+    const p = await makeProject(me.id);
+    const empty = await makeProject(me.id);
+    await makeIssue(p.id);
+    await makeIssue(p.id, { kind: "feature", text: "dark mode" });
+    const res = await app.request("/api/projects", {
+      headers: { cookie: await authCookie(me.id) },
+    });
+    const rows = (await res.json()) as { id: string; issueCount: number; featureRequestCount: number }[];
+    expect(rows.find((r) => r.id === p.id)).toMatchObject({ issueCount: 2, featureRequestCount: 1 });
+    expect(rows.find((r) => r.id === empty.id)).toMatchObject({ issueCount: 0, featureRequestCount: 0 });
+  });
 });

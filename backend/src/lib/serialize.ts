@@ -1,6 +1,7 @@
 import type { Ticket } from "@ganeshdole/brainbox-integrations";
 import type {
   Delivery,
+  Feature,
   IntegrationConnection,
   Issue,
   Project,
@@ -12,6 +13,7 @@ import type {
   ConnectionRecord as ConnectionRow,
   DeliveryRecord as DeliveryRow,
   DestinationRecord as DestinationRow,
+  FeatureRecord as FeatureRow,
   IssueRecord as IssueRow,
   ProjectRecord as ProjectRow,
 } from "../store/index.ts";
@@ -55,6 +57,7 @@ export async function toIssue(
     createdAt: row.createdAt.toISOString(),
     kind: row.kind,
     importance: row.importance ?? undefined,
+    featureId: row.featureId ?? undefined,
     text: row.text ?? undefined,
     screenshot,
     crop,
@@ -64,6 +67,19 @@ export async function toIssue(
     region: row.region ?? undefined,
     metadata: row.metadata,
     ...(deliveryRows && { deliveries: deliveryRows.map(toDelivery) }),
+  };
+}
+
+export function toFeature(row: FeatureRow, requestCount: number): Feature {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    title: row.title,
+    description: row.description ?? undefined,
+    status: row.status,
+    requestCount,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 

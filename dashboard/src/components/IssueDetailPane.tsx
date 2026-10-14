@@ -9,6 +9,7 @@ import { importanceLabel, issueTitle, pageLabel } from "../lib/issue";
 import { CopyButton } from "./CopyButton";
 import { Eyebrow } from "./Eyebrow";
 import { IssueDeliveries } from "./IssueDeliveries";
+import { IssueFeature } from "./IssueFeature";
 import { ReporterCard } from "./IssueReporter";
 import { Lightbox } from "./Lightbox";
 import { Skeleton } from "./ui/skeleton";
@@ -99,12 +100,14 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
     return () => clearTimeout(t);
   }, [issue, issueId]);
 
+  // a feature request is reached from, and goes back to, Features
+  const fromFeatures = issue?.kind === "feature";
   const back = (
     <Link
-      to={`/projects/${projectId}`}
+      to={`/projects/${projectId}${fromFeatures ? "/features" : ""}`}
       className="mb-3 flex w-fit items-center gap-1 text-xs text-muted transition hover:text-emphasis"
     >
-      <ArrowLeft className="h-3.5 w-3.5" /> Reports
+      <ArrowLeft className="h-3.5 w-3.5" /> {fromFeatures ? "Features" : "Reports"}
     </Link>
   );
 
@@ -161,6 +164,13 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
             <ExternalLink className="h-3 w-3 shrink-0" />
           </a>
         </div>
+        {issue.kind === "feature" && (
+          <IssueFeature
+            issue={issue}
+            projectId={projectId}
+            onChange={(next) => setIssue({ ...issue, featureId: next.featureId })}
+          />
+        )}
         <IssueDeliveries
           issueId={issue.id}
           projectId={projectId}
