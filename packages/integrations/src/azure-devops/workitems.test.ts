@@ -133,6 +133,67 @@ describe("azureDevopsWorkItems", () => {
     ]);
   });
 
+  it("attaches the screen recording and voice note, and links them from the report", async () => {
+    const att = (id: string) => ({ status: 201, body: { id, url: `https://dev.azure.com/acme/_apis/wit/attachments/${id}` } });
+    const fetch = fakeFetch(att("v"), att("a"), created);
+    const file = (name: string, contentType: string) => ({ name, contentType, load: async () => new Uint8Array([1]) });
+
+    await azureDevopsWorkItems({ ...base, fetch }).deliver({
+      ...ticket,
+      links: { dashboard: ticket.links.dashboard, video: "https://api.brainbox.sh/f/rec", audio: "https://api.brainbox.sh/f/voice" },
+      files: { video: file("recording.webm", "video/webm"), audio: file("voice-note.webm", "audio/webm") },
+    });
+
+    const [video, audio, create] = fetch.calls;
+    expect(video!.url).toContain("fileName=recording.webm");
+    expect(audio!.url).toContain("fileName=voice-note.webm");
+    const body = field(create!, "System.Description");
+    expect(body).toContain('<a href="https://dev.azure.com/acme/_apis/wit/attachments/v">Watch the recording</a>');
+    expect(body).toContain('<a href="https://dev.azure.com/acme/_apis/wit/attachments/a">Listen to the voice note</a>');
+    expect(body).not.toContain("api.brainbox.sh/f/");
+    const attached = ops(create!).filter((o) => (o.value as { rel?: string }).rel === "AttachedFile");
+    expect(attached.map((o) => (o.value as { attributes: { comment: string } }).attributes.comment)).toEqual([
+      "recording.webm",
+      "voice-note.webm",
+    ]);
+  });
+
+  it("files a feature request as the feature type, its importance as Priority", async () => {
+    const fetch = fakeFetch(created, created);
+    const dest = azureDevopsWorkItems({
+      ...base,
+      priority: 2,
+      tags: ["brainbox"],
+      feature: {
+        workItemType: "User Story",
+        iteration: { path: "Web" },
+        tags: ["brainbox", "feature-request"],
+        priority: 3,
+      },
+      fetch,
+    });
+
+    await dest.deliver({ ...ticket, kind: "feature", importance: "critical" });
+    await dest.deliver({ ...ticket, kind: "feature" });
+
+    const [critical, unrated] = fetch.calls;
+    expect(critical!.url).toContain("/_apis/wit/workitems/$User%20Story?");
+    expect(field(critical!, "System.Tags")).toBe("brainbox; feature-request");
+    expect(field(critical!, "System.IterationPath")).toBe("Web");
+    expect(field(critical!, "Microsoft.VSTS.Common.Priority")).toBe(1);
+    expect(field(unrated!, "Microsoft.VSTS.Common.Priority")).toBe(3);
+  });
+
+  it("leaves Priority out for a type without one, whatever the importance", async () => {
+    const fetch = fakeFetch(created);
+    await azureDevopsWorkItems({ ...base, feature: { workItemType: "Issue" }, fetch }).deliver({
+      ...ticket,
+      kind: "feature",
+      importance: "critical",
+    });
+    expect(field(fetch.calls[0]!, "Microsoft.VSTS.Common.Priority")).toBeUndefined();
+  });
+
   it("embeds an uploaded image even when the ticket has no public link", async () => {
     const fetch = fakeFetch({ status: 201, body: { id: "c", url: "https://dev.azure.com/acme/_apis/wit/attachments/c" } }, created);
     await azureDevopsWorkItems({ ...base, fetch }).deliver({
@@ -238,7 +299,17 @@ describe("validateWorkItem", () => {
     expect(await validateWorkItem({ ...base, areaPath: "Gone", fetch })).toEqual({
       ok: false,
       status: 400,
-      error: "TF401347: Invalid tree name given for work item -1, field 'System.AreaPath'.",
+      error: "Bug: TF401347: Invalid tree name given for work item -1, field 'System.AreaPath'.",
     });
+  });
+
+  it("checks the feature request type too, and names it when it fails", async () => {
+    const fetch = fakeFetch(
+      { status: 200, body: { id: -1 } },
+      { status: 400, body: { message: "TF401320: Rule Error for field Value Area." } },
+    );
+    const result = await validateWorkItem({ ...base, feature: { workItemType: "User Story" }, fetch });
+    expect(result).toEqual({ ok: false, status: 400, error: "User Story: TF401320: Rule Error for field Value Area." });
+    expect(fetch.calls.map((c) => c.url.split("?")[0]!.split("/").pop())).toEqual(["$Bug", "$User%20Story"]);
   });
 });

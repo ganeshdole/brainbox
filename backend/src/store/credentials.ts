@@ -1,13 +1,31 @@
-// Integration credentials (Azure DevOps refresh tokens and PATs) at rest.
-// Every store seals with these before writing and opens after reading, so the
-// format cannot drift between databases. WebCrypto only: no node:crypto.
+// Integration credentials (Azure DevOps PATs, later Entra refresh tokens) at
+// rest. Stores keep the sealed string as it is and never see the key: the
+// backend seals before saving a connection and opens when it needs the token
+// (integrations/azure-devops.ts). WebCrypto only: no node:crypto.
 //
 // Format: `v1.<iv>.<ciphertext+tag>`, base64url. AES-256-GCM, with the
-// connection id as additional data: a sealed value copied onto another row
-// does not open.
+// connection's identity (team, provider, external id) as additional data: a
+// sealed value copied onto another connection does not open.
 
 const VERSION = "v1";
 const IV_BYTES = 12;
+
+declare const sealed: unique symbol;
+
+/** Credentials as stored: only `sealCredentials` makes one, so plaintext
+ *  can't be saved by mistake. */
+export type SealedCredentials = string & { readonly [sealed]: true };
+
+/** A value read back from a database, checked to look sealed. */
+export function asSealedCredentials(value: string): SealedCredentials {
+  if (!value.startsWith(`${VERSION}.`)) throw new Error("stored credentials are not sealed");
+  return value as SealedCredentials;
+}
+
+/** The additional data that ties sealed credentials to one connection. */
+export function connectionContext(conn: { teamId: string; provider: string; externalId: string }): string {
+  return `${conn.provider}:${conn.teamId}:${conn.externalId}`;
+}
 
 type AesKey = Awaited<ReturnType<typeof crypto.subtle.importKey>>;
 
@@ -36,18 +54,24 @@ export function isEncryptionKey(value: string): boolean {
   }
 }
 
-export async function sealCredentials(plain: string, opts: { key: string; context: string }): Promise<string> {
+export async function sealCredentials(
+  plain: string,
+  opts: { key: string; context: string },
+): Promise<SealedCredentials> {
   const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
   const sealed = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv, additionalData: utf8(opts.context) },
     await importKey(opts.key),
     utf8(plain),
   );
-  return `${VERSION}.${base64url(iv)}.${base64url(new Uint8Array(sealed))}`;
+  return asSealedCredentials(`${VERSION}.${base64url(iv)}.${base64url(new Uint8Array(sealed))}`);
 }
 
 /** Throws when the value was sealed with another key or for another context. */
-export async function openCredentials(sealed: string, opts: { key: string; context: string }): Promise<string> {
+export async function openCredentials(
+  sealed: SealedCredentials,
+  opts: { key: string; context: string },
+): Promise<string> {
   const [version, iv, data] = sealed.split(".");
   if (version !== VERSION || !iv || !data) throw new Error("unrecognised sealed credentials");
   const plain = await crypto.subtle.decrypt(

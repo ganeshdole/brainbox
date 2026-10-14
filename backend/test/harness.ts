@@ -6,6 +6,7 @@ import { getDb } from "../src/db/client.ts";
 import { integrationConnections, projectDestinations, waitlistSignups, webhookEvents } from "../src/db/schema/index.ts";
 import { env } from "../src/env.ts";
 import { fromConvex } from "../src/store/convex.ts";
+import { fromPostgres } from "../src/store/postgres.ts";
 import {
   getStore,
   type ConnectionRecord,
@@ -36,7 +37,7 @@ const postgres: StoreInspector = {
     );
   },
   connections: () => getDb().select().from(integrationConnections),
-  destinations: () => getDb().select().from(projectDestinations),
+  destinations: async () => (await getDb().select().from(projectDestinations)).map(fromPostgres.destination),
   webhookEvents: () => getDb().select({ id: webhookEvents.id, type: webhookEvents.type }).from(webhookEvents),
   waitlistSignups: () => getDb().select().from(waitlistSignups),
 };

@@ -2,8 +2,10 @@ import type { Adapter } from "@auth/core/adapters";
 import type {
   BillingPeriod,
   CapturedMetadata,
+  ConnectionAuth,
+  ConnectionStatus,
   DeliveryStatus,
-  DestinationConfig,
+  DestinationConfigs,
   FeatureStatus,
   Importance,
   IntegrationProvider,
@@ -21,6 +23,8 @@ import type {
   TeamRole,
   TranscriptStatus,
 } from "@ganeshdole/brainbox-shared";
+
+import type { SealedCredentials } from "./credentials.ts";
 
 // The backend's whole view of persistence. Routes, auth, billing and delivery
 // talk to a `Store`; which database sits behind it is a deployment choice
@@ -155,22 +159,35 @@ export interface ConnectionRecord {
   /** The Team whose projects can use it. */
   teamId: string;
   provider: IntegrationProvider;
-  /** The provider's id for the link, e.g. a GitHub App installation id. */
+  /** The provider's id for the link, e.g. a GitHub App installation id, or
+   *  `pat:<organization>` for an Azure DevOps token. */
   externalId: string;
   label: string;
+  auth: ConnectionAuth;
+  status: ConnectionStatus;
+  /** Null for a GitHub App install, which mints its own tokens. */
+  credentials: SealedCredentials | null;
   createdAt: Date;
 }
 
-export interface DestinationRecord {
-  id: string;
-  projectId: string;
-  connectionId: string;
-  provider: IntegrationProvider;
-  config: DestinationConfig;
-  enabled: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
+/** One project's destination for one provider; `config` narrows on `provider`. */
+export type DestinationRecord = {
+  [P in IntegrationProvider]: {
+    id: string;
+    projectId: string;
+    connectionId: string;
+    provider: P;
+    config: DestinationConfigs[P];
+    enabled: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+  };
+}[IntegrationProvider];
+
+/** A destination to save: a record without what the store assigns. */
+export type NewDestination = {
+  [P in IntegrationProvider]: Omit<Extract<DestinationRecord, { provider: P }>, "id" | "createdAt" | "updatedAt">;
+}[IntegrationProvider];
 
 export interface DeliveryRecord {
   id: string;
@@ -348,16 +365,17 @@ export interface Store {
     /** Newest first. */
     listConnections(teamId: string): Promise<ConnectionRecord[]>;
     getConnection(id: string): Promise<ConnectionRecord | null>;
-    /** Insert, or refresh the label of the same (team, provider, externalId). */
-    saveConnection(input: Omit<ConnectionRecord, "id" | "createdAt">): Promise<void>;
+    /** Insert, or replace the label, auth and credentials of the same (team,
+     *  provider, externalId). Either way it ends up `active`: saving is how
+     *  a connection is connected again. */
+    saveConnection(input: Omit<ConnectionRecord, "id" | "createdAt" | "status">): Promise<ConnectionRecord>;
+    setConnectionStatus(id: string, status: ConnectionStatus): Promise<void>;
     /** Also removes its destinations; their deliveries keep their links. */
     deleteConnection(id: string): Promise<void>;
 
     listDestinations(projectId: string): Promise<DestinationRecord[]>;
     /** One destination per (project, provider): insert or replace. */
-    saveDestination(
-      input: Omit<DestinationRecord, "id" | "createdAt" | "updatedAt">,
-    ): Promise<DestinationRecord>;
+    saveDestination(input: NewDestination): Promise<DestinationRecord>;
     deleteDestination(projectId: string, provider: IntegrationProvider): Promise<void>;
     /** A project's destinations with their connections; paused ones only on request. */
     deliveryTargets(

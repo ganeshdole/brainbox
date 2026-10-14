@@ -1,29 +1,44 @@
-import { githubApp, githubIssues, type Destination, type GithubApp } from "@ganeshdole/brainbox-integrations";
+import {
+  azureDevopsWorkItems,
+  githubApp,
+  githubIssues,
+  type Destination,
+  type GithubApp,
+} from "@ganeshdole/brainbox-integrations";
 import type { IntegrationProvider } from "@ganeshdole/brainbox-shared";
 
 import { env } from "../env.ts";
 import type { ConnectionRecord, DestinationRecord } from "../store/index.ts";
+import { authFor, workItemsOptions } from "./azure-devops.ts";
 
 /** What a feature request is labelled when its destination doesn't say:
  *  the label GitHub creates in every new repository for one. */
 export const DEFAULT_FEATURE_LABELS = ["enhancement"];
 
-const FACTORIES: Record<IntegrationProvider, (dest: DestinationRecord, conn: ConnectionRecord) => Destination> = {
-  github: (dest, conn) =>
-    githubIssues({
-      owner: dest.config.owner,
-      repo: dest.config.repo,
-      labels: dest.config.labels,
-      // Destinations saved before feature requests have no featureLabels.
-      featureLabels: dest.config.featureLabels ?? DEFAULT_FEATURE_LABELS,
-      token: () => getGithubApp().installationToken(conn.externalId),
-    }),
-};
-
-export function destinationFor(dest: DestinationRecord, conn: ConnectionRecord): Destination {
-  return FACTORIES[dest.provider](dest, conn);
+/** The `Destination` that sends to a stored destination, as its connection.
+ *  Throws when the connection's credentials can't be read. */
+export async function destinationFor(dest: DestinationRecord, conn: ConnectionRecord): Promise<Destination> {
+  switch (dest.provider) {
+    case "github":
+      return githubIssues({
+        owner: dest.config.owner,
+        repo: dest.config.repo,
+        labels: dest.config.labels,
+        // Destinations saved before feature requests have no featureLabels.
+        featureLabels: dest.config.featureLabels ?? DEFAULT_FEATURE_LABELS,
+        token: () => getGithubApp().installationToken(conn.externalId),
+      });
+    case "azure-devops":
+      return azureDevopsWorkItems(workItemsOptions(dest.config, await authFor(conn)));
+  }
 }
 
+export const PROVIDER_NAME: Record<IntegrationProvider, string> = {
+  github: "GitHub",
+  "azure-devops": "Azure DevOps",
+};
+
+/** Whether this deployment can use the provider. Routes answer 503 when not. */
 export function integrationsConfigured(provider: IntegrationProvider): boolean {
   switch (provider) {
     case "github":
@@ -34,6 +49,9 @@ export function integrationsConfigured(provider: IntegrationProvider): boolean {
         env.GITHUB_APP_CLIENT_ID,
         env.GITHUB_APP_CLIENT_SECRET,
       ].every((v) => v !== "");
+    // Tokens are stored, so they need a key to be sealed with.
+    case "azure-devops":
+      return env.INTEGRATIONS_ENCRYPTION_KEY !== "";
   }
 }
 

@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 
 import { newestFirst, removeConnection, removeDestination, serverMutation, serverQuery, strip } from "./lib/server.ts";
-import { destinationConfig, provider } from "./validators.ts";
+import { connectionAuth, connectionStatus, destinationConfig, nullable, provider } from "./validators.ts";
 
 // Store.integrations. See src/store/types.ts for the contract.
 
@@ -27,9 +27,17 @@ export const getConnection = serverQuery({
   },
 });
 
-/** Insert, or refresh the label of the same (team, provider, externalId). */
+/** Insert, or replace the label, auth and credentials of the same (team,
+ *  provider, externalId). Either way it ends up active. */
 export const saveConnection = serverMutation({
-  args: { teamId: v.string(), provider, externalId: v.string(), label: v.string() },
+  args: {
+    teamId: v.string(),
+    provider,
+    externalId: v.string(),
+    label: v.string(),
+    auth: connectionAuth,
+    credentials: nullable(v.string()),
+  },
   handler: async (ctx, input) => {
     const existing = await ctx.db
       .query("connections")
@@ -38,10 +46,30 @@ export const saveConnection = serverMutation({
       )
       .unique();
     if (existing) {
-      await ctx.db.patch(existing._id, { label: input.label });
-      return;
+      await ctx.db.patch(existing._id, {
+        label: input.label,
+        auth: input.auth,
+        credentials: input.credentials,
+        status: "active",
+      });
+      const updated = await ctx.db.get(existing._id);
+      if (!updated) throw new Error("connection vanished during save");
+      return strip(updated);
     }
-    await ctx.db.insert("connections", { ...input, id: crypto.randomUUID(), createdAt: Date.now() });
+    const record = { ...input, status: "active" as const, id: crypto.randomUUID(), createdAt: Date.now() };
+    await ctx.db.insert("connections", record);
+    return record;
+  },
+});
+
+export const setConnectionStatus = serverMutation({
+  args: { id: v.string(), status: connectionStatus },
+  handler: async (ctx, { id, status }) => {
+    const row = await ctx.db
+      .query("connections")
+      .withIndex("with_id", (q) => q.eq("id", id))
+      .unique();
+    if (row) await ctx.db.patch(row._id, { status });
   },
 });
 

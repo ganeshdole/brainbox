@@ -18,7 +18,7 @@ export interface Ticket {
   metadata: CapturedMetadata;
   region?: Region;
   links: TicketLinks;
-  /** The images themselves, for trackers that host their own copy
+  /** The files themselves, for trackers that host their own copy
    *  (Azure DevOps attachments). Destinations that link fall back to `links`. */
   files?: TicketFiles;
 }
@@ -31,11 +31,15 @@ export interface TicketLinks {
   /** The voice note. Without a transcript it is the only place a spoken
    *  report's words are, so the ticket links it. */
   audio?: string;
+  /** The screen recording. Its screenshot is the recording's last frame. */
+  video?: string;
 }
 
 export interface TicketFiles {
   screenshot?: TicketFile;
   crop?: TicketFile;
+  audio?: TicketFile;
+  video?: TicketFile;
 }
 
 /** One stored file, read only when a destination asks for it. */
@@ -58,12 +62,9 @@ export interface RenderedHtmlTicket {
   environment: string;
 }
 
-/** The tracker's own copies of the images. Each replaces the public link
- *  everywhere it appears, so an uploaded image is never also linked publicly. */
-export interface HtmlRenderOptions {
-  crop?: string;
-  screenshot?: string;
-}
+/** The tracker's own copies of the files. Each replaces the public link
+ *  everywhere it appears, so an uploaded file is never also linked publicly. */
+export type HtmlRenderOptions = Partial<Record<keyof TicketFiles, string>>;
 
 const TITLE_MAX = 72;
 
@@ -81,11 +82,11 @@ export function renderTicket(ticket: Ticket): RenderedTicket {
 
 /** The same ticket as HTML. Every value from the report is escaped. */
 export function renderTicketHtml(ticket: Ticket, options: HtmlRenderOptions = {}): RenderedHtmlTicket {
-  const links = {
-    ...ticket.links,
-    ...(options.crop ? { crop: options.crop } : {}),
-    ...(options.screenshot ? { screenshot: options.screenshot } : {}),
-  };
+  const links = { ...ticket.links };
+  for (const key of FILE_KEYS) {
+    const uploaded = options[key];
+    if (uploaded) links[key] = uploaded;
+  }
   const content = contentOf({ ...ticket, links });
   return {
     title: titleFor(ticket),
@@ -111,10 +112,13 @@ interface Content {
   transcript?: string;
   /** The voice note, linked where its words would go when there's no transcript. */
   audio?: string;
+  video?: string;
   details: Row[];
   consoleErrors: { shown: string[]; total: number };
   links: Array<{ label: string; url: string }>;
 }
+
+const FILE_KEYS = ["screenshot", "crop", "audio", "video"] as const satisfies ReadonlyArray<keyof TicketFiles>;
 
 const ENVIRONMENT = new Set(["Page", "Viewport", "Browser", "Locale"]);
 
@@ -134,6 +138,7 @@ function contentOf(t: Ticket): Content {
     text: t.text?.trim() || undefined,
     transcript,
     audio: transcript ? undefined : t.links.audio,
+    video: t.links.video,
     details: detailRows(t),
     consoleErrors: {
       shown: t.metadata.consoleErrors.slice(0, CONSOLE_ERRORS_MAX),
@@ -202,6 +207,7 @@ function markdownBody(c: Content): string {
   if (c.text) parts.push(c.text);
   if (c.transcript) parts.push(`**Voice note**\n\n${quote(c.transcript)}`);
   else if (c.audio) parts.push(`**Voice note**\n\n[Listen to the voice note](${c.audio})`);
+  if (c.video) parts.push(`**Screen recording**\n\n[Watch the recording](${c.video})`);
   parts.push(
     ["| | |", "|---|---|", ...c.details.map(([k, v]) => `| ${cell(k)} | ${markdownCell(v)} |`)].join("\n"),
   );
@@ -256,6 +262,7 @@ function htmlBody(c: Content): string {
   } else if (c.audio) {
     parts.push(`<p><strong>Voice note</strong></p>\n<p>${link(c.audio, "Listen to the voice note")}</p>`);
   }
+  if (c.video) parts.push(`<p><strong>Screen recording</strong></p>\n<p>${link(c.video, "Watch the recording")}</p>`);
   parts.push(htmlTable(c.details));
   if (c.consoleErrors.total > 0) {
     const more = c.consoleErrors.total - c.consoleErrors.shown.length;

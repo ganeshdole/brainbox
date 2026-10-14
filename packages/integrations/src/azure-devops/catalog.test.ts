@@ -112,7 +112,7 @@ describe("azureDevops catalog", () => {
     expect(settings.backlogIteration).toBe("Web\\Release 1");
   });
 
-  it("lists creatable work item types, leaving out hidden and disabled ones", async () => {
+  it("lists the types a report can become, leaving out hidden, test and disabled ones", async () => {
     const fetch = fakeFetch(
       {
         status: 200,
@@ -121,13 +121,20 @@ describe("azureDevops catalog", () => {
             { name: "User Story", color: "009CCC" },
             { name: "Bug", color: "CC293D" },
             { name: "Test Case" },
+            { name: "Code Review Request" },
             { name: "Old", isDisabled: true },
           ],
         },
       },
       {
         status: 200,
-        body: { value: [{ referenceName: "Microsoft.HiddenCategory", workItemTypes: [{ name: "Test Case" }] }] },
+        body: {
+          value: [
+            { referenceName: "Microsoft.HiddenCategory", workItemTypes: [{ name: "Code Review Request" }] },
+            { referenceName: "Microsoft.TestCaseCategory", workItemTypes: [{ name: "Test Case" }] },
+            { referenceName: "Microsoft.BugCategory", workItemTypes: [{ name: "Bug" }] },
+          ],
+        },
       },
     );
     const types = await azureDevops({ auth: { pat: "p" }, fetch }).workItemTypes("acme", "p-1");

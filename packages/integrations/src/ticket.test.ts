@@ -178,6 +178,16 @@ describe("renderTicket body", () => {
     expect(body.startsWith("**Voice note**\n\n[Listen to the voice note](https://x/voice)")).toBe(true);
   });
 
+  it("links a screen recording after the words", () => {
+    const body = renderTicket(
+      ticket({ text: "Chart is blank", links: { dashboard: "d", video: "https://x/rec" } }),
+    ).body;
+    expect(body.startsWith("Chart is blank\n\n**Screen recording**\n\n[Watch the recording](https://x/rec)")).toBe(true);
+    expect(renderTicketHtml(ticket({ links: { dashboard: "d", video: "https://x/rec" } })).body).toContain(
+      '<p><strong>Screen recording</strong></p>\n<p><a href="https://x/rec">Watch the recording</a></p>',
+    );
+  });
+
   it("quotes a transcribed voice note and links the recording in the footer", () => {
     const body = renderTicket(
       ticket({ transcript: "add CSV export", links: { dashboard: "d", audio: "https://x/voice" } }),

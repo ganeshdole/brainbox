@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { isEncryptionKey, openCredentials, sealCredentials } from "./credentials.ts";
+import {
+  asSealedCredentials,
+  isEncryptionKey,
+  openCredentials,
+  sealCredentials,
+  type SealedCredentials,
+} from "./credentials.ts";
 
 const key = btoa(String.fromCharCode(...Array.from({ length: 32 }, (_, i) => i)));
 const otherKey = btoa(String.fromCharCode(...Array.from({ length: 32 }, (_, i) => 255 - i)));
@@ -26,11 +32,15 @@ describe("credentials", () => {
 
     await expect(openCredentials(sealed, { key, context: "conn-2" })).rejects.toThrow();
     await expect(openCredentials(sealed, { key: otherKey, context: "conn-1" })).rejects.toThrow();
-    const tampered = `${sealed.slice(0, -2)}${sealed.endsWith("A") ? "B" : "A"}A`;
+    const tampered = asSealedCredentials(`${sealed.slice(0, -2)}${sealed.endsWith("A") ? "B" : "A"}A`);
     await expect(openCredentials(tampered, { key, context: "conn-1" })).rejects.toThrow();
-    await expect(openCredentials("v2.a.b", { key, context: "conn-1" })).rejects.toThrow(
+    await expect(openCredentials("v2.a.b" as SealedCredentials, { key, context: "conn-1" })).rejects.toThrow(
       "unrecognised sealed credentials",
     );
+  });
+
+  it("refuses to treat a plaintext value as sealed", () => {
+    expect(() => asSealedCredentials("my-pat")).toThrow("not sealed");
   });
 
   it("accepts only a 32-byte base64 key", async () => {

@@ -7,8 +7,11 @@ import { fileURLToPath } from "node:url";
 
 export const API_PORT = 8798;
 export const DASHBOARD_PORT = 5184;
+/** The fake Azure DevOps (backend/scripts/fake-azure-devops.ts). */
+export const FAKE_ADO_PORT = 8799;
 export const API_URL = `http://localhost:${API_PORT}`;
 export const DASHBOARD_URL = `http://localhost:${DASHBOARD_PORT}`;
+export const FAKE_ADO_URL = `http://localhost:${FAKE_ADO_PORT}`;
 
 // One database per checkout (named after its folder), so two worktrees running
 // e2e at once never drop or migrate each other's.
@@ -21,7 +24,7 @@ export const COMPANY_DOMAIN = "acme.test";
 
 /** The backend's output. The console email driver writes sign-in codes and
  *  invites here, which is how the tests read their email. */
-export const BACKEND_LOG = new URL("test-results/backend.log", import.meta.url).pathname;
+export const BACKEND_LOG = fileURLToPath(new URL("test-results/backend.log", import.meta.url));
 
 export const backendEnv: Record<string, string> = {
   DATABASE_DRIVER: "postgres",
@@ -38,4 +41,7 @@ export const backendEnv: Record<string, string> = {
   // Sign in with a 6-digit code read from BACKEND_LOG.
   AUTH_EMAIL_MODE: "code",
   AUTH_ALLOWED_EMAIL_DOMAINS: COMPANY_DOMAIN,
+  // Azure DevOps goes to the fake, which accepts the token "fake-pat".
+  INTEGRATIONS_ENCRYPTION_KEY: Buffer.alloc(32, 9).toString("base64"),
+  AZURE_DEVOPS_URL: FAKE_ADO_URL,
 };

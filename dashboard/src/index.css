@@ -55,6 +55,12 @@
     background: var(--gray-a5);
     color: var(--gray-12);
   }
+  /* A native select's open list follows the select's colors on Windows: light
+     text on the browser's white list unless the options say otherwise. */
+  select option {
+    background-color: var(--bg-elevated);
+    color: var(--text-emphasis);
+  }
 }
 
 /* @ganeshdole/brainbox-replay draws from its own --bb-replay-* properties; point them

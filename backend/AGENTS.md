@@ -71,6 +71,14 @@ The GitHub App env (`GITHUB_APP_*`) is optional; `integrationsConfigured()`
 gates the routes with a 503. Tests stub `fetch` with `test/github-fake.ts`, and
 `test/env.ts` generates a throwaway app key per run.
 
+Azure DevOps connections store a token, which `integrations/azure-devops.ts`
+seals with `INTEGRATIONS_ENCRYPTION_KEY` before `saveConnection` and opens
+when it needs it. Stores keep the `SealedCredentials` string as it is and
+never see the key; never hand a store plaintext. A 401 from a tool marks the
+connection `needs_reauth` (`sendTicket` in `dispatch.ts`). Tests stub Azure
+DevOps with `test/azure-devops-fake.ts`; `scripts/fake-azure-devops.ts` is a
+fake to run against by hand and in `e2e/`.
+
 ## Auth boundary
 
 `app.ts` gates routes in order: `/health`, `/ingest`, `/f` (signed public file

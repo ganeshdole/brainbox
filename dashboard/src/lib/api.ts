@@ -1,12 +1,18 @@
 import type {
+  AzureDevopsProject,
+  AzureDevopsTeam,
+  AzureDevopsTeamSettings,
+  AzureDevopsWorkItemType,
+  AzureDevopsWorkItemTypeInfo,
   BillingPeriod,
   BillingState,
   CreatedInvite,
   Delivery,
-  DestinationConfig,
+  DestinationInputs,
   Feature,
   FeatureDetail,
   FeatureStatus,
+  IntegrationConnection,
   IntegrationProvider,
   IntegrationRepo,
   IntegrationsState,
@@ -169,16 +175,47 @@ export const api = {
     req<IntegrationRepo[]>(`/api/integrations/connections/${connectionId}/repos`),
   deleteConnection: (connectionId: string) =>
     req<{ ok: boolean }>(`/api/integrations/connections/${connectionId}`, { method: "DELETE" }),
+  /** Connects (or reconnects) an Azure DevOps organization with a personal access token. */
+  connectAzureDevops: (teamId: string, organization: string, token: string) =>
+    req<IntegrationConnection>("/api/integrations/azure-devops/pat", {
+      method: "POST",
+      body: JSON.stringify({ teamId, organization, token }),
+    }),
+  // What an Azure DevOps connection offers the destination pickers.
+  adoProjects: (connectionId: string) =>
+    req<AzureDevopsProject[]>(`/api/integrations/connections/${connectionId}/projects`),
+  adoTeams: (connectionId: string, project: string) =>
+    req<AzureDevopsTeam[]>(
+      `/api/integrations/connections/${connectionId}/teams?${new URLSearchParams({ project })}`,
+    ),
+  adoTeam: (connectionId: string, project: AzureDevopsProject, team: string) =>
+    req<AzureDevopsTeamSettings>(
+      `/api/integrations/connections/${connectionId}/team?${new URLSearchParams({ project: project.id, projectName: project.name, team })}`,
+    ),
+  adoTypes: (connectionId: string, project: string) =>
+    req<AzureDevopsWorkItemType[]>(
+      `/api/integrations/connections/${connectionId}/work-item-types?${new URLSearchParams({ project })}`,
+    ),
+  adoType: (connectionId: string, project: string, type: string) =>
+    req<AzureDevopsWorkItemTypeInfo>(
+      `/api/integrations/connections/${connectionId}/work-item-type?${new URLSearchParams({ project, type })}`,
+    ),
   listDestinations: (projectId: string) =>
     req<ProjectDestination[]>(`/api/projects/${projectId}/destinations`),
-  saveDestination: (
+  /** Azure DevOps answers 422 with the rule its process enforces when the setup can't work. */
+  saveDestination: <P extends IntegrationProvider>(
     projectId: string,
-    provider: IntegrationProvider,
-    body: { connectionId: string; config: DestinationConfig; enabled: boolean },
+    provider: P,
+    body: { connectionId: string; config: DestinationInputs[P]; enabled: boolean },
   ) =>
     req<ProjectDestination>(`/api/projects/${projectId}/destinations/${provider}`, {
       method: "PUT",
       body: JSON.stringify(body),
+    }),
+  /** Files a made-up report through the saved destination; returns what it made. */
+  testDestination: (projectId: string, provider: IntegrationProvider) =>
+    req<{ externalId: string; url: string }>(`/api/projects/${projectId}/destinations/${provider}/test`, {
+      method: "POST",
     }),
   deleteDestination: (projectId: string, provider: IntegrationProvider) =>
     req<{ ok: boolean }>(`/api/projects/${projectId}/destinations/${provider}`, {

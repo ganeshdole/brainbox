@@ -1,3 +1,5 @@
+import { isEncryptionKey } from "./store/credentials.ts";
+
 function required(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`Missing required env var: ${name}`);
@@ -32,6 +34,13 @@ const S3_ACCESS_KEY_ID = process.env.S3_ACCESS_KEY_ID ?? "";
 const S3_SECRET_ACCESS_KEY = process.env.S3_SECRET_ACCESS_KEY ?? "";
 if (STORAGE_DRIVER === "s3" && !S3_ACCESS_KEY_ID !== !S3_SECRET_ACCESS_KEY) {
   throw new Error("Set both S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY, or neither to use an IAM role");
+}
+
+// A key that is set but unusable would only fail at the first connect, so it
+// fails the boot instead.
+const INTEGRATIONS_ENCRYPTION_KEY = process.env.INTEGRATIONS_ENCRYPTION_KEY ?? "";
+if (INTEGRATIONS_ENCRYPTION_KEY && !isEncryptionKey(INTEGRATIONS_ENCRYPTION_KEY)) {
+  throw new Error("INTEGRATIONS_ENCRYPTION_KEY must be 32 bytes, base64 (openssl rand -base64 32)");
 }
 
 // AUTH_SECRET and the chosen store's settings are infra and must be present to
@@ -151,6 +160,15 @@ export const env = {
   GITHUB_APP_CLIENT_ID: process.env.GITHUB_APP_CLIENT_ID ?? "",
   GITHUB_APP_CLIENT_SECRET: process.env.GITHUB_APP_CLIENT_SECRET ?? "",
   GITHUB_WEBHOOK_SECRET: process.env.GITHUB_WEBHOOK_SECRET ?? "",
+
+  // Seals stored integration credentials (Azure DevOps tokens). Optional:
+  // unset = Azure DevOps answers 503. 32 bytes, base64 (`openssl rand -base64 32`).
+  // Changing it makes every stored token unreadable: those connections need
+  // connecting again.
+  INTEGRATIONS_ENCRYPTION_KEY,
+  // Azure DevOps Services unless set, e.g. to the local fake
+  // (`pnpm fake:ado`, http://localhost:8790).
+  AZURE_DEVOPS_URL: (process.env.AZURE_DEVOPS_URL ?? "https://dev.azure.com").replace(/\/+$/, ""),
 
   // Accounts allowed past the paywall without a subscription (ours). Kept in
   // env rather than the codebase so access can be granted or revoked without a

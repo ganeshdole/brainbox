@@ -140,12 +140,18 @@ Server.
 ## Azure DevOps
 
 `azureDevopsWorkItems()` opens one work item per ticket. It uploads the
-ticket's `files` as attachments first, shows the crop inline and attaches
-both, then creates the item, its fields and a link back to Brainbox in one
-call, so a work item is never half-made. An uploaded image is never also
-linked publicly; one whose upload fails falls back to its public link in
-`links`. A current-sprint lookup for a team that no longer exists fails the
-delivery rather than filing into the backlog.
+ticket's `files` (crop, screenshot, screen recording, voice note) as
+attachments first, shows the image inline and links the rest from the report,
+then creates the item, its fields and a link back to Brainbox in one call, so
+a work item is never half-made. An uploaded file is never also linked
+publicly; one whose upload fails falls back to its public link in `links`. A
+current-sprint lookup for a team that no longer exists fails the delivery
+rather than filing into the backlog.
+
+Feature requests can be filed differently from everything else: `feature`
+takes its own type, iteration, tags, priority and fields. Either way, a
+request's importance replaces the priority (blocking 1, important 2, nice to
+have 3) when the type has one.
 
 Projects and teams are read page by page, so large organizations list in
 full.
@@ -165,6 +171,7 @@ const dest = azureDevopsWorkItems({
   bodyField: "Microsoft.VSTS.TCM.ReproSteps",   // Bugs read Repro Steps, not Description
   systemInfoField: "Microsoft.VSTS.TCM.SystemInfo",
   fields: { "Custom.Product": "Store" },  // the process's own required fields
+  feature: { workItemType: "User Story", iteration: { path: "Web" }, tags: ["feature-request"], priority: 3 },
 });
 ```
 
@@ -185,8 +192,9 @@ await ado.teamSettings("acme", project, team); // areas, sprints, backlog, and w
 await ado.workItemTypes("acme", project.id);   // hidden types (Test Case...) left out
 await ado.workItemType("acme", project.id, "Bug"); // bodyField, systemInfoField, required fields
 
-// Runs every rule without saving: catches a missing required field or a
-// renamed area before a report depends on the configuration.
+// Runs every rule without saving, for each kind of report: catches a missing
+// required field or a renamed area before a report depends on the
+// configuration. The error starts with the type it is about.
 const check = await validateWorkItem(options); // { ok: true } | { ok: false, status?, error }
 ```
 

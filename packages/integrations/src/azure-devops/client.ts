@@ -6,6 +6,8 @@ export const AZURE_DEVOPS_URL = "https://dev.azure.com";
 export const AZURE_DEVOPS_PROFILE_URL = "https://app.vssps.visualstudio.com";
 export const API_VERSION = "7.1";
 const TIMEOUT_MS = 15_000;
+/** A 50 MB screen recording on a slow link. */
+export const UPLOAD_TIMEOUT_MS = 120_000;
 
 /**
  * How a call is authenticated. A personal access token goes as Basic auth; an
@@ -28,6 +30,7 @@ export interface AdoRequest {
   /** JSON, or raw bytes for an attachment upload. */
   body?: unknown;
   contentType?: string;
+  timeoutMs?: number;
   fetch?: FetchLike;
 }
 
@@ -68,7 +71,7 @@ export async function adoRequest(req: AdoRequest): Promise<AdoResponse> {
     },
     body: req.body === undefined ? undefined : bytes ? (req.body as Uint8Array<ArrayBuffer>) : JSON.stringify(req.body),
     redirect: "manual",
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: AbortSignal.timeout(req.timeoutMs ?? TIMEOUT_MS),
   });
   if (res.status === 203 || (res.status >= 300 && res.status < 400)) {
     return { status: 401, body: { message: "Azure DevOps rejected the credentials" }, headers: res.headers };

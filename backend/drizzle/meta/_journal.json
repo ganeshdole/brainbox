@@ -120,6 +120,13 @@
       "when": 1791949118320,
       "tag": "0016_issue_triage",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791952959227,
+      "tag": "0017_integration_credentials",
+      "breakpoints": true
     }
   ]
 }
