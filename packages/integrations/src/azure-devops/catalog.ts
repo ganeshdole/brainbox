@@ -39,6 +39,8 @@ export interface AzureDevopsCatalog {
   /** Types a person can create: disabled and hidden ones (Test Case, Code Review...) are left out. */
   workItemTypes(organization: string, project: string): Promise<AzureDevopsWorkItemType[]>;
   workItemType(organization: string, project: string, type: string): Promise<AzureDevopsWorkItemTypeInfo>;
+  /** A type's states and the category each belongs to (Proposed, InProgress...). */
+  workItemStates(organization: string, project: string, type: string): Promise<Array<{ name: string; category: string }>>;
 }
 
 const REPRO_STEPS = "Microsoft.VSTS.TCM.ReproSteps";
@@ -155,6 +157,15 @@ export function azureDevops(options: AzureDevopsCatalogOptions): AzureDevopsCata
           return [{ name, ...(color ? { color } : {}) }];
         })
         .sort((a, b) => byName(a.name, b.name));
+    },
+
+    async workItemStates(organization, project, type) {
+      const body = await get(adoUrl(base, [organization, project, "_apis/wit/workitemtypes", type, "states"]));
+      return listOf(body).flatMap((s) => {
+        const name = str(s.name);
+        const category = str(s.category);
+        return name && category ? [{ name, category }] : [];
+      });
     },
 
     async workItemType(organization, project, type) {

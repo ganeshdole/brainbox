@@ -7,4 +7,5 @@ export type * from "./issue.ts";
 export type * from "./feature.ts";
 export type * from "./billing.ts";
 export type * from "./integrations.ts";
+export type * from "./status-event.ts";
 export type * from "./sign-in.ts";

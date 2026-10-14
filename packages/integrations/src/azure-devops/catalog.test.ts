@@ -178,6 +178,19 @@ describe("azureDevops catalog", () => {
     expect(info).toEqual({ bodyField: "System.Description", hasPriority: false, required: [] });
   });
 
+  it("reads a type's states with their categories", async () => {
+    const fetch = fakeFetch({
+      status: 200,
+      body: { value: [{ name: "New", category: "Proposed", color: "b2b2b2" }, { name: "Active", category: "InProgress" }] },
+    });
+    const states = await azureDevops({ auth: { pat: "p" }, fetch }).workItemStates("acme", "p-1", "User Story");
+    expect(states).toEqual([
+      { name: "New", category: "Proposed" },
+      { name: "Active", category: "InProgress" },
+    ]);
+    expect(fetch.calls[0]!.url).toBe("https://dev.azure.com/acme/p-1/_apis/wit/workitemtypes/User%20Story/states?api-version=7.1");
+  });
+
   it("throws AzureDevopsApiError with Azure DevOps' message", async () => {
     const fetch = fakeFetch({ status: 404, body: { message: "TF200016: The project does not exist" } });
     const err = await azureDevops({ auth: { pat: "p" }, fetch })

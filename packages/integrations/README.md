@@ -202,6 +202,27 @@ The catalog helpers throw `AzureDevopsApiError` (with `status`). A rejected
 credential is reported as 401 even when Azure DevOps answers with a sign-in
 page.
 
+### Work item changes coming back
+
+A "Work item updated" service hook tells the host when someone changes a work
+item. `parseWorkItemUpdated()` reads the body: organization, work item id,
+revision, the state before and after, reason, who and when, and the comment.
+It returns null for anything else. `stateCategory()` says what a state means
+(Proposed, InProgress, Resolved, Completed, Removed), from the type's own
+states (`azureDevops().workItemStates()`) or the names every process shares.
+
+```ts
+import { parseWorkItemUpdated, stateCategory } from "@ganeshdole/brainbox-integrations";
+
+const change = parseWorkItemUpdated(await request.json());
+if (change) {
+  const category = stateCategory(change.state.new, await ado.workItemStates(org, projectId, change.type ?? "Bug"));
+}
+```
+
+Authenticating the hook (its basic auth) and deciding what a change does
+are the host's business.
+
 ### Signing in with Microsoft Entra
 
 Azure DevOps' own OAuth apps take no new registrations; Entra is the supported

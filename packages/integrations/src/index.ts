@@ -39,6 +39,12 @@ export {
 export { azureDevops, type AzureDevopsCatalog, type AzureDevopsCatalogOptions } from "./azure-devops/catalog.ts";
 export { AzureDevopsApiError, type AzureDevopsAuth } from "./azure-devops/client.ts";
 export {
+  organizationOf,
+  parseWorkItemUpdated,
+  stateCategory,
+  type WorkItemUpdatedEvent,
+} from "./azure-devops/events.ts";
+export {
   entraApp,
   pkcePair,
   EntraError,

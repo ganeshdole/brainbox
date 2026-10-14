@@ -1,3 +1,5 @@
+import type { WorkItemStateCategory } from "./status-event.ts";
+
 export type IntegrationProvider = "github" | "azure-devops";
 
 /** How Brainbox signs in to the tool: as our GitHub App, or with a personal
@@ -169,6 +171,21 @@ export interface AzureDevopsWorkItemTypeInfo {
 
 export type DeliveryStatus = "pending" | "sent" | "failed";
 
+/** The latest change the tool reported on a delivered ticket (Azure DevOps
+ *  service hooks), and how telling the host app about it went. */
+export interface WorkItemUpdate {
+  id: string;
+  state: string;
+  reason?: string;
+  category?: WorkItemStateCategory;
+  changedBy?: string;
+  changedAt: string;
+  /** HTML, as Azure DevOps stores it. */
+  comment?: string;
+  /** Absent when no status webhook is configured. */
+  notification?: { status: "sent" | "failed"; error?: string; attempts: number };
+}
+
 export interface Delivery {
   id: string;
   issueId: string;
@@ -180,4 +197,6 @@ export interface Delivery {
   attempts: number;
   createdAt: string;
   updatedAt: string;
+  /** The newest update the tool sent back about this ticket, if any. */
+  workItem?: WorkItemUpdate;
 }
