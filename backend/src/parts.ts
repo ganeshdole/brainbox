@@ -6,13 +6,16 @@ export { createApp } from "./create-app.ts";
 export type { AppDeps, AppOptions, AuthOptions, BillingOptions } from "./deps.ts";
 export type { AppEnv } from "./types.ts";
 
-// Data: the Store interface, its modules, and the two stores this repo ships.
+// Data: the Store interface, its modules, the two stores this repo ships, and
+// an in-memory one of only the core. describeStoreConformance() is in
+// "@ganeshdole/brainbox-backend/testing".
 export type * from "./store/types.ts";
 export { hasModules, modulesOf, requireModule, STORE_MODULES } from "./store/modules.ts";
 export { createPostgresStore } from "./store/postgres.ts";
 export { connectPostgres, type DB } from "./db/connect.ts";
 export { createConvexStore } from "./store/convex.ts";
 export { createConvexCaller, type ConvexCaller } from "./convex-caller.ts";
+export { createMemoryStore } from "./store/memory.ts";
 
 // Files.
 export { readStored, type Storage } from "./storage/types.ts";

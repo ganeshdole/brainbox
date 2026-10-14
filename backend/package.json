@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/parts.ts",
       "default": "./src/parts.ts"
+    },
+    "./testing": {
+      "types": "./src/testing/store-conformance.ts",
+      "default": "./src/testing/store-conformance.ts"
     }
   },
   "main": "dist/azure.js",

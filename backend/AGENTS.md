@@ -129,7 +129,13 @@ undefined` - guard it (`if (!row) return c.json(..., 4xx/5xx)`) before use.
 ## Tests
 
 Integration tests (`test/*.int.test.ts`) are the contract every store must
-pass. They run against a REAL Postgres by default: copy `.env.test.example`,
+pass. `describeStoreConformance()` (`src/testing/store-conformance.ts`,
+exported as `@ganeshdole/brainbox-backend/testing`) is the part of it a store
+of someone else's can run: straight through the `Store`, core plus each
+module the store has. Postgres and Convex run it from
+`test/store-conformance.int.test.ts`, the in-memory store
+(`store/memory.ts`, core only) from `src/store/memory.test.ts`. A new `Store`
+method gets a case there as well as in the route tests. They run against a REAL Postgres by default: copy `.env.test.example`,
 have Postgres reachable at the configured URL. `TEST_STORE=convex` runs the same
 suite against a local Convex deployment instead (`CONVEX_AGENT_MODE=anonymous
 npx convex dev` in `backend/`, plus the two `npx convex env set` lines that
