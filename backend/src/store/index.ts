@@ -19,7 +19,8 @@ export function getStore(): FullStore {
 
 /** Use `store` instead of the DATABASE_DRIVER one: how an entry plugs in a
  *  database this repo does not ship (DATABASE_DRIVER=custom). Call it before
- *  serving. `null` goes back to the configured driver. */
+ *  serving. `null` goes back to the configured driver. It takes a store with
+ *  every module, because this app serves every module's routes. */
 export function setStore(store: FullStore | null): void {
   instance = store;
 }
