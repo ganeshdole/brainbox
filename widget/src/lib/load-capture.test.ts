@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CAPTURE_GLOBAL, captureUrl, loadCapture } from "./load-capture.ts";
+import { CAPTURE_GLOBAL, captureUrl, loadCapture, siblingScriptLoader } from "./load-capture.ts";
 
 const injected = () => Array.from(document.head.querySelectorAll("script"));
 const published = window as unknown as Record<string, unknown>;
@@ -45,5 +45,36 @@ describe("loadCapture", () => {
 
     void load("https://cdn.test/widget.js").catch(() => {});
     expect(injected()).toHaveLength(2);
+  });
+});
+
+describe("siblingScriptLoader", () => {
+  it("serves both libraries from the one script beside widget.js", async () => {
+    // the embedding tag, which a fresh module reads its own URL from
+    const tag = document.createElement("script");
+    tag.dataset.project = "pk_test";
+    tag.dataset.endpoint = "https://api.test/ingest";
+    tag.src = "https://cdn.test/widget.js";
+    document.body.appendChild(tag);
+    vi.resetModules();
+    const { siblingScriptLoader: loader } = await import("./load-capture.ts");
+    tag.remove();
+    const recorder = loader.recorder();
+    const rasteriser = loader.rasteriser();
+    expect(injected()).toHaveLength(1);
+    expect(injected()[0]!.src).toBe("https://cdn.test/widget-capture.js");
+
+    const libs = { record: () => undefined, domToCanvas: () => undefined };
+    published[CAPTURE_GLOBAL] = libs;
+    injected()[0]!.dispatchEvent(new Event("load"));
+    expect((await recorder).record).toBe(libs.record);
+    expect((await rasteriser).domToCanvas).toBe(libs.domToCanvas);
+  });
+
+  it("is a CaptureLoader", () => {
+    expect(siblingScriptLoader).toEqual({
+      recorder: expect.any(Function),
+      rasteriser: expect.any(Function),
+    });
   });
 });

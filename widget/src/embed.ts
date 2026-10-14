@@ -5,6 +5,7 @@ import {
   type ReportField,
 } from "@ganeshdole/brainbox-core";
 import { readConfig, triggerAction } from "./lib/config.ts";
+import { siblingScriptLoader } from "./lib/load-capture.ts";
 import { isBrainboxEvent } from "./lib/shadow-host.ts";
 import type { StartMode } from "./lib/widget-store.ts";
 import { mount, type WidgetHandle } from "./mount.tsx";
@@ -82,6 +83,10 @@ function boot() {
     position: config.position,
     theme: config.theme,
     featureRequests: config.featureRequests,
+    // The built widget.js fetches rrweb and modern-screenshot as the sibling
+    // widget-capture.js. The dev server has no such file; core's default
+    // `import()`s work there instead.
+    loader: import.meta.env.DEV ? undefined : siblingScriptLoader,
     identity: earlyIdentity,
     fields: earlyFields,
     onSubmitted: ({ id }) =>
