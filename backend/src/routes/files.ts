@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 
 import { projectAccess } from "../lib/access.ts";
-import { getStorage } from "../storage/index.ts";
 import { mimeForKey } from "../storage/mime.ts";
 import type { AppEnv } from "../types.ts";
 
@@ -16,7 +15,7 @@ export const filesRoute = new Hono<AppEnv>().get("/*", async (c) => {
   const access = await projectAccess(c, projectId, "member");
   if (access instanceof Response) return access;
 
-  const storage = getStorage();
+  const { storage } = c.get("deps");
   if (!storage.read) return c.json({ error: "Not found" }, 404);
   let bytes: Uint8Array;
   try {

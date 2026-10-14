@@ -1,7 +1,7 @@
 import type { Adapter, AdapterAccount, AdapterUser } from "@auth/core/adapters";
 
 import { api } from "../../convex/_generated/api.js";
-import type { ConvexCaller } from "../convex-client.ts";
+import type { ConvexCaller } from "../convex-caller.ts";
 
 /**
  * Auth.js persistence on Convex (convex/auth.ts): users, OAuth account links

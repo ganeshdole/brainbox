@@ -1,10 +1,13 @@
 import { sql } from "drizzle-orm";
 
 import { api } from "../convex/_generated/api.js";
+import { createAuthConfig } from "../src/auth/config.ts";
 import { getConvex } from "../src/convex-client.ts";
 import { getDb } from "../src/db/client.ts";
 import { integrationConnections, projectDestinations, waitlistSignups, webhookEvents } from "../src/db/schema/index.ts";
+import { resolveDeps } from "../src/deps.ts";
 import { env } from "../src/env.ts";
+import { fromEnv } from "../src/from-env.ts";
 import { fromConvex } from "../src/store/convex.ts";
 import { fromPostgres } from "../src/store/postgres.ts";
 import {
@@ -13,6 +16,12 @@ import {
   type DestinationRecord,
   type WaitlistSignupRecord,
 } from "../src/store/index.ts";
+
+/** What the env-built app runs on, for tests that call into it directly. */
+export const testDeps = resolveDeps(fromEnv());
+
+/** The env-built app's Auth.js config, as one request gets it. */
+export const getAuthConfig = createAuthConfig(testDeps, testDeps.auth!);
 
 // The integration suite runs against whichever store TEST_STORE picks
 // (test/env.ts). Tests seed through helpers.ts and inspect through `stored`,

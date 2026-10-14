@@ -1,13 +1,11 @@
-import type { Context } from "hono";
 import { Hono } from "hono";
 import { z } from "zod";
 
 import { deliverIssue } from "../integrations/dispatch.ts";
-import { projectAccess } from "../lib/access.ts";
+import { issueAccess } from "../lib/access.ts";
 import { toDelivery, toIssue, toIssueEvent } from "../lib/serialize.ts";
-import { getStorage } from "../storage/index.ts";
-import type { IssueRecord } from "../store/index.ts";
 import { triageError } from "../store/issue-triage.ts";
+import { requireModule } from "../store/modules.ts";
 import type { AppEnv } from "../types.ts";
 
 const featureLink = z.object({ featureId: z.string().min(1).nullable() });
@@ -28,29 +26,18 @@ const bulkSchema = z.object({
   patch: triageSchema,
 });
 
-/**
- * The issue and its caller, when the caller may work on it; otherwise the
- * response to send. Access is the issue's project's, through its Team: every
- * member may read and triage (404 outside the Team, the same as no issue;
- * 402 when the Team's plan has lapsed). The one place issue access is decided.
- */
-async function issueAccess(
-  c: Context<AppEnv>,
-  id: string,
-): Promise<{ uid: string; issue: IssueRecord } | Response> {
-  const issue = await c.get("store").issues.get(id);
-  if (!issue) return c.json({ error: "Not found" }, 404);
-  const access = await projectAccess(c, issue.projectId, "member");
-  return access instanceof Response ? access : { uid: access.uid, issue };
-}
+/** Reading an issue: the core. Its deliveries come along when the store keeps them. */
+export const issuesRoute = new Hono<AppEnv>().get("/:id", async (c) => {
+  const access = await issueAccess(c, c.req.param("id"));
+  if (access instanceof Response) return access;
+  const { store, storage } = c.get("deps");
+  const sent = store.integrations ? await store.integrations.listDeliveries(access.issue.id) : undefined;
+  return c.json(await toIssue(access.issue, storage, sent));
+});
 
-export const issuesRoute = new Hono<AppEnv>()
-  .get("/:id", async (c) => {
-    const access = await issueAccess(c, c.req.param("id"));
-    if (access instanceof Response) return access;
-    const sent = await c.get("store").integrations.listDeliveries(access.issue.id);
-    return c.json(await toIssue(access.issue, getStorage(), sent));
-  })
+/** Triage: status, priority and close reason, one issue or many, and the
+ *  activity log. Mounted with the triage module. */
+export const triageRoute = new Hono<AppEnv>()
   .patch("/:id", async (c) => {
     const access = await issueAccess(c, c.req.param("id"));
     if (access instanceof Response) return access;
@@ -58,9 +45,10 @@ export const issuesRoute = new Hono<AppEnv>()
     if (!parsed.success) return c.json({ error: "Invalid body", issues: parsed.error.issues }, 400);
     const error = triageError(access.issue, parsed.data);
     if (error) return c.json({ error }, 400);
-    const [row] = await c.get("store").triage.apply([access.issue.id], parsed.data, access.uid);
+    const triage = requireModule(c.get("store"), "triage");
+    const [row] = await triage.apply([access.issue.id], parsed.data, access.uid);
     if (!row) return c.json({ error: "Not found" }, 404);
-    return c.json(await toIssue(row, getStorage()));
+    return c.json(await toIssue(row, c.get("deps").storage));
   })
   .patch("/", async (c) => {
     const uid = c.get("authUser").token?.sub;
@@ -77,16 +65,16 @@ export const issuesRoute = new Hono<AppEnv>()
       const error = triageError(access.issue, patch);
       if (error) return c.json({ error, id }, 400);
     }
-    const updated = await c.get("store").triage.apply(unique, patch, uid);
-    const storage = getStorage();
+    const updated = await requireModule(c.get("store"), "triage").apply(unique, patch, uid);
+    const { storage } = c.get("deps");
     return c.json(await Promise.all(updated.map((row) => toIssue(row, storage))));
   })
   .get("/:id/activity", async (c) => {
     const access = await issueAccess(c, c.req.param("id"));
     if (access instanceof Response) return access;
     const store = c.get("store");
-    const events = await store.triage.listEvents(access.issue.id);
-    const adapter = store.auth.adapter();
+    const events = await requireModule(store, "triage").listEvents(access.issue.id);
+    const adapter = requireModule(store, "auth").adapter();
     const names = new Map<string, string>();
     for (const actorId of new Set(events.map((e) => e.actorId))) {
       if (!actorId) continue;
@@ -95,33 +83,37 @@ export const issuesRoute = new Hono<AppEnv>()
       if (name) names.set(actorId, name);
     }
     return c.json(events.map((e) => toIssueEvent(e, names)));
-  })
-  // Attach a feature request to one of its project's features, or send it
-  // back to waiting with { featureId: null }.
-  .put("/:id/feature", async (c) => {
-    const parsed = featureLink.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) return c.json({ error: "Invalid body", issues: parsed.error.issues }, 400);
-    const access = await issueAccess(c, c.req.param("id"));
-    if (access instanceof Response) return access;
-    const { issue } = access;
-    const store = c.get("store");
-    if (issue.kind !== "feature") return c.json({ error: "Only a feature request joins a feature" }, 400);
-    const { featureId } = parsed.data;
-    if (featureId !== null) {
-      const feature = await store.features.get(featureId);
-      if (!feature || feature.projectId !== issue.projectId) {
-        return c.json({ error: "Feature not found" }, 404);
-      }
-    }
-    await store.features.attach(issue.id, featureId);
-    const row = await store.issues.get(issue.id);
-    if (!row) return c.json({ error: "Not found" }, 404);
-    return c.json(await toIssue(row, getStorage()));
-  })
-  .post("/:id/deliveries", async (c) => {
-    const access = await issueAccess(c, c.req.param("id"));
-    if (access instanceof Response) return access;
-    const results = await deliverIssue(c.get("store"), access.issue.id, { force: true });
-    if (results.length === 0) return c.json({ error: "No destination configured" }, 409);
-    return c.json(results.map(toDelivery));
   });
+
+/** Attach a feature request to one of its project's features, or send it
+ *  back to waiting with { featureId: null }. Mounted with the features module. */
+export const issueFeatureRoute = new Hono<AppEnv>().put("/:id/feature", async (c) => {
+  const parsed = featureLink.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: "Invalid body", issues: parsed.error.issues }, 400);
+  const access = await issueAccess(c, c.req.param("id"));
+  if (access instanceof Response) return access;
+  const { issue } = access;
+  const store = c.get("store");
+  const features = requireModule(store, "features");
+  if (issue.kind !== "feature") return c.json({ error: "Only a feature request joins a feature" }, 400);
+  const { featureId } = parsed.data;
+  if (featureId !== null) {
+    const feature = await features.get(featureId);
+    if (!feature || feature.projectId !== issue.projectId) {
+      return c.json({ error: "Feature not found" }, 404);
+    }
+  }
+  await features.attach(issue.id, featureId);
+  const row = await store.issues.get(issue.id);
+  if (!row) return c.json({ error: "Not found" }, 404);
+  return c.json(await toIssue(row, c.get("deps").storage));
+});
+
+/** Send an issue to its destinations now. Mounted with the integrations module. */
+export const issueDeliveriesRoute = new Hono<AppEnv>().post("/:id/deliveries", async (c) => {
+  const access = await issueAccess(c, c.req.param("id"));
+  if (access instanceof Response) return access;
+  const results = await deliverIssue(c.get("deps"), access.issue.id, { force: true });
+  if (results.length === 0) return c.json({ error: "No destination configured" }, 409);
+  return c.json(results.map(toDelivery));
+});

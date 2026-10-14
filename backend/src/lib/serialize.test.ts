@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { CapturedMetadata, Region } from "@ganeshdole/brainbox-shared";
 
-import type { IssueRecord, ProjectRecord } from "../store/index.ts";
-import type { Storage } from "../storage/index.ts";
+import type { IssueRecord, ProjectRecord } from "../store/types.ts";
+import type { Storage } from "../storage/types.ts";
 import { toIssue, toIssueEvent, toProject } from "./serialize.ts";
 
 const region: Region = { x: 0, y: 0, width: 10, height: 10 };

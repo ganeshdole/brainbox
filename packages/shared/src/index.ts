@@ -8,3 +8,4 @@ export type * from "./feature.ts";
 export type * from "./billing.ts";
 export type * from "./integrations.ts";
 export type * from "./sign-in.ts";
+export type * from "./backend.ts";

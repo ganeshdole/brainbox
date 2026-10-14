@@ -1,13 +1,13 @@
 import { randomInt } from "node:crypto";
 import Google from "@auth/core/providers/google";
 import type { EmailConfig } from "@auth/core/providers/email";
+import type { Context } from "hono";
+import { env as runtimeEnv } from "hono/adapter";
 
-import { getEmailer } from "../email/index.ts";
+import type { Deps, ResolvedAuth } from "../deps.ts";
 import { magicLinkEmail } from "../email/templates/magic-link.ts";
 import { signInCodeEmail } from "../email/templates/sign-in-code.ts";
-import { env } from "../env.ts";
 import { AUTH_ERROR_PATH } from "../routes/auth-error.ts";
-import { getStore } from "../store/index.ts";
 import { signInAllowed } from "./allowed.ts";
 import { CODE_LIFETIME_MS, withCodeAttemptLimit } from "./code-attempts.ts";
 
@@ -20,45 +20,6 @@ export function generateSignInCode(): string {
 // or leaked mail stops working quickly, long enough to survive a slow inbox.
 // The code attempt limit counts over the same span (code-attempts.ts).
 const MAGIC_LINK_MAX_AGE_SECONDS = CODE_LIFETIME_MS / 1000;
-
-// Magic-link sign-in, declared inline rather than via the Nodemailer provider:
-// that one hard-imports `nodemailer` and throws without an SMTP `server`, and
-// we already have an Emailer abstraction (console in dev/test, Resend in prod)
-// plus a Resend-verified domain. Auth.js treats any `type: "email"` provider
-// generically, so this needs no extra dependency.
-//
-// Requires the store's Auth.js adapter to keep verification tokens.
-//
-// AUTH_EMAIL_MODE picks what the email carries. With "code" or "both" the
-// verification token is a 6-digit code instead of Auth.js's 64-character one;
-// the dashboard sends it to the same callback a link opens, so Auth.js checks
-// both the same way. withCodeAttemptLimit caps guessing.
-const sendsCode = env.AUTH_EMAIL_MODE !== "link";
-const magicLink: EmailConfig = {
-  id: "magic-link",
-  type: "email",
-  name: "Email",
-  from: env.EMAIL_FROM,
-  maxAge: MAGIC_LINK_MAX_AGE_SECONDS,
-  options: {},
-  ...(sendsCode && { generateVerificationToken: generateSignInCode }),
-  async sendVerificationRequest({ identifier, url, token }) {
-    const minutes = MAGIC_LINK_MAX_AGE_SECONDS / 60;
-    const { subject, html, text } = !sendsCode
-      ? magicLinkEmail(url, minutes)
-      : signInCodeEmail(token, env.AUTH_EMAIL_MODE === "both" ? url : null, minutes);
-    // Throwing here surfaces to the caller as a failed sign-in, which is what
-    // we want: silently swallowing it would leave the user waiting for a mail
-    // that is never coming.
-    await getEmailer().send({
-      to: identifier,
-      subject,
-      html,
-      text,
-      ...(env.EMAIL_REPLY_TO ? { replyTo: env.EMAIL_REPLY_TO } : {}),
-    });
-  },
-};
 
 // Extra fields captured from the Google profile and persisted on `users`.
 declare module "@auth/core/types" {
@@ -74,13 +35,63 @@ declare module "@auth/core/adapters" {
   }
 }
 
-// Passed to initAuthConfig(); it invokes this per request (the Context arg is
-// unused - all config comes from `env`, since `c.env` is empty on Node).
-export function getAuthConfig() {
+// Magic-link sign-in, declared inline rather than via the Nodemailer provider:
+// that one hard-imports `nodemailer` and throws without an SMTP `server`, and
+// we already have an Emailer abstraction (console in dev/test, Resend in prod)
+// plus a Resend-verified domain. Auth.js treats any `type: "email"` provider
+// generically, so this needs no extra dependency.
+//
+// Requires the store's Auth.js adapter to keep verification tokens.
+//
+// `emailMode` (AUTH_EMAIL_MODE) picks what the email carries. With "code" or
+// "both" the verification token is a 6-digit code instead of Auth.js's
+// 64-character one; the dashboard sends it to the same callback a link opens,
+// so Auth.js checks both the same way. withCodeAttemptLimit caps guessing.
+function magicLink(deps: Deps, auth: ResolvedAuth): EmailConfig {
+  const sendsCode = auth.emailMode !== "link";
+  const { replyTo } = deps.options;
   return {
-    secret: env.AUTH_SECRET,
+    id: "magic-link",
+    type: "email",
+    name: "Email",
+    maxAge: MAGIC_LINK_MAX_AGE_SECONDS,
+    options: {},
+    ...(sendsCode && { generateVerificationToken: generateSignInCode }),
+    async sendVerificationRequest({ identifier, url, token }) {
+      const minutes = MAGIC_LINK_MAX_AGE_SECONDS / 60;
+      const { subject, html, text } = !sendsCode
+        ? magicLinkEmail(url, minutes)
+        : signInCodeEmail(token, auth.emailMode === "both" ? url : null, minutes);
+      // Throwing here surfaces to the caller as a failed sign-in, which is what
+      // we want: silently swallowing it would leave the user waiting for a mail
+      // that is never coming.
+      await deps.emailer.send({
+        to: identifier,
+        subject,
+        html,
+        text,
+        ...(replyTo ? { replyTo } : {}),
+      });
+    },
+  };
+}
+
+/**
+ * The Auth.js config for an app, as initAuthConfig() wants it: built per
+ * request. Auth.js reads AUTH_URL from the runtime's environment itself and
+ * takes its base path from it; without one, it is mounted at /api/auth.
+ */
+export function createAuthConfig(deps: Deps, auth: ResolvedAuth) {
+  return (c?: Context) => authConfig(deps, auth, c && !runtimeEnv(c).AUTH_URL ? "/api/auth" : undefined);
+}
+
+function authConfig(deps: Deps, auth: ResolvedAuth, basePath: string | undefined) {
+  const { dashboardOrigin } = deps.options;
+  return {
+    secret: deps.options.secret,
+    ...(basePath && { basePath }),
     trustHost: true,
-    adapter: withCodeAttemptLimit(getStore().auth.adapter(), getStore().auth, env.AUTH_EMAIL_MODE),
+    adapter: withCodeAttemptLimit(auth.store.adapter(), auth.store, auth.emailMode),
 
     // Auth.js otherwise renders its own unbranded pages on the API origin, so a
     // failed sign-in dropped the user on app.brainbox.sh/api/auth/error with a
@@ -96,15 +107,15 @@ export function getAuthConfig() {
     // verifyRequest arrives with `?provider=<id>&type=email`, which is what the
     // login page keys its "check your inbox" state off.
     pages: {
-      signIn: `${env.DASHBOARD_ORIGIN}/login`,
+      signIn: `${dashboardOrigin}/login`,
       error: AUTH_ERROR_PATH,
-      verifyRequest: `${env.DASHBOARD_ORIGIN}/login`,
+      verifyRequest: `${dashboardOrigin}/login`,
     },
 
     providers: [
       Google({
-        clientId: env.GOOGLE_ID,
-        clientSecret: env.GOOGLE_SECRET,
+        clientId: auth.google?.clientId ?? "",
+        clientSecret: auth.google?.clientSecret ?? "",
         authorization: {
           params: {
             // Without this Google silently reuses whichever account is already
@@ -133,15 +144,15 @@ export function getAuthConfig() {
           };
         },
       }),
-      magicLink,
+      magicLink(deps, auth),
     ],
 
     callbacks: {
-      // AUTH_ALLOWED_EMAIL_DOMAINS. For email sign-in this runs before the
+      // allowedEmailDomains (AUTH_ALLOWED_EMAIL_DOMAINS). For email sign-in this runs before the
       // email is sent, so a refused address gets no mail. A refusal lands on
       // the login page as ?error=AccessDenied.
       async signIn({ user }: { user: { email?: string | null } }) {
-        return signInAllowed(getStore(), user.email, env.AUTH_ALLOWED_EMAIL_DOMAINS);
+        return signInAllowed(auth.store, deps.store.teams, user.email, auth.allowedEmailDomains);
       },
 
       // Auth.js's default drops any callbackUrl whose origin differs from the
@@ -155,11 +166,11 @@ export function getAuthConfig() {
         try {
           const target = new URL(url);
           if (target.origin === baseUrl) return url;
-          if (target.origin === new URL(env.DASHBOARD_ORIGIN).origin) return url;
+          if (target.origin === new URL(dashboardOrigin).origin) return url;
         } catch {
           // Not a parseable URL - fall through to the safe default.
         }
-        return env.DASHBOARD_ORIGIN;
+        return dashboardOrigin;
       },
     },
 

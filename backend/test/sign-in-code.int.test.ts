@@ -4,10 +4,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "../src/app.ts";
 import { CODE_LIFETIME_MS, MAX_CODE_ATTEMPTS, withCodeAttemptLimit } from "../src/auth/code-attempts.ts";
-import { generateSignInCode, getAuthConfig } from "../src/auth/config.ts";
+import { generateSignInCode } from "../src/auth/config.ts";
 import { signInCodeEmail } from "../src/email/templates/sign-in-code.ts";
 import { env } from "../src/env.ts";
 import { getStore } from "../src/store/index.ts";
+import { getAuthConfig } from "./harness.ts";
 
 // The suite runs with AUTH_EMAIL_MODE=both (test/env.ts). Codes are issued
 // here the way Auth.js issues them: through the configured adapter, hashed

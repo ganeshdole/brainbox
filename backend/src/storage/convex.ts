@@ -1,7 +1,7 @@
 import { api } from "../../convex/_generated/api.js";
 import type { Id } from "../../convex/_generated/dataModel.js";
-import type { ConvexCaller } from "../convex-client.ts";
-import type { Storage } from "./index.ts";
+import type { ConvexCaller } from "../convex-caller.ts";
+import type { Storage } from "./types.ts";
 
 /**
  * Convex file storage (convex/files.ts), under the same "<project>/<issue>/<file>"

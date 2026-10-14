@@ -9,8 +9,9 @@ export interface EmailMessage {
   replyTo?: string;
 }
 
-// Swappable transport, chosen by env (mirrors the Storage interface). `id` is
-// the provider's message id when available (null for the console driver).
+// Swappable transport (mirrors the Storage interface). `id` is the provider's
+// message id, and null when nothing was actually sent, as with the console
+// driver: the dashboard then offers an invite's link to pass on by hand.
 export interface Emailer {
   send(msg: EmailMessage): Promise<{ id: string | null }>;
 }

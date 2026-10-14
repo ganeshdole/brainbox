@@ -1,7 +1,7 @@
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { and, asc, count, desc, eq, gt, inArray, sql } from "drizzle-orm";
 
-import type { DB } from "../db/client.ts";
+import type { DB } from "../db/connect.ts";
 import {
   accounts,
   deliveries,

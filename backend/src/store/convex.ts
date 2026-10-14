@@ -1,7 +1,7 @@
 import type { ProjectKey } from "@ganeshdole/brainbox-shared";
 
 import { api } from "../../convex/_generated/api.js";
-import type { ConvexCaller } from "../convex-client.ts";
+import type { ConvexCaller } from "../convex-caller.ts";
 import { createConvexAuthAdapter } from "./convex-auth.ts";
 import { asSealedCredentials } from "./credentials.ts";
 import type {

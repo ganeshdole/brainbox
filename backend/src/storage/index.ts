@@ -2,42 +2,27 @@ import { getConvex } from "../convex-client.ts";
 import { env } from "../env.ts";
 import { ConvexStorage } from "./convex.ts";
 import { LocalStorage } from "./local.ts";
-import { r2FromEnv, s3FromEnv } from "./s3.ts";
+import { S3Storage } from "./s3.ts";
+import type { Storage } from "./types.ts";
 
 export type StorageDriver = typeof env.STORAGE_DRIVER;
 export { S3Storage, type S3Options } from "./s3.ts";
-
-// Object storage for screenshots/audio.
-export interface Storage {
-  put(key: string, body: Uint8Array, contentType: string): Promise<void>;
-  // A URL the dashboard can use to fetch the object. S3/R2 → a short-lived
-  // presigned URL; Convex → its file URL; local → a cookie-gated /api/files route.
-  presignGet(key: string): Promise<string>;
-  // The stored bytes. Only for a driver whose presignGet points back at this
-  // API (local): the file routes stream from read() when it exists, and
-  // redirect to presignGet when it does not.
-  read?(key: string): Promise<Uint8Array>;
-}
-
-/** A stored file's bytes from any driver: read() where there is one, else its
- *  presigned URL. For handing a file to a tracker that keeps its own copy. */
-export async function readStored(storage: Storage, key: string): Promise<Uint8Array> {
-  if (storage.read) return storage.read(key);
-  const res = await fetch(await storage.presignGet(key));
-  if (!res.ok) throw new Error(`reading ${key} from storage failed: ${res.status}`);
-  return new Uint8Array(await res.arrayBuffer());
-}
+export { readStored, type Storage } from "./types.ts";
 
 let instance: Storage | null = null;
 
+/** The deployment's file storage (STORAGE_DRIVER), created on first use.
+ *  Only the env-built app (`fromEnv()`) uses it; `createApp` takes its own. */
 export function getStorage(): Storage {
   instance ??= createStorage(env.STORAGE_DRIVER);
   return instance;
 }
 
-/** Use `storage` instead of the STORAGE_DRIVER one: how an entry plugs in a
- *  store this repo does not ship (STORAGE_DRIVER=custom). Call it before
- *  serving. `null` goes back to the configured driver. */
+/**
+ * Use `storage` instead of the STORAGE_DRIVER one in the env-built app
+ * (STORAGE_DRIVER=custom). `null` goes back to the configured driver.
+ * @deprecated Pass `storage` to `createApp()` instead.
+ */
 export function setStorage(storage: Storage | null): void {
   instance = storage;
 }
@@ -51,8 +36,33 @@ function createStorage(driver: StorageDriver): Storage {
     case "convex":
       return new ConvexStorage(getConvex());
     case "local":
-      return new LocalStorage();
+      return new LocalStorage({ publicUrl: env.PUBLIC_API_URL });
     case "custom":
       throw new Error("STORAGE_DRIVER=custom, but no storage was given to setStorage()");
   }
+}
+
+/** STORAGE_DRIVER=s3: the S3_* settings. */
+function s3FromEnv(): S3Storage {
+  return new S3Storage({
+    bucket: env.S3_BUCKET,
+    region: env.S3_REGION,
+    ...(env.S3_ENDPOINT && { endpoint: env.S3_ENDPOINT }),
+    ...(env.S3_ACCESS_KEY_ID && {
+      credentials: { accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY },
+    }),
+    forcePathStyle: env.S3_FORCE_PATH_STYLE,
+  });
+}
+
+/** STORAGE_DRIVER=r2: Cloudflare R2, which is S3 with a fixed shape. */
+function r2FromEnv(): S3Storage {
+  return new S3Storage({
+    bucket: env.R2_BUCKET,
+    region: "auto",
+    endpoint: env.R2_ENDPOINT,
+    credentials: { accessKeyId: env.R2_ACCESS_KEY_ID, secretAccessKey: env.R2_SECRET_ACCESS_KEY },
+    forcePathStyle: true,
+    checksumsWhenRequired: true,
+  });
 }

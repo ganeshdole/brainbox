@@ -13,7 +13,7 @@ import type { AppEnv } from "../types.ts";
  * "you cannot do this" from "you have not subscribed yet" and only the latter
  * should redirect to the plan picker.
  *
- * Deliberately NOT applied to:
+ * Mounted only on a deployment with billing. Deliberately NOT applied to:
  *   - /api/billing/*  an unsubscribed Account must be able to reach checkout
  *   - /api/me         the dashboard needs an identity to render the shell
  *   - /ingest         a lapsed Account's users should never have feedback
@@ -25,11 +25,13 @@ export const requireSubscription = createMiddleware<AppEnv>(async (c, next) => {
   const uid = token?.sub;
   if (!uid) return c.json({ error: "Unauthorized" }, 401);
 
-  const store = c.get("store");
-  const state = await billingStateFor(store, uid, token?.email);
+  const deps = c.get("deps");
+  const { billing } = deps;
+  if (!billing) return next();
+  const state = await billingStateFor(billing, uid, token?.email);
   if (state.hasAccess) return next();
-  for (const team of await store.teams.listForUser(uid)) {
-    if (await teamHasAccess(store, team.id)) return next();
+  for (const team of (await deps.store.teams?.listForUser(uid)) ?? []) {
+    if (await teamHasAccess(deps, team.id)) return next();
   }
   return c.json({ error: "Subscription required", code: "subscription_required" }, 402);
 });

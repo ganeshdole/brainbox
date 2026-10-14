@@ -1,17 +1,30 @@
 # backend - AGENTS.md
 
-The API (`@ganeshdole/brainbox-backend`): Hono over a `Store`. Postgres (Drizzle)
-and Convex are the stores, picked by `DATABASE_DRIVER`. Root rules in
-`/AGENTS.md` apply; this covers what's specific here.
+The API (`@ganeshdole/brainbox-backend`): Hono over a `Store`, built by
+`createApp(deps)`. Postgres (Drizzle) and Convex are the stores, picked by
+`DATABASE_DRIVER`. Root rules in `/AGENTS.md` apply; this covers what's
+specific here.
 
 ## Structure
 
-- Routes live in `src/routes/*` and are mounted in `src/app.ts`. Add a route by
-  exporting a Hono sub-app and wiring it in `app.ts`, minding the auth boundary
-  below.
+- `createApp(deps)` (`src/create-app.ts`) builds the whole app from what it is
+  given (`AppDeps` in `src/deps.ts`): store, storage, emailer, transcriber,
+  integrations, auth, billing and settings. Nothing on that path reads the
+  environment or a process-wide singleton (ADR 0010); ESLint refuses an
+  import of `env.ts` or a `get*()` module there. `fromEnv()`
+  (`src/from-env.ts`) is the one place that turns `src/env.ts` into deps, and
+  `src/app.ts` is `createApp(fromEnv())`. `src/parts.ts` is what the package
+  exports to a backend built from parts.
+- Inside a handler, `c.get("deps")` has everything the app was built with
+  (defaults filled in: `Deps`), and `c.get("store")` is `deps.store`. Pass
+  `deps` to helpers rather than having them reach for settings.
+- Routes live in `src/routes/*` and are mounted in `create-app.ts`. Add a route
+  by exporting a Hono sub-app and wiring it there, minding the auth boundary
+  below. A route that needs an optional store module is mounted only when the
+  store has it, and gets the module with `requireModule(store, "teams")`.
 - All persistence goes through the `Store` interface in `src/store/types.ts`.
-  Inside a handler use `c.get("store")` (injected by `middleware/store.ts`);
-  outside a request, `getStore()`. Never import the Drizzle client or schema
+  Inside a handler use `c.get("store")`; outside a request, take the store
+  you were given. Never import the Drizzle client or schema
   outside `src/store/postgres.ts` and `src/db/`: another store has to be able to
   replace it. A new query is a new `Store` method, implemented by every store.
 - `Store` is a required core (`projects`, `issues`: what ingest and reading
@@ -19,7 +32,10 @@ and Convex are the stores, picked by `DATABASE_DRIVER`. Root rules in
   `triage`, `features`, `integrations`, `billing`, `waitlist`. Postgres and
   Convex implement all of them (`FullStore`). A method goes in the module
   whose feature needs it, not in the core, unless ingest or reading an issue
-  can't work without it.
+  can't work without it. Code that can run without a module checks for it
+  (`store.integrations?.…`); without `teams`, everyone signed in owns one
+  implicit Team (`EVERYONE_TEAM` in `lib/access.ts`). `GET /api/me` lists the
+  modules the dashboard should show.
 - Rules that every store must apply identically live as plain functions beside
   the stores (e.g. `store/subscription-write.ts`), not inside one store.
 - The Postgres schema is in `src/db/schema/`. The Convex store is
@@ -35,17 +51,20 @@ and Convex are the stores, picked by `DATABASE_DRIVER`. Root rules in
   of `S3Storage`, so an S3-compatible store needs settings, not a driver. Ask
   the interface, never the class: routes check `storage.read`, not
   `instanceof LocalStorage`.
-- `setStore()`, `setStorage()` and `setEmailer()` let an entry pass in its own
-  implementation (`DATABASE_DRIVER=custom` / `STORAGE_DRIVER=custom`). Resolve
-  them per use through `getStore()` / `getStorage()` / `getEmailer()`, never at
-  import, or an injected one is missed. Tests use them to swap in fakes and
-  pass `null` afterwards to go back.
+- Transcription is a `Transcriber` (`src/transcription/`); Groq and OpenAI
+  are factories over the AI SDK. No transcriber, no transcripts.
+- `setStore()`, `setStorage()` and `setEmailer()` are deprecated: they still
+  swap what the env-built app uses (`fromEnv()` resolves them per use), but
+  new code passes its parts to `createApp`. Tests that need different parts
+  build their own app: `createApp({ ...fromEnv(), transcriber: fake })`.
 - Env is read once through `src/env.ts`. Add new vars there with an explicit
-  required/optional decision, not ad-hoc `process.env` reads elsewhere.
+  required/optional decision, map them to a setting in `from-env.ts`, and keep
+  `docs/self-hosting.md` in step. No ad-hoc `process.env` reads elsewhere.
 
 ## Runtimes
 
-`src/app.ts` is a web-standard Hono app; each host gets a thin entry around it.
+`createApp` returns a web-standard Hono app; each host gets a thin entry around
+the env-built one in `src/app.ts`.
 
 - `src/index.ts` - the Node server (`pnpm start`, the Docker image).
 - `src/azure.ts` - Azure Functions. `package.json` `"main"` points at its build
@@ -69,12 +88,13 @@ transcription. A change to what the widget sends goes in `packages/server`
 
 ## Integrations
 
-`src/integrations/registry.ts` turns a stored destination into a `Destination`
-from `@ganeshdole/brainbox-integrations`; `dispatch.ts` (`deliverIssue`) sends an issue and
-writes its `deliveries` row. A change to what a ticket says, or a new tracker,
-goes in `packages/integrations`; which project sends where, and when, is here.
-The GitHub App env (`GITHUB_APP_*`) is optional; `integrationsConfigured()`
-gates the routes with a 503. Tests stub `fetch` with `test/github-fake.ts`, and
+`src/integrations/registry.ts` builds each app's `Integrations`
+(`deps.integrations`) from its settings, which turns a stored destination into
+a `Destination` from `@ganeshdole/brainbox-integrations`; `dispatch.ts`
+(`deliverIssue`) sends an issue and writes its `deliveries` row. A change to
+what a ticket says, or a new tracker, goes in `packages/integrations`; which
+project sends where, and when, is here. Each tracker's settings are optional;
+`deps.integrations.configured()` gates the routes with a 503. Tests stub `fetch` with `test/github-fake.ts`, and
 `test/env.ts` generates a throwaway app key per run.
 
 Azure DevOps connections store a token, which `integrations/azure-devops.ts`
@@ -87,9 +107,10 @@ fake to run against by hand and in `e2e/`.
 
 ## Auth boundary
 
-`app.ts` gates routes in order: `/health`, `/ingest`, `/f` (signed public file
-links for external tickets) and `/webhooks` are public; everything
-under `/api/*` (except `/api/auth/*`) requires a valid Auth.js session. `/ingest`
+`create-app.ts` gates routes in order: `/health`, `/ingest`, `/f` (signed
+public file links for external tickets), `/waitlist` and `/webhooks` are
+public; everything under `/api/*` (except `/api/auth/*`) requires a valid
+Auth.js session, and exists only on an app built with `auth`. `/ingest`
 is the widget's public endpoint - it authenticates by project key + origin
 allowlist, never a session. Put new authenticated endpoints after the
 `verifyAuth()` line; keep public ones before it.

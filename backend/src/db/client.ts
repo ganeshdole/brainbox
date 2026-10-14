@@ -1,14 +1,7 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-
 import { env } from "../env.ts";
-import * as schema from "./schema/index.ts";
+import { connectPostgres, type DB } from "./connect.ts";
 
-function connect() {
-  return drizzle(postgres(env.DATABASE_URL), { schema });
-}
-
-export type DB = ReturnType<typeof connect>;
+export type { DB } from "./connect.ts";
 
 let instance: DB | null = null;
 
@@ -16,6 +9,6 @@ let instance: DB | null = null;
  *  process, so a deployment on another store never needs DATABASE_URL. */
 export function getDb(): DB {
   if (!env.DATABASE_URL) throw new Error("DATABASE_URL is not set");
-  instance ??= connect();
+  instance ??= connectPostgres(env.DATABASE_URL);
   return instance;
 }

@@ -3,7 +3,6 @@ import type { IntegrationRepo } from "@ganeshdole/brainbox-shared";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 
-import { env } from "../env.ts";
 import {
   authFor,
   catalogFor,
@@ -12,10 +11,10 @@ import {
   patExternalId,
   sealToken,
 } from "../integrations/azure-devops.ts";
-import { getGithubApp, integrationsConfigured } from "../integrations/registry.ts";
 import { projectAccess, teamAccess } from "../lib/access.ts";
 import { toConnection } from "../lib/serialize.ts";
 import { sign, verify } from "../lib/signed.ts";
+import { requireModule } from "../store/modules.ts";
 import type { AppEnv } from "../types.ts";
 
 const STATE_TTL_MS = 15 * 60 * 1000;
@@ -40,17 +39,19 @@ const ADO_REJECTED = "Azure DevOps rejected the token. Connect Azure DevOps agai
 async function azureDevopsConnection(
   c: Context<AppEnv>,
 ): Promise<{ catalog: AzureDevopsCatalog; organization: string; markRejected: () => Promise<void> } | Response> {
-  const store = c.get("store");
-  const conn = await store.integrations.getConnection(c.req.param("id") ?? "");
+  const deps = c.get("deps");
+  const integrations = requireModule(deps.store, "integrations");
+  const conn = await integrations.getConnection(c.req.param("id") ?? "");
   if (!conn || conn.provider !== "azure-devops") return c.json({ error: "Not found" }, 404);
   const access = await teamAccess(c, conn.teamId, "admin");
   if (access instanceof Response) return access;
-  if (!integrationsConfigured("azure-devops")) return c.json({ error: ADO_UNAVAILABLE }, 503);
+  const ado = deps.integrations.azureDevops;
+  if (!ado) return c.json({ error: ADO_UNAVAILABLE }, 503);
   if (conn.status === "needs_reauth") return c.json({ error: ADO_REJECTED, code: "needs_reauth" }, 409);
   return {
-    catalog: catalogFor(await authFor(conn)),
+    catalog: catalogFor(ado, await authFor(ado, conn)),
     organization: organizationOf(conn),
-    markRejected: () => store.integrations.setConnectionStatus(conn.id, "needs_reauth"),
+    markRejected: () => integrations.setConnectionStatus(conn.id, "needs_reauth"),
   };
 }
 
@@ -82,8 +83,8 @@ const stateSchema = z.object({
   exp: z.number(),
 });
 
-function readState(token: string | undefined): z.infer<typeof stateSchema> | null {
-  const raw = token ? verify(token) : null;
+function readState(token: string | undefined, secret: string): z.infer<typeof stateSchema> | null {
+  const raw = token ? verify(token, secret) : null;
   if (!raw) return null;
   try {
     const parsed = stateSchema.safeParse(JSON.parse(raw));
@@ -93,6 +94,8 @@ function readState(token: string | undefined): z.infer<typeof stateSchema> | nul
   }
 }
 
+// Connections to trackers, and what each offers. Mounted with the
+// integrations module.
 export const integrationsRoute = new Hono<AppEnv>()
   // A Team's connections: ?teamId= names the Team.
   .get("/", async (c) => {
@@ -100,15 +103,17 @@ export const integrationsRoute = new Hono<AppEnv>()
     if (!teamId) return c.json({ error: "teamId is required" }, 400);
     const access = await teamAccess(c, teamId, "member");
     if (access instanceof Response) return access;
-    const rows = await c.get("store").integrations.listConnections(access.team.id);
+    const { integrations } = c.get("deps");
+    const rows = await requireModule(c.get("store"), "integrations").listConnections(access.team.id);
     return c.json({
-      github: { available: integrationsConfigured("github") },
-      azureDevops: { available: integrationsConfigured("azure-devops") },
+      github: { available: integrations.configured("github") },
+      azureDevops: { available: integrations.configured("azure-devops") },
       connections: rows.map(toConnection),
     });
   })
   .post("/github/install", async (c) => {
-    if (!integrationsConfigured("github")) {
+    const { integrations, options } = c.get("deps");
+    if (!integrations.github) {
       return c.json({ error: "GitHub is not configured on this deployment" }, 503);
     }
     const parsed = installSchema.safeParse(await c.req.json().catch(() => null));
@@ -124,8 +129,9 @@ export const integrationsRoute = new Hono<AppEnv>()
         projectId: access.project.id,
         exp: Date.now() + STATE_TTL_MS,
       }),
+      options.secret,
     );
-    const url = new URL(`https://github.com/apps/${env.GITHUB_APP_SLUG}/installations/new`);
+    const url = new URL(`https://github.com/apps/${integrations.github.slug}/installations/new`);
     url.searchParams.set("state", state);
     return c.json({ url: url.toString() });
   })
@@ -134,11 +140,12 @@ export const integrationsRoute = new Hono<AppEnv>()
   .get("/github/callback", async (c) => {
     const uid = c.get("authUser").token?.sub;
     if (!uid) return c.json({ error: "Unauthorized" }, 401);
-    const state = readState(c.req.query("state"));
+    const deps = c.get("deps");
+    const state = readState(c.req.query("state"), deps.options.secret);
     if (!state || state.uid !== uid) return c.json({ error: "Invalid state" }, 400);
 
     const back = (result: "connected" | "error") =>
-      c.redirect(`${env.DASHBOARD_ORIGIN}/projects/${state.projectId}/settings?github=${result}`, 302);
+      c.redirect(`${deps.options.dashboardOrigin}/projects/${state.projectId}/settings?github=${result}`, 302);
 
     const installationId = c.req.query("installation_id") ?? "";
     const code = c.req.query("code");
@@ -147,13 +154,13 @@ export const integrationsRoute = new Hono<AppEnv>()
     if ((await teamAccess(c, state.teamId, "admin")) instanceof Response) return back("error");
 
     try {
-      const github = getGithubApp();
+      const github = deps.integrations.githubApp();
       const userToken = await github.userToken(code);
       const mine = (await github.userInstallations(userToken)).find(
         (i) => String(i.id) === installationId,
       );
       if (!mine) return back("error");
-      await c.get("store").integrations.saveConnection({
+      await requireModule(deps.store, "integrations").saveConnection({
         teamId: state.teamId,
         provider: "github",
         externalId: installationId,
@@ -170,7 +177,9 @@ export const integrationsRoute = new Hono<AppEnv>()
   // Connect (or reconnect) an organization with a personal access token. The
   // token is tried first: listing projects needs "Project and Team (Read)".
   .post("/azure-devops/pat", async (c) => {
-    if (!integrationsConfigured("azure-devops")) return c.json({ error: ADO_UNAVAILABLE }, 503);
+    const deps = c.get("deps");
+    const ado = deps.integrations.azureDevops;
+    if (!ado) return c.json({ error: ADO_UNAVAILABLE }, 503);
     const parsed = patSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {
       return c.json({ error: "Invalid body", issues: parsed.error.issues }, 400);
@@ -183,7 +192,7 @@ export const integrationsRoute = new Hono<AppEnv>()
     }
     const token = parsed.data.token;
     try {
-      await catalogFor({ pat: token }).projects(organization);
+      await catalogFor(ado, { pat: token }).projects(organization);
     } catch (err) {
       if (!(err instanceof AzureDevopsApiError)) throw err;
       const error =
@@ -195,11 +204,11 @@ export const integrationsRoute = new Hono<AppEnv>()
       return c.json({ error }, err.status === 401 || err.status === 404 ? 400 : 502);
     }
     const identity = { teamId: access.team.id, provider: "azure-devops" as const, externalId: patExternalId(organization) };
-    const row = await c.get("store").integrations.saveConnection({
+    const row = await requireModule(deps.store, "integrations").saveConnection({
       ...identity,
       label: organization,
       auth: "pat",
-      credentials: await sealToken(identity, token),
+      credentials: await sealToken(ado, identity, token),
     });
     return c.json(toConnection(row), 201);
   })
@@ -227,16 +236,17 @@ export const integrationsRoute = new Hono<AppEnv>()
     return lookup(c, (catalog, org) => catalog.workItemType(org, project, type));
   })
   .get("/connections/:id/repos", async (c) => {
-    const conn = await c.get("store").integrations.getConnection(c.req.param("id"));
+    const { integrations } = c.get("deps");
+    const conn = await requireModule(c.get("store"), "integrations").getConnection(c.req.param("id"));
     if (!conn) return c.json({ error: "Not found" }, 404);
     const access = await teamAccess(c, conn.teamId, "admin");
     if (access instanceof Response) return access;
     if (conn.provider !== "github") return c.json({ error: "Not found" }, 404);
-    if (!integrationsConfigured(conn.provider)) {
+    if (!integrations.configured(conn.provider)) {
       return c.json({ error: "GitHub is not configured on this deployment" }, 503);
     }
     try {
-      const repos = await getGithubApp().installationRepos(conn.externalId);
+      const repos = await integrations.githubApp().installationRepos(conn.externalId);
       return c.json(
         repos.map(
           (r): IntegrationRepo => ({ owner: r.owner, name: r.name, fullName: r.fullName, private: r.private }),
@@ -249,11 +259,11 @@ export const integrationsRoute = new Hono<AppEnv>()
     }
   })
   .delete("/connections/:id", async (c) => {
-    const store = c.get("store");
-    const conn = await store.integrations.getConnection(c.req.param("id"));
+    const integrations = requireModule(c.get("store"), "integrations");
+    const conn = await integrations.getConnection(c.req.param("id"));
     if (!conn) return c.json({ error: "Not found" }, 404);
     const access = await teamAccess(c, conn.teamId, "admin");
     if (access instanceof Response) return access;
-    await store.integrations.deleteConnection(conn.id);
+    await integrations.deleteConnection(conn.id);
     return c.json({ ok: true });
   });

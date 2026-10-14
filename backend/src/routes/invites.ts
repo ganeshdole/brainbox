@@ -3,7 +3,8 @@ import type { Context } from "hono";
 import { Hono } from "hono";
 
 import { normalizeEmail } from "../lib/teams.ts";
-import type { TeamInviteRecord } from "../store/index.ts";
+import { requireModule } from "../store/modules.ts";
+import type { TeamInviteRecord } from "../store/types.ts";
 import type { AppEnv } from "../types.ts";
 
 // The invited person's side. Session-only, outside the paywall: someone
@@ -22,10 +23,10 @@ function callerEmail(c: Context<AppEnv>): string | null {
 }
 
 async function received(c: Context<AppEnv>, invite: TeamInviteRecord): Promise<ReceivedInvite | null> {
-  const store = c.get("store");
-  const team = await store.teams.get(invite.teamId);
+  const { teams, auth } = modules(c);
+  const team = await teams.get(invite.teamId);
   if (!team) return null;
-  const inviter = invite.invitedBy ? await store.auth.adapter().getUser?.(invite.invitedBy) : null;
+  const inviter = invite.invitedBy ? await auth.adapter().getUser?.(invite.invitedBy) : null;
   return {
     id: invite.id,
     teamId: team.id,
@@ -37,6 +38,12 @@ async function received(c: Context<AppEnv>, invite: TeamInviteRecord): Promise<R
   };
 }
 
+/** The teams and auth modules: this route is mounted only with both. */
+function modules(c: Context<AppEnv>) {
+  const store = c.get("store");
+  return { teams: requireModule(store, "teams"), auth: requireModule(store, "auth") };
+}
+
 export const invitesRoute = new Hono<AppEnv>()
   // Open invites sent to the caller's address, for the dashboard to offer
   // even to someone who signed in without the link.
@@ -44,12 +51,12 @@ export const invitesRoute = new Hono<AppEnv>()
     const email = callerEmail(c);
     if (!email) return c.json([]);
     const now = new Date();
-    const open = (await c.get("store").teams.invitesForEmail(email)).filter((i) => i.expiresAt > now);
+    const open = (await modules(c).teams.invitesForEmail(email)).filter((i) => i.expiresAt > now);
     const list = await Promise.all(open.map((i) => received(c, i)));
     return c.json(list.filter((i) => i !== null));
   })
   .get("/:id", async (c) => {
-    const invite = await c.get("store").teams.getInvite(c.req.param("id"));
+    const invite = await modules(c).teams.getInvite(c.req.param("id"));
     if (!invite) return c.json({ error: "This invite was used, revoked or replaced" }, 404);
     if (invite.email !== callerEmail(c)) {
       return c.json({ error: "This invite is for another address", code: "wrong_account", email: invite.email }, 403);
@@ -61,13 +68,13 @@ export const invitesRoute = new Hono<AppEnv>()
   .post("/:id/accept", async (c) => {
     const uid = c.get("authUser").token?.sub;
     if (!uid) return c.json({ error: "Unauthorized" }, 401);
-    const store = c.get("store");
-    const invite = await store.teams.getInvite(c.req.param("id"));
+    const { teams } = modules(c);
+    const invite = await teams.getInvite(c.req.param("id"));
     if (!invite) return c.json({ error: "This invite was used, revoked or replaced" }, 404);
     if (invite.email !== callerEmail(c)) {
       return c.json({ error: "This invite is for another address", code: "wrong_account", email: invite.email }, 403);
     }
-    const result = await store.teams.acceptInvite(invite.id, uid, new Date());
+    const result = await teams.acceptInvite(invite.id, uid, new Date());
     if (result.status === "not_found") return c.json({ error: "This invite was used, revoked or replaced" }, 404);
     if (result.status === "expired") return c.json({ error: "This invite has expired. Ask for a new one." }, 410);
     return c.json({ teamId: result.teamId });

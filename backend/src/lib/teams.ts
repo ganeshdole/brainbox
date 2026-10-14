@@ -1,7 +1,5 @@
 import type { TeamRole } from "@ganeshdole/brainbox-shared";
 
-import { env } from "../env.ts";
-
 /** How long an invite can be accepted for. */
 export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -35,8 +33,8 @@ export function defaultTeamName(name: string | null | undefined, email: string |
 }
 
 /** The dashboard page that accepts an invite. */
-export function inviteUrl(inviteId: string): string {
-  return `${env.DASHBOARD_ORIGIN}/invite/${inviteId}`;
+export function inviteUrl(dashboardOrigin: string, inviteId: string): string {
+  return `${dashboardOrigin}/invite/${inviteId}`;
 }
 
 /** Addresses compare the way Auth.js stores them. */

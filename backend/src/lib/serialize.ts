@@ -14,7 +14,7 @@ import type {
   TeamRole,
 } from "@ganeshdole/brainbox-shared";
 
-import type { Storage } from "../storage/index.ts";
+import type { Storage } from "../storage/types.ts";
 import { mimeForKey } from "../storage/mime.ts";
 import type {
   ConnectionRecord as ConnectionRow,
@@ -27,7 +27,7 @@ import type {
   TeamInviteRecord as TeamInviteRow,
   TeamMemberProfile,
   TeamRecord as TeamRow,
-} from "../store/index.ts";
+} from "../store/types.ts";
 import { inviteUrl } from "./teams.ts";
 
 /** Map a DB issue row → the shared Issue, minting file URLs via storage. */
@@ -141,12 +141,12 @@ export function toTeamMember(row: TeamMemberProfile): TeamMember {
   };
 }
 
-export function toTeamInvite(row: TeamInviteRow): TeamInvite {
+export function toTeamInvite(row: TeamInviteRow, dashboardOrigin: string): TeamInvite {
   return {
     id: row.id,
     email: row.email,
     role: row.role,
-    url: inviteUrl(row.id),
+    url: inviteUrl(dashboardOrigin, row.id),
     expiresAt: row.expiresAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
   };

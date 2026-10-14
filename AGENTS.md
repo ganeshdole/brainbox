@@ -36,7 +36,8 @@ Ten surfaces, one workspace package each:
   project has which destination and when to deliver.
 - `backend/` - the API (`@ganeshdole/brainbox-backend`). Hono over a pluggable
   store (Postgres or Convex) and file storage (local, R2 or Convex), runnable as
-  a Node server or on Azure Functions. Uses `@ganeshdole/brainbox-server` for
+  a Node server or on Azure Functions. `createApp(deps)` builds it from parts,
+  for a backend of your own (ADR 0010). Uses `@ganeshdole/brainbox-server` for
   `/ingest` and `@ganeshdole/brainbox-integrations` to deliver.
 - `marketing/` - the landing page (`brainbox-landing`). React + Vite.
 - `packages/shared/` - cross-surface types (`@ganeshdole/brainbox-shared`). Pure types, no
