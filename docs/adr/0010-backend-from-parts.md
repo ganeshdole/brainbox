@@ -55,6 +55,11 @@ Some combinations need rules:
 **`Transcriber`** is an interface with one method; the Groq and OpenAI
 providers are factories over the AI SDK. No transcriber, no transcripts.
 
+**Conformance suite.** The integration tests remain the full contract, but a
+store author also gets `describeStoreConformance()`, run directly against a
+store, covering the core and whichever modules it has. Postgres, Convex and
+an in-memory reference store all run it.
+
 ## Consequences
 
 - A custom backend is an entry file: build a store, call `createApp`, serve.

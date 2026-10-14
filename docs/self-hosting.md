@@ -272,7 +272,30 @@ without `integrations`, no Team page or invites without `teams`.
 
 `createPostgresStore(connectPostgres(url))` and
 `createConvexStore(createConvexCaller(url, secret))` are the two stores this
-repo ships, with every module. A file store that hands out its own URLs, as
+repo ships, with every module. `createMemoryStore()` is the core alone, kept
+in memory: the reference for a store of your own, and a backend with no
+database at all that receives reports and hands them to your own code
+(`createApp` returns a Hono app, so add routes to it), forgetting them on
+restart.
+
+### Proving your store
+
+A store is done when it passes the conformance suite, which runs against the
+store directly and checks the core plus every module the store has:
+
+```ts
+// mongo-store.test.ts (vitest)
+import { describeStoreConformance } from "@ganeshdole/brainbox-backend/testing";
+
+import { createMongoStore } from "./mongo-store.ts";
+
+const store = createMongoStore(process.env.MONGODB_URL ?? "");
+describeStoreConformance("Mongo", { store: () => store, reset: () => store.dropEverything() });
+```
+
+`reset` empties the store before each test; leave it out and each test only
+reads back what it wrote. Postgres, Convex and the in-memory store run the
+same suite in this repo. A file store that hands out its own URLs, as
 S3 does, only needs `put` and `presignGet`; one that serves files through the
 API instead also implements `read`, and the file routes stream from it.
 

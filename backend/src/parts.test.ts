@@ -1,3 +1,7 @@
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 afterEach(() => {
@@ -16,33 +20,25 @@ describe("the parts entry", () => {
     expect(typeof parts.createApp).toBe("function");
   });
 
-  it("builds a working app from a store, storage and settings alone", async () => {
+  it("makes a backend with no database: reports in memory, files on disk", async () => {
     vi.resetModules();
     vi.stubEnv("AUTH_SECRET", "");
-    const { createApp, LocalStorage } = await import("./parts.ts");
+    const { createApp, createMemoryStore, LocalStorage } = await import("./parts.ts");
+    const { generateProjectKey } = await import("./lib/projectKey.ts");
+    const store = createMemoryStore();
+    const dir = await mkdtemp(join(tmpdir(), "brainbox-parts-"));
     const app = createApp({
-      store: {
-        projects: {
-          listForTeams: async () => [],
-          create: async () => {
-            throw new Error("unused");
-          },
-          get: async () => null,
-          getByKey: async () => null,
-          update: async () => null,
-          delete: async () => {},
-        },
-        issues: {
-          listForProject: async () => [],
-          get: async () => null,
-          create: async () => {},
-          setTranscript: async () => {},
-        },
-      },
-      storage: new LocalStorage({ publicUrl: "http://localhost:8787" }),
+      store,
+      storage: new LocalStorage({ publicUrl: "http://localhost:8787", dir }),
       options: { secret: "s", publicUrl: "http://localhost:8787", dashboardOrigin: "http://localhost:5173" },
     });
-    expect(await (await app.request("/health")).json()).toEqual({ ok: true });
+    const project = await store.projects.create({
+      teamId: "mine",
+      name: "Shop",
+      key: generateProjectKey(),
+      allowedOrigins: [],
+    });
+
     const fd = new FormData();
     const metadata = {
       url: "http://host/app",
@@ -54,8 +50,14 @@ describe("the parts entry", () => {
       timezone: "UTC",
       consoleErrors: [],
     };
-    fd.append("json", JSON.stringify({ projectKey: "pk_none", kind: "feature", text: "hi", metadata }));
-    // Through parsing to the store, which knows no such project.
-    expect((await app.request("/ingest", { method: "POST", body: fd })).status).toBe(401);
+    fd.append("json", JSON.stringify({ projectKey: project.key, text: "broken", metadata }));
+    fd.append("screenshot", new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "s.png", { type: "image/png" }));
+    const res = await app.request("/ingest", { method: "POST", body: fd });
+    expect(res.status).toBe(201);
+    const { id } = (await res.json()) as { id: string };
+
+    const [issue] = await store.issues.listForProject(project.id);
+    expect(issue).toMatchObject({ id, text: "broken", status: "new" });
+    expect((await app.request("/health")).status).toBe(200);
   });
 });
