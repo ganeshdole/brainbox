@@ -27,7 +27,7 @@ async function seed() {
     throw new Error("seed-e2e-triage seeds only an e2e database");
   }
   const store = getStore();
-  const adapter = store.authAdapter();
+  const adapter = store.auth.adapter();
   if (!adapter.createUser) throw new Error("auth adapter cannot create users");
   const user = await adapter.createUser({
     id: crypto.randomUUID(),
@@ -80,9 +80,9 @@ async function seed() {
   // The older three are already triaged; the newest three wait in the Inbox.
   const [, , , csv, darkMode, search] = ids;
   if (!csv || !darkMode || !search) throw new Error("seed lost a report");
-  await store.issues.triage([csv], { status: "in_progress", priority: "high" }, user.id);
-  await store.issues.triage([darkMode], { status: "open", priority: "low" }, user.id);
-  await store.issues.triage([search], { status: "resolved" }, user.id);
+  await store.triage.apply([csv], { status: "in_progress", priority: "high" }, user.id);
+  await store.triage.apply([darkMode], { status: "open", priority: "low" }, user.id);
+  await store.triage.apply([search], { status: "resolved" }, user.id);
 
   console.log(JSON.stringify({ projectId: project.id, email: TRIAGE_EMAIL }));
   process.exit(0);

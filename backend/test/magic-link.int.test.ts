@@ -1,13 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { getAuthConfig } from "../src/auth/config.ts";
-import * as emailModule from "../src/email/index.ts";
+import { createAuthConfig } from "../src/auth/config.ts";
+import { resolveDeps } from "../src/deps.ts";
+import type { Emailer } from "../src/email/types.ts";
 import { magicLinkEmail } from "../src/email/templates/magic-link.ts";
+import { fromEnv } from "../src/from-env.ts";
+import { getAuthConfig } from "./harness.ts";
 
 const URL_UNDER_TEST = "https://api.brainbox.sh/api/auth/callback/magic-link?token=abc123";
 
-function magicLinkProvider() {
-  const provider = getAuthConfig().providers.find(
+/** The magic-link provider, sending through `emailer` when given. */
+function magicLinkProvider(emailer?: Emailer) {
+  const deps = resolveDeps({ ...fromEnv(), ...(emailer && { emailer }) });
+  const provider = createAuthConfig(deps, deps.auth!)().providers.find(
     (p) => "id" in p && p.id === "magic-link",
   );
   if (!provider || !("sendVerificationRequest" in provider)) {
@@ -35,9 +40,8 @@ describe("magic-link provider", () => {
 
   it("sends the link through the configured emailer", async () => {
     const send = vi.fn().mockResolvedValue({ id: "msg_1" });
-    vi.spyOn(emailModule, "getEmailer").mockReturnValue({ send });
 
-    const provider = magicLinkProvider();
+    const provider = magicLinkProvider({ send });
     await provider.sendVerificationRequest({
       identifier: "founder@acme.com",
       url: URL_UNDER_TEST,
@@ -49,23 +53,18 @@ describe("magic-link provider", () => {
     expect(msg.to).toBe("founder@acme.com");
     expect(msg.html).toContain(URL_UNDER_TEST);
     expect(msg.text).toContain(URL_UNDER_TEST);
-
-    vi.restoreAllMocks();
   });
 
   it("surfaces a send failure instead of silently swallowing it", async () => {
     const send = vi.fn().mockRejectedValue(new Error("resend down"));
-    vi.spyOn(emailModule, "getEmailer").mockReturnValue({ send });
 
-    const provider = magicLinkProvider();
+    const provider = magicLinkProvider({ send });
     await expect(
       provider.sendVerificationRequest({
         identifier: "founder@acme.com",
         url: URL_UNDER_TEST,
       } as Parameters<typeof provider.sendVerificationRequest>[0]),
     ).rejects.toThrow("resend down");
-
-    vi.restoreAllMocks();
   });
 });
 

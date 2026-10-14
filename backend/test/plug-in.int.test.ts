@@ -5,6 +5,7 @@ import { publicFileUrl } from "../src/lib/public-files.ts";
 import { setStorage, type Storage } from "../src/storage/index.ts";
 import { getStore, setStore } from "../src/store/index.ts";
 import { authCookie, makeProject, makeUser } from "./helpers.ts";
+import { testDeps } from "./harness.ts";
 
 // What an entry gets from setStore()/setStorage(): its own database or file
 // store, used by every route without the backend knowing what it is.
@@ -29,7 +30,7 @@ function urlOnlyStorage(): Storage & { puts: string[] } {
 describe("setStorage()", () => {
   it("sends /f/ links to the store's own URL when it cannot read()", async () => {
     setStorage(urlOnlyStorage());
-    const url = new URL(publicFileUrl("p/i/screenshot.png"));
+    const url = new URL(publicFileUrl(testDeps.options, "p/i/screenshot.png"));
 
     const res = await app.request(url.pathname);
     expect(res.status).toBe(302);
@@ -51,7 +52,7 @@ describe("setStorage()", () => {
     const bytes = new Uint8Array([1, 2, 3]);
     setStorage({ ...urlOnlyStorage(), read: async () => bytes });
 
-    const res = await app.request(new URL(publicFileUrl("p/i/screenshot.png")).pathname);
+    const res = await app.request(new URL(publicFileUrl(testDeps.options, "p/i/screenshot.png")).pathname);
     expect(res.status).toBe(200);
     expect([...new Uint8Array(await res.arrayBuffer())]).toEqual([1, 2, 3]);
   });

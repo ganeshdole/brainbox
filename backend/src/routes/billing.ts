@@ -2,8 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { BillingPeriod, PlanId } from "@ganeshdole/brainbox-shared";
 
-import { env } from "../env.ts";
-import { billingStateFor } from "../lib/billing.ts";
+import { billingStateFor, requireBilling } from "../lib/billing.ts";
 import { billingConfigured, createCheckoutSession, productIdFor } from "../lib/dodo.ts";
 import type { AppEnv } from "../types.ts";
 
@@ -12,15 +11,15 @@ const checkoutSchema = z.object({
   period: z.enum(["monthly", "annual"]),
 });
 
-// Mounted behind verifyAuth(), but NOT behind the subscription gate - an
-// Account with no subscription has to be able to reach checkout, or the paywall
-// would have no exit.
+// Mounted behind verifyAuth() on a deployment with billing, but NOT behind the
+// subscription gate - an Account with no subscription has to be able to reach
+// checkout, or the paywall would have no exit.
 export const billing = new Hono<AppEnv>()
   .get("/subscription", async (c) => {
     const token = c.get("authUser").token;
     const uid = token?.sub;
     if (!uid) return c.json({ error: "Unauthorized" }, 401);
-    return c.json(await billingStateFor(c.get("store"), uid, token?.email));
+    return c.json(await billingStateFor(requireBilling(c), uid, token?.email));
   })
 
   .post("/checkout", async (c) => {
@@ -45,24 +44,26 @@ export const billing = new Hono<AppEnv>()
 
     // Already paying: sending them through checkout again would create a
     // second subscription and bill them twice.
-    const state = await billingStateFor(c.get("store"), uid, email);
+    const billing = requireBilling(c);
+    const state = await billingStateFor(billing, uid, email);
     if (state.subscription?.hasAccess) {
       return c.json({ error: "Already subscribed" }, 409);
     }
 
-    if (!billingConfigured()) {
+    if (!billingConfigured(billing.dodo)) {
       return c.json({ error: "Billing is not configured" }, 503);
     }
 
     try {
-      const session = await createCheckoutSession({
-        productId: productIdFor(plan, period),
+      const { dashboardOrigin } = c.get("deps").options;
+      const session = await createCheckoutSession(billing.dodo, {
+        productId: productIdFor(billing.dodo, plan, period),
         userId: uid,
         email,
         name: typeof token?.name === "string" ? token.name : null,
         // Dodo appends ?subscription_id&status to the return url.
-        returnUrl: `${env.DASHBOARD_ORIGIN}/billing/return`,
-        cancelUrl: `${env.DASHBOARD_ORIGIN}/billing`,
+        returnUrl: `${dashboardOrigin}/billing/return`,
+        cancelUrl: `${dashboardOrigin}/billing`,
       });
       return c.json({ checkoutUrl: session.checkoutUrl });
     } catch (err) {

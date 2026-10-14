@@ -4,10 +4,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "../src/app.ts";
 import { CODE_LIFETIME_MS, MAX_CODE_ATTEMPTS, withCodeAttemptLimit } from "../src/auth/code-attempts.ts";
-import { generateSignInCode, getAuthConfig } from "../src/auth/config.ts";
+import { generateSignInCode } from "../src/auth/config.ts";
 import { signInCodeEmail } from "../src/email/templates/sign-in-code.ts";
 import { env } from "../src/env.ts";
 import { getStore } from "../src/store/index.ts";
+import { getAuthConfig } from "./harness.ts";
 
 // The suite runs with AUTH_EMAIL_MODE=both (test/env.ts). Codes are issued
 // here the way Auth.js issues them: through the configured adapter, hashed
@@ -138,12 +139,12 @@ describe("signing in with a code", () => {
 describe("withCodeAttemptLimit", () => {
   it("leaves link sign-in alone: a 64-character token needs no cap, and a cap would let anyone cancel a link", () => {
     const adapter: Adapter = { useVerificationToken: async () => null };
-    expect(withCodeAttemptLimit(adapter, getStore().signIn, "link")).toBe(adapter);
+    expect(withCodeAttemptLimit(adapter, getStore().auth, "link")).toBe(adapter);
   });
 
   it("checks at most the allowed number of codes when guesses arrive together", async () => {
     const checked = vi.fn(async () => null);
-    const adapter = withCodeAttemptLimit({ useVerificationToken: checked }, getStore().signIn, "code");
+    const adapter = withCodeAttemptLimit({ useVerificationToken: checked }, getStore().auth, "code");
     await issueCode(EMAIL, "042137");
 
     await Promise.all(
@@ -179,9 +180,9 @@ describe("signInCodeEmail", () => {
 });
 
 describe("GET /api/sign-in-options", () => {
-  it("tells the signed-out login page how email sign-in works", async () => {
+  it("tells the signed-out login page how sign-in works", async () => {
     const res = await app.request("/api/sign-in-options");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ email: env.AUTH_EMAIL_MODE });
+    expect(await res.json()).toEqual({ email: env.AUTH_EMAIL_MODE, google: true });
   });
 });

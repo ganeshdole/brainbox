@@ -2,13 +2,11 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { parseIngest } from "@ganeshdole/brainbox-server";
 
-import { env } from "../env.ts";
 import { deliverIssue } from "../integrations/dispatch.ts";
 import { cropRegion } from "../lib/crop.ts";
-import { transcribeAudio, transcriptionEnabled } from "../lib/transcription.ts";
 import { runInBackground } from "../runtime/background.ts";
-import { getStorage } from "../storage/index.ts";
-import type { Store } from "../store/index.ts";
+import type { Store } from "../store/types.ts";
+import type { Transcriber } from "../transcription/index.ts";
 import type { AppEnv } from "../types.ts";
 
 const AUDIO_EXT: Record<string, string> = {
@@ -33,18 +31,14 @@ ingest.use("*", cors({ origin: (origin) => origin ?? "*", credentials: false }))
 ingest.post("/", async (c) => {
   // The wire format itself (parts, schema, types, sizes) is @ganeshdole/brainbox-server's
   // job; from here on it is ours: which project, where files go, what we store.
-  const parsed = await parseIngest(c.req.raw, {
-    screenshotBytes: env.MAX_SCREENSHOT_BYTES,
-    videoBytes: env.MAX_VIDEO_BYTES,
-    sessionBytes: env.MAX_SESSION_BYTES,
-    audioBytes: env.MAX_AUDIO_BYTES,
-  });
+  const deps = c.get("deps");
+  const parsed = await parseIngest(c.req.raw, deps.options.limits);
   if (!parsed.ok) return c.json(parsed.body, parsed.status);
   const feedback = parsed.payload;
   const { screenshot, video, session, audio } = parsed.files;
 
   // --- project key ---
-  const store = c.get("store");
+  const { store, storage, transcriber } = deps;
   const project = await store.projects.getByKey(feedback.projectKey);
   if (!project) return c.json({ error: "Unknown project key" }, 401);
 
@@ -60,7 +54,6 @@ ingest.post("/", async (c) => {
 
   // --- store + persist ---
   const issueId = crypto.randomUUID();
-  const storage = getStorage();
 
   let screenshotKey: string | null = null;
   let cropKey: string | null = null;
@@ -116,9 +109,9 @@ ingest.post("/", async (c) => {
     await storage.put(audioKey, audioBytes, audio.type);
   }
 
-  const willTranscribeAudio = audioBytes !== null && transcriptionEnabled();
+  const willTranscribeAudio = audioBytes !== null && transcriber !== null;
   // The video's mic audio track; whisper takes the webm/mp4 container as-is.
-  const willTranscribeVideo = videoBytes !== null && transcriptionEnabled();
+  const willTranscribeVideo = videoBytes !== null && transcriber !== null;
 
   await store.issues.create({
     id: issueId,
@@ -142,30 +135,34 @@ ingest.post("/", async (c) => {
   // In the background: transcription must never delay or fail the submission.
   // Delivery waits for it so the ticket carries the transcript.
   const transcriptions: Promise<void>[] = [];
-  if (audioBytes && willTranscribeAudio) {
-    transcriptions.push(transcribeAndStore(store, issueId, audioBytes, "audio"));
+  if (transcriber && audioBytes && willTranscribeAudio) {
+    transcriptions.push(transcribeAndStore(store, transcriber, issueId, audioBytes, "audio"));
   }
-  if (videoBytes && willTranscribeVideo) {
-    transcriptions.push(transcribeAndStore(store, issueId, videoBytes, "video"));
+  if (transcriber && videoBytes && willTranscribeVideo) {
+    transcriptions.push(transcribeAndStore(store, transcriber, issueId, videoBytes, "video"));
   }
-  runInBackground(
-    c,
-    Promise.allSettled(transcriptions)
-      .then(() => deliverIssue(store, issueId))
-      .catch((err: unknown) => console.error(`[ingest] delivery failed for ${issueId}:`, err)),
-  );
+  // Without the integrations module there is nowhere to deliver to.
+  if (transcriptions.length > 0 || store.integrations) {
+    runInBackground(
+      c,
+      Promise.allSettled(transcriptions)
+        .then(() => deliverIssue(deps, issueId))
+        .catch((err: unknown) => console.error(`[ingest] delivery failed for ${issueId}:`, err)),
+    );
+  }
 
   return c.json({ id: issueId }, 201);
 });
 
 async function transcribeAndStore(
   store: Store,
+  transcriber: Transcriber,
   issueId: string,
   media: Uint8Array,
   kind: "audio" | "video",
 ): Promise<void> {
   try {
-    const text = await transcribeAudio(media);
+    const text = await transcriber.transcribe(media);
     await store.issues.setTranscript(issueId, kind, { status: "done", text });
   } catch (err) {
     console.error(`[ingest] ${kind} transcription failed for issue ${issueId}:`, err);

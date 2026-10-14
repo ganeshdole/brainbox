@@ -144,6 +144,25 @@ describe("DraftMarkup", () => {
     expect(draft.cancel).not.toHaveBeenCalled();
   });
 
+  it("rasterises through the instance's own capture loader", async () => {
+    const rasteriser = vi.fn(() => Promise.reject(new Error("no CDN today")));
+    const brainbox = createBrainbox({
+      transport: { send: async () => ({ id: "x" }) },
+      loader: { rasteriser, recorder: () => Promise.reject(new Error("unused")) },
+    });
+    const draft = brainbox.draft();
+    try {
+      render(<DraftMarkup draft={draft} onDone={() => {}} onCancel={() => {}} />);
+      await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+      expect(rasteriser).toHaveBeenCalled();
+      // a loader that fails is a failed screenshot: the user can still mark up and go on
+      expect(container.textContent).toContain("Couldn't grab the screenshot");
+      expect(findButton(container, "Next")).toBeDefined();
+    } finally {
+      brainbox.destroy();
+    }
+  });
+
   it("files a report from a real draft in a styled shadow root (the README recipe)", async () => {
     const sent: Report[] = [];
     const brainbox = createBrainbox({

@@ -1,7 +1,7 @@
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { and, asc, count, desc, eq, gt, inArray, sql } from "drizzle-orm";
 
-import type { DB } from "../db/client.ts";
+import type { DB } from "../db/connect.ts";
 import {
   accounts,
   deliveries,
@@ -25,7 +25,7 @@ import {
 import { planTriageWrite } from "./issue-triage.ts";
 import { planSubscriptionWrite } from "./subscription-write.ts";
 import { leavesNoOwner } from "./team-rules.ts";
-import type { DestinationRecord, InviteAcceptance, MembershipChange, Store } from "./types.ts";
+import type { DestinationRecord, FullStore, InviteAcceptance, MembershipChange } from "./types.ts";
 
 type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
 
@@ -40,7 +40,7 @@ export const fromPostgres = { destination: toDestination };
 
 /** The Postgres store: Drizzle over postgres.js. Foreign keys do the cascades
  *  the `Store` contract describes. */
-export function createPostgresStore(db: DB): Store {
+export function createPostgresStore(db: DB): FullStore {
   // Locks this email's sign-in row for the rest of the transaction, creating
   // it first. Code requests and attempts for one email take turns on it.
   async function lockSignIn(tx: Tx, identifier: string): Promise<Date[]> {
@@ -279,7 +279,10 @@ export function createPostgresStore(db: DB): Store {
           )
           .where(eq(issues.id, id));
       },
-      async triage(ids, patch, actorId) {
+    },
+
+    triage: {
+      async apply(ids, patch, actorId) {
         if (ids.length === 0) return [];
         return db.transaction(async (tx) => {
           // Locked, in id order so two bulk edits can't deadlock, and so two
@@ -314,9 +317,6 @@ export function createPostgresStore(db: DB): Store {
           .from(issueEvents)
           .where(eq(issueEvents.issueId, issueId))
           .orderBy(asc(issueEvents.createdAt));
-      },
-      async setFeature(id, featureId) {
-        await db.update(issues).set({ featureId }).where(eq(issues.id, id));
       },
     },
 
@@ -358,6 +358,9 @@ export function createPostgresStore(db: DB): Store {
           await tx.delete(features).where(eq(features.id, fromId));
           await tx.update(features).set({ updatedAt: new Date() }).where(eq(features.id, intoId));
         });
+      },
+      async attach(issueId, featureId) {
+        await db.update(issues).set({ featureId }).where(eq(issues.id, issueId));
       },
     },
 
@@ -479,6 +482,24 @@ export function createPostgresStore(db: DB): Store {
           .returning();
         return row ?? null;
       },
+
+      async applyGithubEvent({ eventId, eventType, removedInstallation }) {
+        const applied = await db.transaction(async (tx) => {
+          if (!(await claimEvent(tx, eventId, eventType))) return false;
+          if (removedInstallation !== null) {
+            await tx
+              .delete(integrationConnections)
+              .where(
+                and(
+                  eq(integrationConnections.provider, "github"),
+                  eq(integrationConnections.externalId, removedInstallation),
+                ),
+              );
+          }
+          return true;
+        });
+        return applied ? "applied" : "duplicate";
+      },
     },
 
     billing: {
@@ -490,9 +511,6 @@ export function createPostgresStore(db: DB): Store {
           .limit(1);
         return row ?? null;
       },
-    },
-
-    webhooks: {
       async applySubscriptionEvent({ eventId, eventType, change }) {
         const applied = await db.transaction(async (tx) => {
           if (!(await claimEvent(tx, eventId, eventType))) return false;
@@ -535,24 +553,6 @@ export function createPostgresStore(db: DB): Store {
         });
         return applied ? "applied" : "duplicate";
       },
-
-      async applyGithubEvent({ eventId, eventType, removedInstallation }) {
-        const applied = await db.transaction(async (tx) => {
-          if (!(await claimEvent(tx, eventId, eventType))) return false;
-          if (removedInstallation !== null) {
-            await tx
-              .delete(integrationConnections)
-              .where(
-                and(
-                  eq(integrationConnections.provider, "github"),
-                  eq(integrationConnections.externalId, removedInstallation),
-                ),
-              );
-          }
-          return true;
-        });
-        return applied ? "applied" : "duplicate";
-      },
     },
 
     waitlist: {
@@ -576,7 +576,15 @@ export function createPostgresStore(db: DB): Store {
       },
     },
 
-    signIn: {
+    auth: {
+      adapter() {
+        return DrizzleAdapter(db, {
+          usersTable: users,
+          accountsTable: accounts,
+          sessionsTable: sessions,
+          verificationTokensTable: verificationTokens,
+        });
+      },
       async recordAttempt(identifier, { at, since, keep }) {
         return db.transaction(async (tx) => {
           const [pending] = await tx
@@ -608,15 +616,6 @@ export function createPostgresStore(db: DB): Store {
       async forgetAttempts(identifier) {
         await db.delete(signInAttempts).where(eq(signInAttempts.identifier, identifier));
       },
-    },
-
-    authAdapter() {
-      return DrizzleAdapter(db, {
-        usersTable: users,
-        accountsTable: accounts,
-        sessionsTable: sessions,
-        verificationTokensTable: verificationTokens,
-      });
     },
   };
 }

@@ -1,7 +1,7 @@
 import type { Adapter } from "@auth/core/adapters";
 import type { EmailSignInMode } from "@ganeshdole/brainbox-shared";
 
-import type { Store } from "../store/index.ts";
+import type { AuthStore } from "../store/types.ts";
 
 /** Attempts allowed per email in any CODE_LIFETIME_MS. Five guesses at a
  *  6-digit code succeed one time in 200,000. */
@@ -35,7 +35,7 @@ export const CODE_LIFETIME_MS = 15 * 60_000;
  */
 export function withCodeAttemptLimit(
   adapter: Adapter,
-  signIn: Store["signIn"],
+  signIn: Pick<AuthStore, "recordAttempt" | "replaceCode" | "revokeCodes" | "forgetAttempts">,
   mode: EmailSignInMode,
 ): Adapter {
   const { useVerificationToken } = adapter;

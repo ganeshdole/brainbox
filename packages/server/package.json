@@ -1,8 +1,16 @@
 {
   "name": "@ganeshdole/brainbox-server",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.3.0",
+  "description": "The receiving end of a Brainbox report: parseIngest() reads the widget's upload from a web-standard Request and returns typed data or a ready error. No framework, no I/O.",
+  "license": "SEE LICENSE IN LICENSE",
+  "homepage": "https://www.brainbox.sh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ganeshdole/brainbox.git",
+    "directory": "packages/server"
+  },
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./src/index.ts",
@@ -16,6 +24,7 @@
     "README.md"
   ],
   "publishConfig": {
+    "access": "public",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "exports": {

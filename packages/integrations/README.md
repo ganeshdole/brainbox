@@ -44,11 +44,60 @@ in one place.
 
 ## Install
 
-Inside the monorepo the package is consumed from source. Outside it:
+Inside this monorepo the package is consumed from source:
+
+```json
+{ "dependencies": { "@ganeshdole/brainbox-integrations": "workspace:*" } }
+```
+
+Outside it, from npm:
 
 ```sh
-pnpm -F @ganeshdole/brainbox-integrations pack   # emits a tarball with dist/
-npm install ./brainbox-integrations-0.0.0.tgz
+npm install @ganeshdole/brainbox-integrations
+```
+
+`pnpm build` emits `dist/` (JS plus `.d.ts`); the published package's
+`exports` point at it (`publishConfig`).
+
+## On its own
+
+No Brainbox backend: with `@ganeshdole/brainbox-server` reading the widget's
+upload, every report becomes a GitHub issue from one file (`bun server.ts`).
+Files are not stored here, so the ticket links only to your own page for the
+report.
+
+```ts
+import { parseIngest, DEFAULT_INGEST_LIMITS } from "@ganeshdole/brainbox-server";
+import { githubIssues } from "@ganeshdole/brainbox-integrations";
+
+const github = githubIssues({
+  owner: "acme",
+  repo: "web",
+  token: () => process.env.GITHUB_TOKEN ?? "", // an empty token fails the delivery
+});
+
+export default {
+  async fetch(request: Request): Promise<Response> {
+    const parsed = await parseIngest(request, DEFAULT_INGEST_LIMITS);
+    if (!parsed.ok) return Response.json(parsed.body, { status: parsed.status });
+
+    const { payload } = parsed;
+    const id = crypto.randomUUID();
+    const result = await github.deliver({
+      id,
+      createdAt: new Date().toISOString(),
+      kind: payload.kind,
+      importance: payload.importance,
+      text: payload.text,
+      metadata: payload.metadata,
+      region: payload.region,
+      links: { dashboard: `https://admin.example.com/reports/${id}` },
+    });
+    // Nothing else kept the report: tell the widget it failed rather than drop it.
+    if (!result.ok) return Response.json({ error: result.error }, { status: 502 });
+    return Response.json({ id, issue: result.url }, { status: 201 });
+  },
+};
 ```
 
 ## Destinations

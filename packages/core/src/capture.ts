@@ -1,4 +1,4 @@
-import { loadRasteriser } from "./lazy.ts";
+import { defaultCaptureLoader, type CaptureLoader } from "./loader.ts";
 import { paintMarks, type Mark } from "./marks.ts";
 import { paintCovers, screenshotCovers, type PrivacyOptions } from "./privacy.ts";
 
@@ -19,14 +19,37 @@ const MAX_CANVAS_PIXELS = 16_777_216;
 /** `@ganeshdole/brainbox-server`'s default screenshot cap. */
 export const SCREENSHOT_BUDGET_BYTES = 5 * 1024 * 1024;
 
-export function captureScale(devicePixelRatio: number, documentPixels: number): number {
-  if (!Number.isFinite(devicePixelRatio)) return 1;
-  const fit = Math.sqrt(MAX_CANVAS_PIXELS / Math.max(documentPixels, 1));
-  return Math.max(1, Math.min(devicePixelRatio, MAX_SCALE, fit));
+/** How a screenshot is rendered and encoded. Every field is optional and
+ *  defaults to what the widget uses. */
+export interface ScreenshotOptions {
+  /** The highest pixel density to render at. The display's own ratio is used
+   *  up to this, and never less than 1x. Default 2. */
+  maxScale?: number;
+  /** How long to wait for one image, font or stylesheet before rendering
+   *  without it. Default 6000 ms. */
+  assetTimeoutMs?: number;
+  /** A shot that encodes larger than this is redone at 1x. Default 5 MB,
+   *  `@ganeshdole/brainbox-server`'s default cap. */
+  maxBytes?: number;
 }
 
-export function overBudget(bytes: number, pixelWidth: number, cssWidth: number): boolean {
-  return bytes > SCREENSHOT_BUDGET_BYTES && pixelWidth > cssWidth;
+export function captureScale(
+  devicePixelRatio: number,
+  documentPixels: number,
+  maxScale = MAX_SCALE,
+): number {
+  if (!Number.isFinite(devicePixelRatio)) return 1;
+  const fit = Math.sqrt(MAX_CANVAS_PIXELS / Math.max(documentPixels, 1));
+  return Math.max(1, Math.min(devicePixelRatio, maxScale, fit));
+}
+
+export function overBudget(
+  bytes: number,
+  pixelWidth: number,
+  cssWidth: number,
+  maxBytes = SCREENSHOT_BUDGET_BYTES,
+): boolean {
+  return bytes > maxBytes && pixelWidth > cssWidth;
 }
 
 /** Positions that lay a box out against an ancestor rather than its parent, so a
@@ -85,14 +108,16 @@ export function keepForViewport(
   return r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw;
 }
 
-/** What to leave out of a screenshot. */
-export interface CaptureOptions {
+/** What to leave out of a screenshot, and how to take it. */
+export interface CaptureViewportOptions extends ScreenshotOptions {
   /** Left out of the cloned page, so the UI's own chrome never appears in the
    *  shot (ADR 0001). It stays visible on the live page throughout: hiding it
    *  would blank the UI for the seconds a capture takes. */
   exclude?: HTMLElement;
   /** With `maskScreenshots`, what to cover before the shot leaves the page. */
   privacy?: PrivacyOptions;
+  /** Where modern-screenshot comes from. Default `defaultCaptureLoader`. */
+  loader?: CaptureLoader;
 }
 
 /** Resolve after the next frame has painted, so UI shown just before a capture
@@ -136,17 +161,23 @@ export async function withReadableFonts<T>(
 }
 
 /** Render the current viewport to a canvas. */
-async function viewportCanvas({ exclude, privacy }: CaptureOptions): Promise<HTMLCanvasElement> {
-  const { domToCanvas } = await loadRasteriser();
+async function viewportCanvas({
+  exclude,
+  privacy,
+  maxScale,
+  assetTimeoutMs = ASSET_TIMEOUT_MS,
+  loader = defaultCaptureLoader,
+}: CaptureViewportOptions): Promise<HTMLCanvasElement> {
+  const { domToCanvas } = await loader.rasteriser();
   await afterPaint();
   // Measured from the live page as it is cloned, painted onto the crop below.
   const covers = screenshotCovers(privacy, exclude);
   const box = document.documentElement.getBoundingClientRect();
-  const scale = captureScale(window.devicePixelRatio, box.width * box.height);
+  const scale = captureScale(window.devicePixelRatio, box.width * box.height, maxScale);
   const full = await withReadableFonts(() =>
     domToCanvas(document.documentElement, {
       scale,
-      timeout: ASSET_TIMEOUT_MS,
+      timeout: assetTimeoutMs,
       filter: viewportFilter(exclude),
       // Every @font-face in the host's CSS is fetched and inlined; on a
       // font-heavy page that dominates capture time. One modern format is
@@ -182,21 +213,37 @@ async function viewportCanvas({ exclude, privacy }: CaptureOptions): Promise<HTM
   return out;
 }
 
-/** Plain viewport shot - the frozen page the user marks up, and the
- *  thumbnail/last-frame of a session recording. */
-export async function captureViewport(options: CaptureOptions = {}): Promise<Blob> {
-  return encodeWithinBudget(await viewportCanvas(options));
+/** A PNG of what is on screen right now - the frozen page the user marks up,
+ *  and the thumbnail/last-frame of a session recording. Rendered from a clone
+ *  of the page, so the live page is never touched. */
+export async function captureViewport(options: CaptureViewportOptions = {}): Promise<Blob> {
+  const canvas = await viewportCanvas(options);
+  return encodeWithinBudget(canvas, window.innerWidth, options.maxBytes);
+}
+
+export interface BakeOptions {
+  /** Image pixels per mark unit. Default: the image's width over the
+   *  viewport's, which is right for marks drawn in viewport CSS pixels over a
+   *  `captureViewport()` shot. Use 1 for marks in the image's own pixels. */
+  scale?: number;
+  /** As for a screenshot: a result larger than this is redone at 1x
+   *  (`width / scale`). Default 5 MB. */
+  maxBytes?: number;
 }
 
 /**
- * Flatten the user's markup onto the frozen shot.
+ * Flatten marks onto an image and return it as a PNG. With no marks the image
+ * comes back as is.
  *
  * This runs once, on the way out of the markup step, rather than on every
  * stroke: the marks are vectors until here, so drawing stays instant and
- * undoable and nothing has to re-rasterise the page. Mark coordinates are
- * viewport CSS pixels, scaled to the shot's resolution.
+ * undoable and nothing has to re-rasterise the page.
  */
-export async function bakeMarks(shot: Blob, marks: Mark[]): Promise<Blob> {
+export async function bakeMarks(
+  shot: Blob,
+  marks: Mark[],
+  { scale: given, maxBytes }: BakeOptions = {},
+): Promise<Blob> {
   if (marks.length === 0) return shot;
 
   const bitmap = await createImageBitmap(shot);
@@ -212,10 +259,10 @@ export async function bakeMarks(shot: Blob, marks: Mark[]): Promise<Blob> {
   ctx.drawImage(bitmap, 0, 0);
   bitmap.close();
 
-  const scale = out.width / window.innerWidth;
+  const scale = given ?? out.width / window.innerWidth;
   ctx.scale(scale, scale);
   paintMarks(ctx, marks);
-  return encodeWithinBudget(out);
+  return encodeWithinBudget(out, Math.round(out.width / scale), maxBytes);
 }
 
 /**
@@ -238,10 +285,14 @@ export async function pickScreenshot(
   return (await pending.catch(() => null)) ?? settled;
 }
 
-async function encodeWithinBudget(canvas: HTMLCanvasElement): Promise<Blob> {
+/** Encode `canvas`, redrawn `cssWidth` wide (1x) if it comes out over budget. */
+async function encodeWithinBudget(
+  canvas: HTMLCanvasElement,
+  cssWidth: number,
+  maxBytes?: number,
+): Promise<Blob> {
   const blob = await toBlob(canvas);
-  const cssWidth = window.innerWidth;
-  if (!overBudget(blob.size, canvas.width, cssWidth)) return blob;
+  if (!overBudget(blob.size, canvas.width, cssWidth, maxBytes)) return blob;
 
   const small = document.createElement("canvas");
   small.width = cssWidth;

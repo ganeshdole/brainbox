@@ -1,15 +1,13 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-import { env } from "../env.ts";
+// `base64url(payload).base64url(hmac)`, keyed on the app secret.
 
-// `base64url(payload).base64url(hmac)`, keyed on AUTH_SECRET.
-
-export function sign(payload: string, secret = env.AUTH_SECRET): string {
+export function sign(payload: string, secret: string): string {
   const body = Buffer.from(payload, "utf8").toString("base64url");
   return `${body}.${mac(body, secret)}`;
 }
 
-export function verify(token: string, secret = env.AUTH_SECRET): string | null {
+export function verify(token: string, secret: string): string | null {
   const dot = token.indexOf(".");
   if (dot <= 0) return null;
   const body = token.slice(0, dot);

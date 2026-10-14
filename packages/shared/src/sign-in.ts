@@ -5,4 +5,7 @@ export type EmailSignInMode = "link" | "code" | "both";
 /** GET /api/sign-in-options: how this deployment signs people in. */
 export interface SignInOptions {
   email: EmailSignInMode;
+  /** Whether "Continue with Google" works here. A backend from before this
+   *  field always offered it. */
+  google?: boolean;
 }

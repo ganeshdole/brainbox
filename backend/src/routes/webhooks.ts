@@ -3,9 +3,10 @@ import { Hono } from "hono";
 import { Webhook } from "standardwebhooks";
 import type { SubscriptionStatus } from "@ganeshdole/brainbox-shared";
 
-import { env } from "../env.ts";
-import { planForProductId } from "../lib/dodo.ts";
-import type { SubscriptionChange } from "../store/index.ts";
+import { planForProductId, type DodoSettings } from "../lib/dodo.ts";
+import { requireBilling } from "../lib/billing.ts";
+import { requireModule } from "../store/modules.ts";
+import type { SubscriptionChange } from "../store/types.ts";
 import type { AppEnv } from "../types.ts";
 
 // Dodo's subscription states -> ours. Anything unmapped is ignored rather than
@@ -30,15 +31,16 @@ interface SubscriptionPayload {
   metadata?: Record<string, string>;
 }
 
-export const webhooks = new Hono<AppEnv>();
-
 // Public: authenticated by signature, not by session. Mounted before the auth
-// gate in app.ts.
-webhooks.post("/dodo", async (c) => {
-  if (!env.DODO_WEBHOOK_SECRET) {
+// gate in create-app.ts, each with what it changes: Dodo's with billing, and
+// GitHub's with the integrations module.
+
+export const dodoWebhook = new Hono<AppEnv>().post("/dodo", async (c) => {
+  const billing = requireBilling(c);
+  if (!billing.webhookSecret) {
     // Refusing unverifiable payment events is the only safe default. 500 (not
     // 4xx) so Dodo retries once the secret is configured instead of discarding.
-    console.error("[webhooks] DODO_WEBHOOK_SECRET is not set - rejecting");
+    console.error("[webhooks] the Dodo webhook secret (DODO_WEBHOOK_SECRET) is not set - rejecting");
     return c.json({ error: "Webhooks not configured" }, 500);
   }
 
@@ -52,7 +54,7 @@ webhooks.post("/dodo", async (c) => {
   };
 
   try {
-    new Webhook(env.DODO_WEBHOOK_SECRET).verify(raw, headers);
+    new Webhook(billing.webhookSecret).verify(raw, headers);
   } catch (err) {
     console.error("[webhooks] signature verification failed:", err);
     return c.json({ error: "Invalid signature" }, 400);
@@ -69,10 +71,10 @@ webhooks.post("/dodo", async (c) => {
     // transaction. Recording first is what makes redelivery a no-op; doing
     // both atomically means a failure leaves no record, so Dodo's retry is
     // processed rather than skipped as a duplicate.
-    const result = await c.get("store").webhooks.applySubscriptionEvent({
+    const result = await billing.store.applySubscriptionEvent({
       eventId: headers["webhook-id"],
       eventType: type,
-      change: subscriptionChange(type, event.data ?? {}, sentAt),
+      change: subscriptionChange(billing.dodo, type, event.data ?? {}, sentAt),
     });
     return c.json(result === "applied" ? { received: true } : { received: true, duplicate: true });
   } catch (err) {
@@ -84,17 +86,14 @@ webhooks.post("/dodo", async (c) => {
 
 // GitHub App events. Only an uninstall changes anything: its connections go,
 // and their destinations with them.
-webhooks.post("/github", async (c) => {
-  if (!env.GITHUB_WEBHOOK_SECRET) {
-    console.error("[webhooks] GITHUB_WEBHOOK_SECRET is not set - rejecting");
+export const githubWebhook = new Hono<AppEnv>().post("/github", async (c) => {
+  const secret = c.get("deps").integrations.github?.webhookSecret;
+  if (!secret) {
+    console.error("[webhooks] the GitHub webhook secret (GITHUB_WEBHOOK_SECRET) is not set - rejecting");
     return c.json({ error: "Webhooks not configured" }, 500);
   }
   const raw = await c.req.text();
-  const ok = await verifyGithubSignature(
-    raw,
-    c.req.header("x-hub-signature-256"),
-    env.GITHUB_WEBHOOK_SECRET,
-  );
+  const ok = await verifyGithubSignature(raw, c.req.header("x-hub-signature-256"), secret);
   const deliveryId = c.req.header("x-github-delivery");
   if (!ok || !deliveryId) return c.json({ error: "Invalid signature" }, 400);
 
@@ -110,7 +109,7 @@ webhooks.post("/github", async (c) => {
     type === "installation" && payload.action === "deleted" && installationId !== undefined;
 
   try {
-    const result = await c.get("store").webhooks.applyGithubEvent({
+    const result = await requireModule(c.get("store"), "integrations").applyGithubEvent({
       eventId: `github:${deliveryId}`,
       eventType: `${type}.${payload.action ?? ""}`,
       removedInstallation: uninstalled ? String(installationId) : null,
@@ -128,6 +127,7 @@ webhooks.post("/github", async (c) => {
  * subscription event without an id, which the route answers with a 500.
  */
 function subscriptionChange(
+  dodo: DodoSettings,
   type: string,
   data: SubscriptionPayload,
   sentAt: Date,
@@ -148,7 +148,7 @@ function subscriptionChange(
   // webhook arrives out-of-band with no session.
   const userId = data.metadata?.userId;
   const productId = data.product_id ?? "";
-  const mapped = planForProductId(productId);
+  const mapped = planForProductId(dodo, productId);
   const create = !userId
     ? { error: `${type} for unknown subscription and no metadata.userId` }
     : !mapped

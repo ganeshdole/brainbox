@@ -4,7 +4,7 @@ import { captureErrors, captureMetadata, type ErrorLog } from "./metadata.ts";
 const original = console.error;
 const live: ErrorLog[] = [];
 const start = (max?: number) => {
-  const log = captureErrors(max);
+  const log = captureErrors({ max });
   live.push(log);
   return log;
 };
@@ -27,6 +27,12 @@ describe("captureErrors", () => {
     expect(errors.length).toBeLessThanOrEqual(20);
     expect(errors.some((e) => e.includes("evt-24"))).toBe(true);
     expect(errors.some((e) => e.includes("evt-0"))).toBe(false);
+  });
+
+  it("keeps as many as asked for", () => {
+    const log = start(3);
+    for (let i = 0; i < 5; i++) console.error(`n-${i}`);
+    expect(log.snapshot()).toEqual(["n-2", "n-3", "n-4"]);
   });
 
   it("keeps a separate buffer per log", () => {
@@ -98,5 +104,12 @@ describe("captureMetadata", () => {
     expect(m.consoleErrors).toEqual(["e1"]);
     expect(typeof m.url).toBe("string");
     expect(m.viewport).toHaveProperty("width");
+  });
+
+  it("needs nothing but the page", () => {
+    const m = captureMetadata();
+    expect(m.consoleErrors).toEqual([]);
+    expect(m.url).toBe(location.href);
+    expect(m).not.toHaveProperty("fields");
   });
 });

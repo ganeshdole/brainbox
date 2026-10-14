@@ -1,19 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "../src/app.ts";
+import { createApp } from "../src/create-app.ts";
+import { fromEnv } from "../src/from-env.ts";
 import { stored } from "./harness.ts";
 import { getStorage } from "../src/storage/index.ts";
 import { LocalStorage } from "../src/storage/local.ts";
 import { authCookie, makeProject, makeUser } from "./helpers.ts";
 
-const { transcribeAudioMock, transcriptionEnabledMock } = vi.hoisted(() => ({
-  transcribeAudioMock: vi.fn<(audio: Uint8Array) => Promise<string>>(),
-  transcriptionEnabledMock: vi.fn(() => false),
-}));
-vi.mock("../src/lib/transcription.ts", () => ({
-  transcribeAudio: transcribeAudioMock,
-  transcriptionEnabled: transcriptionEnabledMock,
-}));
+const transcribeMock = vi.fn<(media: Uint8Array) => Promise<string>>();
+// The env-built app has no transcriber in tests; this one has a fake.
+const transcribing = createApp({ ...fromEnv(), transcriber: { transcribe: (media) => transcribeMock(media) } });
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
 
@@ -39,8 +36,8 @@ function payload(projectKey: string) {
   };
 }
 
-function post(fd: FormData, headers: Record<string, string> = {}) {
-  return app.request("/ingest", { method: "POST", body: fd, headers });
+function post(fd: FormData, headers: Record<string, string> = {}, target = app) {
+  return target.request("/ingest", { method: "POST", body: fd, headers });
 }
 
 function form(json: object, screenshot: File | null = pngFile()) {
@@ -158,9 +155,7 @@ describe("POST /ingest", () => {
 
 describe("POST /ingest — voice note transcription", () => {
   beforeEach(() => {
-    transcribeAudioMock.mockReset();
-    transcriptionEnabledMock.mockReset();
-    transcriptionEnabledMock.mockReturnValue(false);
+    transcribeMock.mockReset();
   });
 
   function audioForm(projectKey: string) {
@@ -184,16 +179,15 @@ describe("POST /ingest — voice note transcription", () => {
     const row = await issueRow(id);
     expect(row.audioKey).toContain("audio.webm");
     expect(row.audioTranscriptStatus).toBeNull();
-    expect(transcribeAudioMock).not.toHaveBeenCalled();
+    expect(transcribeMock).not.toHaveBeenCalled();
   });
 
   it("transcribes the audio in the background and stores the text", async () => {
-    transcriptionEnabledMock.mockReturnValue(true);
-    transcribeAudioMock.mockResolvedValue("the checkout page crashes");
+    transcribeMock.mockResolvedValue("the checkout page crashes");
     const user = await makeUser();
     const project = await makeProject(user.id);
 
-    const res = await post(audioForm(project.key));
+    const res = await post(audioForm(project.key), {}, transcribing);
     expect(res.status).toBe(201);
     const { id } = (await res.json()) as { id: string };
 
@@ -202,16 +196,15 @@ describe("POST /ingest — voice note transcription", () => {
       expect(row.audioTranscriptStatus).toBe("done");
       expect(row.audioTranscript).toBe("the checkout page crashes");
     });
-    expect(transcribeAudioMock).toHaveBeenCalledWith(new Uint8Array([9, 8, 7]));
+    expect(transcribeMock).toHaveBeenCalledWith(new Uint8Array([9, 8, 7]));
   });
 
   it("marks the transcription failed when the provider errors", async () => {
-    transcriptionEnabledMock.mockReturnValue(true);
-    transcribeAudioMock.mockRejectedValue(new Error("provider down"));
+    transcribeMock.mockRejectedValue(new Error("provider down"));
     const user = await makeUser();
     const project = await makeProject(user.id);
 
-    const res = await post(audioForm(project.key));
+    const res = await post(audioForm(project.key), {}, transcribing);
     expect(res.status).toBe(201);
     const { id } = (await res.json()) as { id: string };
 
@@ -223,14 +216,13 @@ describe("POST /ingest — voice note transcription", () => {
   });
 
   it("transcribes a screen recording's audio track and stores it on video", async () => {
-    transcriptionEnabledMock.mockReturnValue(true);
-    transcribeAudioMock.mockResolvedValue("so I click save and nothing happens");
+    transcribeMock.mockResolvedValue("so I click save and nothing happens");
     const user = await makeUser();
     const project = await makeProject(user.id);
 
     const fd = form(payload(project.key), null);
     fd.append("video", new File([new Uint8Array([1, 2, 3])], "r.webm", { type: "video/webm" }));
-    const res = await post(fd);
+    const res = await post(fd, {}, transcribing);
     expect(res.status).toBe(201);
     const { id } = (await res.json()) as { id: string };
 
@@ -239,20 +231,19 @@ describe("POST /ingest — voice note transcription", () => {
       expect(row.videoTranscriptStatus).toBe("done");
       expect(row.videoTranscript).toBe("so I click save and nothing happens");
     });
-    expect(transcribeAudioMock).toHaveBeenCalledWith(new Uint8Array([1, 2, 3]));
+    expect(transcribeMock).toHaveBeenCalledWith(new Uint8Array([1, 2, 3]));
     const row = await issueRow(id);
     expect(row.audioTranscriptStatus).toBeNull();
   });
 
   it("marks a failed recording transcription on the video fields", async () => {
-    transcriptionEnabledMock.mockReturnValue(true);
-    transcribeAudioMock.mockRejectedValue(new Error("provider down"));
+    transcribeMock.mockRejectedValue(new Error("provider down"));
     const user = await makeUser();
     const project = await makeProject(user.id);
 
     const fd = form(payload(project.key), null);
     fd.append("video", new File([new Uint8Array([1, 2, 3])], "r.webm", { type: "video/webm" }));
-    const res = await post(fd);
+    const res = await post(fd, {}, transcribing);
     expect(res.status).toBe(201);
     const { id } = (await res.json()) as { id: string };
 
@@ -264,16 +255,15 @@ describe("POST /ingest — voice note transcription", () => {
   });
 
   it("does not transcribe issues without audio even when enabled", async () => {
-    transcriptionEnabledMock.mockReturnValue(true);
     const user = await makeUser();
     const project = await makeProject(user.id);
 
-    const res = await post(form(payload(project.key)));
+    const res = await post(form(payload(project.key)), {}, transcribing);
     expect(res.status).toBe(201);
     const { id } = (await res.json()) as { id: string };
 
     const row = await issueRow(id);
     expect(row.audioTranscriptStatus).toBeNull();
-    expect(transcribeAudioMock).not.toHaveBeenCalled();
+    expect(transcribeMock).not.toHaveBeenCalled();
   });
 });

@@ -1,10 +1,9 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { z } from "zod";
 
-import { getEmailer } from "../email/index.ts";
 import { earlyAccessReservedEmail } from "../email/templates/early-access.ts";
-import { env } from "../env.ts";
+import { requireModule } from "../store/modules.ts";
 import type { AppEnv } from "../types.ts";
 
 // Trim + lowercase BEFORE validating so " Foo@Bar.com " normalizes rather than
@@ -14,15 +13,16 @@ const bodySchema = z.object({
   email: z.string().trim().toLowerCase().pipe(z.email().max(254)),
 });
 
-// --- lightweight in-memory rate limit (per process instance) ---
+// --- lightweight in-memory rate limit (per app instance) ---
 // A basic bot/spam speed bump for this public, email-triggering endpoint. It is
 // per-instance (multiple replicas each get their own budget) - Cloudflare
 // Turnstile is the real defense and the intended follow-up.
 const RATE_LIMIT = 5;
 const RATE_WINDOW_MS = 60_000;
-const hits = new Map<string, { count: number; resetAt: number }>();
 
-function rateLimited(ip: string, now: number): boolean {
+type Hits = Map<string, { count: number; resetAt: number }>;
+
+function rateLimited(hits: Hits, ip: string, now: number): boolean {
   // Opportunistic prune so the map can't grow without bound.
   if (hits.size > 10_000) {
     for (const [key, entry] of hits) if (now > entry.resetAt) hits.delete(key);
@@ -41,14 +41,21 @@ function clientIp(c: { req: { header: (name: string) => string | undefined } }):
   return fwd?.split(",")[0]?.trim() || c.req.header("cf-connecting-ip") || "unknown";
 }
 
-export const waitlist = new Hono<AppEnv>();
+/** The marketing site's early-access signup. One per app, each with its own
+ *  rate limit. Mounted with the waitlist module. */
+export function createWaitlistRoute(marketingOrigins: readonly string[]) {
+  const hits: Hits = new Map();
+  return (
+    new Hono<AppEnv>()
+      // Public: called cross-origin from the marketing site, no cookies. Only
+      // the configured marketing origins may POST here.
+      .use("*", cors({ origin: [...marketingOrigins], credentials: false }))
+      .post("/", (c) => signUp(c, hits))
+  );
+}
 
-// Public: called cross-origin from the marketing site, no cookies. Only the
-// configured marketing origins may POST here.
-waitlist.use("*", cors({ origin: env.MARKETING_ORIGINS, credentials: false }));
-
-waitlist.post("/", async (c) => {
-  if (rateLimited(clientIp(c), Date.now())) {
+async function signUp(c: Context<AppEnv>, hits: Hits) {
+  if (rateLimited(hits, clientIp(c), Date.now())) {
     return c.json({ error: "Too many requests" }, 429);
   }
 
@@ -56,16 +63,16 @@ waitlist.post("/", async (c) => {
   if (!parsed.success) return c.json({ error: "Invalid email" }, 400);
   const email = parsed.data.email;
 
-  const store = c.get("store");
+  const { store, emailer, options } = c.get("deps");
+  const waitlist = requireModule(store, "waitlist");
 
   // Idempotent capture: a re-submitted email is a no-op (null).
-  const row = await store.waitlist.add(email, "marketing");
+  const row = await waitlist.add(email, "marketing");
 
   if (!row) return c.json({ ok: true, alreadyRegistered: true });
 
   // New signup: send the confirmation (best-effort, tracked). A send failure
   // must never lose the signup or 500 the request.
-  const emailer = getEmailer();
   const tmpl = earlyAccessReservedEmail();
   try {
     await emailer.send({
@@ -73,12 +80,12 @@ waitlist.post("/", async (c) => {
       subject: tmpl.subject,
       html: tmpl.html,
       text: tmpl.text,
-      ...(env.EMAIL_REPLY_TO ? { replyTo: env.EMAIL_REPLY_TO } : {}),
+      ...(options.replyTo ? { replyTo: options.replyTo } : {}),
     });
-    await store.waitlist.setEmailStatus(row.id, { status: "sent" });
+    await waitlist.setEmailStatus(row.id, { status: "sent" });
   } catch (err) {
     console.error("[waitlist] confirmation email failed:", err);
-    await store.waitlist
+    await waitlist
       .setEmailStatus(row.id, {
         status: "failed",
         error: err instanceof Error ? err.message : String(err),
@@ -89,4 +96,4 @@ waitlist.post("/", async (c) => {
   }
 
   return c.json({ ok: true }, 201);
-});
+}

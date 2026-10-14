@@ -14,14 +14,25 @@ import type {
   DestinationInputs,
 } from "@ganeshdole/brainbox-shared";
 
-import { env } from "../env.ts";
 import { connectionContext, openCredentials, sealCredentials, type SealedCredentials } from "../store/credentials.ts";
-import type { ConnectionRecord } from "../store/index.ts";
+import type { ConnectionRecord } from "../store/types.ts";
 
 // The backend's side of Azure DevOps: a connection's token, sealed at rest,
 // and a stored destination turned into what @ganeshdole/brainbox-integrations
 // sends. Connections are personal access tokens, one per organization per
 // Team. Entra sign-in would add a second `auth` here, beside "pat".
+
+/** What Azure DevOps needs from a deployment. */
+export interface AzureDevopsSettings {
+  /** Seals stored tokens: 32 bytes, base64 (`openssl rand -base64 32`).
+   *  Changing it makes every stored token unreadable. */
+  encryptionKey: string;
+  /** Azure DevOps Services (https://dev.azure.com) unless set, e.g. to the
+   *  local fake. */
+  url?: string;
+}
+
+const AZURE_DEVOPS_URL = "https://dev.azure.com";
 
 type ConnectionIdentity = Pick<ConnectionRecord, "teamId" | "provider" | "externalId">;
 
@@ -59,26 +70,34 @@ export function parseOrganization(input: string): string | null {
   return org && name.test(decodeURIComponent(org)) ? decodeURIComponent(org) : null;
 }
 
-export function sealToken(conn: ConnectionIdentity, token: string): Promise<SealedCredentials> {
-  return sealCredentials(token, { key: env.INTEGRATIONS_ENCRYPTION_KEY, context: connectionContext(conn) });
+export function sealToken(
+  settings: AzureDevopsSettings,
+  conn: ConnectionIdentity,
+  token: string,
+): Promise<SealedCredentials> {
+  return sealCredentials(token, { key: settings.encryptionKey, context: connectionContext(conn) });
 }
 
 /** How to call Azure DevOps as this connection. Throws when it has no readable token. */
-export async function authFor(conn: ConnectionRecord): Promise<AzureDevopsAuth> {
+export async function authFor(settings: AzureDevopsSettings, conn: ConnectionRecord): Promise<AzureDevopsAuth> {
   if (!conn.credentials) throw new Error("the connection has no token");
   const pat = await openCredentials(conn.credentials, {
-    key: env.INTEGRATIONS_ENCRYPTION_KEY,
+    key: settings.encryptionKey,
     context: connectionContext(conn),
   });
   return { pat };
 }
 
-export function catalogFor(auth: AzureDevopsAuth): AzureDevopsCatalog {
-  return azureDevops({ auth, baseUrl: env.AZURE_DEVOPS_URL });
+export function catalogFor(settings: AzureDevopsSettings, auth: AzureDevopsAuth): AzureDevopsCatalog {
+  return azureDevops({ auth, baseUrl: settings.url ?? AZURE_DEVOPS_URL });
 }
 
 /** A stored destination as the options `azureDevopsWorkItems()` takes. */
-export function workItemsOptions(config: AzureDevopsDestinationConfig, auth: AzureDevopsAuth): AzureDevopsWorkItemsOptions {
+export function workItemsOptions(
+  settings: AzureDevopsSettings,
+  config: AzureDevopsDestinationConfig,
+  auth: AzureDevopsAuth,
+): AzureDevopsWorkItemsOptions {
   return {
     organization: config.organization,
     project: config.project.id,
@@ -87,7 +106,7 @@ export function workItemsOptions(config: AzureDevopsDestinationConfig, auth: Azu
     ...(config.assignedTo && { assignedTo: config.assignedTo }),
     ...shapeOf(config.bug, config.team.id),
     feature: shapeOf(config.feature, config.team.id),
-    baseUrl: env.AZURE_DEVOPS_URL,
+    baseUrl: settings.url ?? AZURE_DEVOPS_URL,
   };
 }
 
@@ -113,14 +132,15 @@ export type PreparedDestination =
  * dry-run create of each kind. `rejected`: the token no longer works.
  */
 export async function prepareDestination(
+  settings: AzureDevopsSettings,
   conn: ConnectionRecord,
   input: DestinationInputs["azure-devops"],
 ): Promise<PreparedDestination> {
-  const auth = await authFor(conn);
+  const auth = await authFor(settings, conn);
   const organization = organizationOf(conn);
   let types: [AzureDevopsWorkItemTypeInfo, AzureDevopsWorkItemTypeInfo];
   try {
-    const catalog = catalogFor(auth);
+    const catalog = catalogFor(settings, auth);
     types = await Promise.all([
       catalog.workItemType(organization, input.project.id, input.bug.type),
       catalog.workItemType(organization, input.project.id, input.feature.type),
@@ -136,7 +156,7 @@ export async function prepareDestination(
     bug: completed(input.bug, bug),
     feature: completed(input.feature, feature),
   };
-  const check = await validateWorkItem(workItemsOptions(config, auth));
+  const check = await validateWorkItem(workItemsOptions(settings, config, auth));
   if (check.ok) return { ok: true, config };
   return {
     ok: false,

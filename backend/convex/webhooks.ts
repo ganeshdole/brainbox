@@ -5,7 +5,8 @@ import type { MutationCtx } from "./_generated/server";
 import { removeConnection, serverMutation } from "./lib/server.ts";
 import { billingPeriod, nullable, planId, subscriptionStatus } from "./validators.ts";
 
-// Store.webhooks. A Convex mutation is one transaction: if applying an event
+// Store.billing.applySubscriptionEvent and Store.integrations.applyGithubEvent.
+// A Convex mutation is one transaction: if applying an event
 // throws, recording its id is undone too, so the sender's retry is processed.
 
 /** Records the event id; false when it was already recorded. */

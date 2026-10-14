@@ -65,8 +65,10 @@ It runs inside a **host app you don't control**, so isolation is the whole game:
 
 `pnpm build` emits three things from one source: `dist/widget.js`, the
 IIFE with React bundled; `dist/widget-capture.js`, rrweb and modern-screenshot
-as a second IIFE that `widget.js` injects on first open (core's `lazy.ts` is
-swapped for `src/lib/load-capture.ts` in that build - keep the two in step);
+as a second IIFE that `widget.js` injects on first open (`embed.ts` passes
+`siblingScriptLoader` from `src/lib/load-capture.ts` to core as its `loader`,
+and the IIFE build marks rrweb and modern-screenshot external so core's
+default `import()`s don't pull them in);
 and `dist/index.js`, `dist/ui.js` and `dist/markup.js`, one ES build of
 the three library entries sharing their chunks (the lazy `widget-ui-*.js`
 among them), with React and the other `@ganeshdole/brainbox-*` packages

@@ -14,7 +14,8 @@ The two drivers are independent, so any database goes with any file store.
 `postgres` is any Postgres: your own, Docker, Supabase, Neon, AWS RDS. `s3` is
 anything that speaks the S3 API: AWS S3, MinIO, Supabase Storage, Backblaze B2,
 DigitalOcean Spaces. `r2` is Cloudflare R2 with its settings filled in.
-`custom` is a database or file store you write yourself (see the last section).
+`custom` is a database or file store you write yourself, though a backend
+built from parts is the better way to bring one (see the last section).
 
 | You want | Set |
 |---|---|
@@ -22,7 +23,7 @@ DigitalOcean Spaces. `r2` is Cloudflare R2 with its settings filled in.
 | Everything on AWS | `postgres` on RDS, `s3` with the keys left empty so the instance's IAM role is used |
 | Everything on Convex | `DATABASE_DRIVER=convex`, `STORAGE_DRIVER=convex` |
 | Postgres with Cloudflare R2 | `DATABASE_DRIVER=postgres`, `STORAGE_DRIVER=r2` |
-| MongoDB, or anything else not listed | `DATABASE_DRIVER=custom` and your own `Store` |
+| MongoDB, or anything else not listed | your own `Store` in a backend built from parts |
 
 Why it is built this way: [ADR 0007](adr/0007-pluggable-stores-and-runtimes.md).
 
@@ -39,8 +40,8 @@ Everything else is in `backend/src/env.ts`.
 | `DATABASE_DRIVER=convex` or `STORAGE_DRIVER=convex` | `CONVEX_URL`, `BRAINBOX_SERVER_SECRET` (also set on the Convex deployment) |
 | `STORAGE_DRIVER=s3` | `S3_BUCKET`, `S3_REGION`; `S3_ENDPOINT` for anything but AWS itself; `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` unless an IAM role supplies them; `S3_FORCE_PATH_STYLE=true` for MinIO and Supabase Storage |
 | `STORAGE_DRIVER=r2` | `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` |
-| `DATABASE_DRIVER=custom` or `STORAGE_DRIVER=custom` | an entry that calls `setStore()` or `setStorage()` (below) |
-| Sign-in with Google | `GOOGLE_ID`, `GOOGLE_SECRET` |
+| `DATABASE_DRIVER=custom` or `STORAGE_DRIVER=custom` | an entry that calls the deprecated `setStore()` or `setStorage()` (below) |
+| Sign-in with Google | `GOOGLE_ID`, `GOOGLE_SECRET` (without both, sign-in is by email only) |
 | Sign-in by email | `EMAIL_DRIVER=resend`, `RESEND_API_KEY`, `EMAIL_FROM` |
 | A code instead of a link | `AUTH_EMAIL_MODE=code`, or `both` for a code and a link in one email (default `link`) |
 | Only your company signs in | `AUTH_ALLOWED_EMAIL_DOMAINS=acme.com` (comma-separated; unset lets anyone in) |
@@ -204,33 +205,106 @@ project's key:
 brainboxTransport({ endpoint: "https://api.feedback.example.com/ingest", projectKey: "pk_..." })
 ```
 
-## Bringing your own database, file store or email
+## Build your own backend from parts
 
-Write the interface (`Store` in `src/store/types.ts`, `Storage` in
-`src/storage/index.ts`, `Emailer` in `src/email/types.ts`) and hand it to the
-backend from an entry, before it serves:
+The backend is also a library. `createApp()` builds the same Hono app the
+shipped entries run, from parts you hand it instead of environment variables,
+so you can bring your own database, file store, email, transcription or host
+without editing the backend:
 
 ```ts
-// src/my-entry.ts, next to src/index.ts
+// my-backend.ts
 import { serve } from "@hono/node-server";
+import { createApp, groqTranscriber, S3Storage } from "@ganeshdole/brainbox-backend";
 
-import { app } from "./app.ts";
-import { env } from "./env.ts";
-import { setStore } from "./store/index.ts";
-import { createMongoStore } from "./my-mongo-store.ts";
+import { createMongoStore } from "./mongo-store.ts";
 
-setStore(createMongoStore(process.env.MONGODB_URL ?? ""));
-serve({ fetch: app.fetch, port: env.PORT });
+const app = createApp({
+  store: createMongoStore(process.env.MONGODB_URL ?? ""),
+  storage: new S3Storage({ bucket: "feedback", region: "eu-west-1" }),
+  transcriber: groqTranscriber({ apiKey: process.env.GROQ_API_KEY ?? "" }),
+  auth: { allowedEmailDomains: ["acme.com"] },
+  options: {
+    secret: process.env.AUTH_SECRET ?? "",
+    publicUrl: "https://feedback-api.acme.com",
+    dashboardOrigin: "https://feedback.acme.com",
+  },
+});
+
+serve({ fetch: app.fetch, port: 8787 });
 ```
 
-With `DATABASE_DRIVER=custom` the backend skips the Postgres and Convex
-settings. `setStorage()` and `STORAGE_DRIVER=custom` work the same way for
-files, and `setEmailer()` for email (SES, SMTP).
+Only `store`, `storage` and `options` are required. Each part you leave out
+turns its feature off:
 
-A file store that hands out its own URLs, as S3 does, only needs `put` and
-`presignGet`. One that serves files through the API instead also implements
-`read`, and the file routes stream from it.
+| Part | Without it |
+|---|---|
+| `emailer` (any `Emailer`: `ResendEmailer`, or your own for SES or SMTP) | Emails are logged, not sent. Invites show a link to pass on by hand. |
+| `transcriber` (`groqTranscriber`, `openaiTranscriber`, `aiSdkTranscriber`, or your own `Transcriber`) | Voice notes and recordings arrive without a transcript. |
+| `integrations` (`github` for your GitHub App, `azureDevops` with an encryption key) | Those trackers answer 503 and the dashboard says they aren't set up. |
+| `auth` (Google sign-in, email mode, allowed domains) | No dashboard API: the app receives reports, serves file links and runs webhooks, nothing more. Auth.js reads `AUTH_URL` from the environment if it is set. |
+| `billing` (Dodo Payments settings) | No paywall. |
 
-A store is done when the backend suite passes against it: the integration
-tests are the contract (`backend/AGENTS.md`). To ship an option in this repo
-instead, add it to `src/env.ts` and the driver switch beside the others.
+### Your own store
+
+A `Store` (`backend/src/store/types.ts`) is a small required core, `projects`
+and `issues`, which is all ingest and reading reports need. Everything else is
+an optional module, each its own interface, and the app serves only the
+modules your store has:
+
+| Module | What it adds | Without it |
+|---|---|---|
+| `auth` | Accounts and sign-in (the Auth.js adapter, sign-in codes) | No dashboard API |
+| `teams` | Teams, members and invites | Everyone who signs in shares every project |
+| `triage` | Status, priority, close reason and the activity log | Reports keep the status they arrived with |
+| `features` | Features and the requests attached to them | No features |
+| `integrations` | Connections, destinations and deliveries | Reports go nowhere else |
+| `billing` | Subscriptions from Dodo's webhooks | No paywall |
+| `waitlist` | The marketing site's early-access list | No `/waitlist` |
+
+So a store can start with the core alone and grow. Without `teams`, everyone
+who can sign in owns every project, so `createApp` refuses to start unless
+`auth.allowedEmailDomains` limits who that is. `GET /api/me` lists the
+modules this backend has, and the dashboard hides what needs the others: no
+Features page without `features` (feature requests then show among the
+reports), no status tabs or triage controls without `triage`, no destinations
+without `integrations`, no Team page or invites without `teams`.
+
+`createPostgresStore(connectPostgres(url))` and
+`createConvexStore(createConvexCaller(url, secret))` are the two stores this
+repo ships, with every module. `createMemoryStore()` is the core alone, kept
+in memory: the reference for a store of your own, and a backend with no
+database at all that receives reports and hands them to your own code
+(`createApp` returns a Hono app, so add routes to it), forgetting them on
+restart.
+
+### Proving your store
+
+A store is done when it passes the conformance suite, which runs against the
+store directly and checks the core plus every module the store has:
+
+```ts
+// mongo-store.test.ts (vitest)
+import { describeStoreConformance } from "@ganeshdole/brainbox-backend/testing";
+
+import { createMongoStore } from "./mongo-store.ts";
+
+const store = createMongoStore(process.env.MONGODB_URL ?? "");
+describeStoreConformance("Mongo", { store: () => store, reset: () => store.dropEverything() });
+```
+
+`reset` empties the store before each test; leave it out and each test only
+reads back what it wrote. Postgres, Convex and the in-memory store run the
+same suite in this repo. A file store that hands out its own URLs, as
+S3 does, only needs `put` and `presignGet`; one that serves files through the
+API instead also implements `read`, and the file routes stream from it.
+
+### Without a new entry
+
+The shipped entries still run `createApp(fromEnv())`. `setStore()`,
+`setStorage()` and `setEmailer()` with `DATABASE_DRIVER=custom` /
+`STORAGE_DRIVER=custom` still swap a part into that app before it serves, but
+they are deprecated: they take only a store with every module, and
+`createApp` takes any. To ship an option in this repo instead, add it to
+`src/env.ts`, map it in `src/from-env.ts`, and add it to the driver switch
+beside the others.

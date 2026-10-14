@@ -1,12 +1,14 @@
 import type { Identity, Importance, IssueKind, Region, ReportField } from "@ganeshdole/brainbox-shared";
 import { createAnnotations, type Annotations } from "./annotate.ts";
-import { bakeMarks, captureViewport, pickScreenshot } from "./capture.ts";
+import { bakeMarks, captureViewport, pickScreenshot, type ScreenshotOptions } from "./capture.ts";
+import type { CaptureLoader } from "./loader.ts";
 import { unionBounds, type Mark } from "./marks.ts";
 import { captureMetadata } from "./metadata.ts";
 import type { PrivacyOptions } from "./privacy.ts";
 import { cssPath, elementAt } from "./selector.ts";
 import {
   startSessionRecording,
+  type RecordingOptions,
   type SessionCapture,
   type SessionRecording,
 } from "./session.ts";
@@ -72,8 +74,9 @@ export interface Draft {
    *  and the marks are baked onto the screenshot in the background. */
   markUp(marks: Mark[]): void;
   /** Start recording the page. `onAutoStop` fires at the duration cap so the
-   *  UI can call `stop()`. */
-  startRecording(options?: { onAutoStop?: () => void; maxMs?: number }): Recording;
+   *  UI can call `stop()`. `audio` overrides the instance's `recording.audio`
+   *  for this one recording. */
+  startRecording(options?: { onAutoStop?: () => void; maxMs?: number; audio?: boolean }): Recording;
   /** Send the report. Waits for a bake in flight rather than sending the
    *  un-marked shot. Rejects if there is nothing to send, `beforeSend` drops
    *  it, or the transport fails. A feature request (`kind: "feature"`) needs
@@ -102,6 +105,9 @@ export interface DraftContext {
   fields(): ReportField[] | undefined;
   consoleErrors(): string[];
   privacy?: PrivacyOptions;
+  screenshot?: ScreenshotOptions;
+  recording?: RecordingOptions;
+  loader?: CaptureLoader;
   beforeSend?: BeforeSend;
   onSubmitted?: (result: SubmitResult) => void;
 }
@@ -111,7 +117,10 @@ export interface DraftContext {
 export type BeforeSend = (report: Report) => Report | null | Promise<Report | null>;
 
 export function createDraft(ctx: DraftContext, { exclude }: DraftOptions = {}): Draft {
-  const { privacy } = ctx;
+  const { privacy, screenshot, recording: recordingOptions, loader } = ctx;
+  const shoot = () => captureViewport({ ...screenshot, exclude, privacy, loader });
+  const bake = (blob: Blob, marks: Mark[]) =>
+    bakeMarks(blob, marks, { maxBytes: screenshot?.maxBytes });
   const listeners = new Set<() => void>();
   let state = EMPTY;
   const set = (patch: Partial<DraftState>) => {
@@ -183,7 +192,7 @@ export function createDraft(ctx: DraftContext, { exclude }: DraftOptions = {}): 
       set({ screenshotFailed: false });
       // A failed screenshot must not sink the report - the text and voice
       // note are still worth filing.
-      track(captureViewport({ exclude, privacy }), () => set({ screenshotFailed: true }));
+      track(shoot(), () => set({ screenshotFailed: true }));
     },
 
     markUp(marks) {
@@ -195,14 +204,21 @@ export function createDraft(ctx: DraftContext, { exclude }: DraftOptions = {}): 
       // If the bake fails the plain shot is already attached, so the report
       // still goes out - just without the markup.
       track(
-        frozen.then((blob) => bakeMarks(blob, marks)),
+        frozen.then((blob) => bake(blob, marks)),
         () => {},
       );
     },
 
-    startRecording({ onAutoStop, maxMs } = {}) {
+    startRecording({ onAutoStop, maxMs, audio } = {}) {
       const annotations = createAnnotations();
-      const rec = startSessionRecording(() => onAutoStop?.(), maxMs, privacy);
+      const rec = startSessionRecording({
+        ...recordingOptions,
+        audio: audio ?? recordingOptions?.audio,
+        onAutoStop: () => onAutoStop?.(),
+        maxMs,
+        privacy,
+        loader,
+      });
       const r = run;
 
       const handle: Recording = {
@@ -237,8 +253,8 @@ export function createDraft(ctx: DraftContext, { exclude }: DraftOptions = {}): 
           // report's screenshot so a list view gets a real preview. Best-effort,
           // and a failed bake still leaves the plain frame.
           try {
-            const thumb = await captureViewport({ exclude, privacy });
-            const baked = await bakeMarks(thumb, marks).catch(() => thumb);
+            const thumb = await shoot();
+            const baked = await bake(thumb, marks).catch(() => thumb);
             if (run === r) setShot(baked);
           } catch {
             /* the composer falls back to a text note */

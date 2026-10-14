@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { app } from "../src/app.ts";
+import { createApp } from "../src/create-app.ts";
+import { fromEnv } from "../src/from-env.ts";
 import { env } from "../src/env.ts";
 import { authCookie, makeProject, makeUser, subscribeUser } from "./helpers.ts";
 
@@ -162,19 +164,16 @@ describe("exempt accounts", () => {
 
   it("covers everyone while BILLING_DISABLED is on", async () => {
     const me = await unpaidUser("anyone@brainbox.test");
-    Object.assign(env, { BILLING_DISABLED: true });
-    try {
-      const res = await app.request("/api/projects", {
-        headers: { cookie: await authCookie(me.id, "anyone@brainbox.test") },
-      });
-      expect(res.status).toBe(200);
-      const state = await app.request("/api/billing/subscription", {
-        headers: { cookie: await authCookie(me.id, "anyone@brainbox.test") },
-      });
-      expect(await state.json()).toMatchObject({ exempt: true, hasAccess: true });
-    } finally {
-      Object.assign(env, { BILLING_DISABLED: false });
-    }
+    const deps = fromEnv();
+    const free = createApp({ ...deps, billing: { ...deps.billing!, disabled: true } });
+    const res = await free.request("/api/projects", {
+      headers: { cookie: await authCookie(me.id, "anyone@brainbox.test") },
+    });
+    expect(res.status).toBe(200);
+    const state = await free.request("/api/billing/subscription", {
+      headers: { cookie: await authCookie(me.id, "anyone@brainbox.test") },
+    });
+    expect(await state.json()).toMatchObject({ exempt: true, hasAccess: true });
   });
 
   it("matches case-insensitively - OAuth casing need not match the env var", async () => {

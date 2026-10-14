@@ -5,8 +5,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-import { env } from "../env.ts";
-import type { Storage } from "./index.ts";
+import type { Storage } from "./types.ts";
 
 export interface S3Options {
   bucket: string;
@@ -58,29 +57,4 @@ export class S3Storage implements Storage {
       { expiresIn: 3600 },
     );
   }
-}
-
-/** STORAGE_DRIVER=s3: the S3_* settings. */
-export function s3FromEnv(): S3Storage {
-  return new S3Storage({
-    bucket: env.S3_BUCKET,
-    region: env.S3_REGION,
-    ...(env.S3_ENDPOINT && { endpoint: env.S3_ENDPOINT }),
-    ...(env.S3_ACCESS_KEY_ID && {
-      credentials: { accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY },
-    }),
-    forcePathStyle: env.S3_FORCE_PATH_STYLE,
-  });
-}
-
-/** STORAGE_DRIVER=r2: Cloudflare R2, which is S3 with a fixed shape. */
-export function r2FromEnv(): S3Storage {
-  return new S3Storage({
-    bucket: env.R2_BUCKET,
-    region: "auto",
-    endpoint: env.R2_ENDPOINT,
-    credentials: { accessKeyId: env.R2_ACCESS_KEY_ID, secretAccessKey: env.R2_SECRET_ACCESS_KEY },
-    forcePathStyle: true,
-    checksumsWhenRequired: true,
-  });
 }

@@ -4,7 +4,7 @@ import { app } from "../src/app.ts";
 import { deliverIssue } from "../src/integrations/dispatch.ts";
 import { getStore } from "../src/store/index.ts";
 import { fakeAzureDevops, fieldOf } from "./azure-devops-fake.ts";
-import { stored } from "./harness.ts";
+import { stored, testDeps } from "./harness.ts";
 import {
   ADO_CONFIG,
   authCookie,
@@ -307,7 +307,7 @@ describe("delivering to Azure DevOps", () => {
     await makeAzureDevopsDestination(project.id, conn.id);
     const issue = await makeIssue(project.id, { kind: "feature", importance: "critical", text: "Bulk invoice export", screenshotKey: null });
 
-    const [delivery] = await deliverIssue(getStore(), issue.id);
+    const [delivery] = await deliverIssue(testDeps, issue.id);
     expect(delivery?.status).toBe("sent");
     const [item] = ado.created();
     expect(item?.type).toBe("User Story");
@@ -324,13 +324,13 @@ describe("delivering to Azure DevOps", () => {
     await makeAzureDevopsDestination(project.id, conn.id);
     const first = await makeIssue(project.id, { screenshotKey: null });
 
-    const [failed] = await deliverIssue(getStore(), first.id);
+    const [failed] = await deliverIssue(testDeps, first.id);
     expect(failed).toMatchObject({ status: "failed", error: "Azure DevOps rejected the token. Connect Azure DevOps again in Settings." });
     expect((await getStore().integrations.getConnection(conn.id))?.status).toBe("needs_reauth");
 
     const callsBefore = ado.calls.length;
     const second = await makeIssue(project.id, { screenshotKey: null });
-    const [skipped] = await deliverIssue(getStore(), second.id);
+    const [skipped] = await deliverIssue(testDeps, second.id);
     expect(skipped?.status).toBe("failed");
     expect(ado.calls).toHaveLength(callsBefore);
   });

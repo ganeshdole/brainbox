@@ -1,7 +1,7 @@
 import type { ProjectKey } from "@ganeshdole/brainbox-shared";
 
 import { api } from "../../convex/_generated/api.js";
-import type { ConvexCaller } from "../convex-client.ts";
+import type { ConvexCaller } from "../convex-caller.ts";
 import { createConvexAuthAdapter } from "./convex-auth.ts";
 import { asSealedCredentials } from "./credentials.ts";
 import type {
@@ -12,7 +12,7 @@ import type {
   FeatureRecord,
   IssueRecord,
   ProjectRecord,
-  Store,
+  FullStore,
   SubscriptionRecord,
   TeamInviteRecord,
   TeamMemberRecord,
@@ -23,7 +23,7 @@ import type {
 /** The Convex store: each method is one Convex function (convex/*.ts), which
  *  also does the cascades Postgres gets from foreign keys. Convex keeps epoch
  *  milliseconds; records leave here with Dates like every other store. */
-export function createConvexStore(convex: ConvexCaller): Store {
+export function createConvexStore(convex: ConvexCaller): FullStore {
   return {
     teams: {
       async create(input) {
@@ -119,15 +119,14 @@ export function createConvexStore(convex: ConvexCaller): Store {
           ...(outcome.status === "done" && { text: outcome.text }),
         });
       },
-      async triage(ids, patch, actorId) {
+    },
+
+    triage: {
+      async apply(ids, patch, actorId) {
         return (await convex.mutation(api.issues.triage, { ids: [...ids], patch, actorId })).map(toIssue);
       },
       async listEvents(issueId) {
         return (await convex.query(api.issues.listEvents, { issueId })).map(toIssueEvent);
-
-      },
-      async setFeature(id, featureId) {
-        await convex.mutation(api.issues.setFeature, { id, featureId });
       },
     },
 
@@ -152,6 +151,9 @@ export function createConvexStore(convex: ConvexCaller): Store {
       },
       async merge(fromId, intoId) {
         await convex.mutation(api.features.merge, { fromId, intoId });
+      },
+      async attach(issueId, featureId) {
+        await convex.mutation(api.issues.setFeature, { id: issueId, featureId });
       },
     },
 
@@ -196,15 +198,15 @@ export function createConvexStore(convex: ConvexCaller): Store {
       async finishDelivery(id, outcome) {
         return maybe(await convex.mutation(api.integrations.finishDelivery, { id, outcome }), toDelivery);
       },
+      async applyGithubEvent(event) {
+        return convex.mutation(api.webhooks.applyGithubEvent, event);
+      },
     },
 
     billing: {
       async subscriptionFor(userId) {
         return maybe(await convex.query(api.billing.subscriptionFor, { userId }), toSubscription);
       },
-    },
-
-    webhooks: {
       async applySubscriptionEvent({ eventId, eventType, change }) {
         return convex.mutation(api.webhooks.applySubscriptionEvent, {
           eventId,
@@ -215,9 +217,6 @@ export function createConvexStore(convex: ConvexCaller): Store {
             sentAt: change.sentAt.getTime(),
           },
         });
-      },
-      async applyGithubEvent(event) {
-        return convex.mutation(api.webhooks.applyGithubEvent, event);
       },
     },
 
@@ -230,7 +229,10 @@ export function createConvexStore(convex: ConvexCaller): Store {
       },
     },
 
-    signIn: {
+    auth: {
+      adapter() {
+        return createConvexAuthAdapter(convex);
+      },
       async recordAttempt(identifier, { at, since, keep }) {
         return convex.mutation(api.signIn.recordAttempt, {
           identifier,
@@ -248,10 +250,6 @@ export function createConvexStore(convex: ConvexCaller): Store {
       async forgetAttempts(identifier) {
         await convex.mutation(api.signIn.forgetAttempts, { identifier });
       },
-    },
-
-    authAdapter() {
-      return createConvexAuthAdapter(convex);
     },
   };
 }

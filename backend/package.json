@@ -3,6 +3,16 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/parts.ts",
+      "default": "./src/parts.ts"
+    },
+    "./testing": {
+      "types": "./src/testing/store-conformance.ts",
+      "default": "./src/testing/store-conformance.ts"
+    }
+  },
   "main": "dist/azure.js",
   "scripts": {
     "dev": "tsx watch --env-file=.env src/index.ts",

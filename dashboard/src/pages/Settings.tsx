@@ -14,6 +14,7 @@ import { Input } from "../components/ui/input";
 import { api } from "../lib/api";
 import { canAdmin } from "../lib/team";
 import { LAST_PROJECT_KEY, useProject } from "../lib/useProject";
+import { useModules } from "../lib/modules";
 
 function Section({
   label,
@@ -126,6 +127,7 @@ function DangerZone({
 
 export function Settings() {
   const { project, projects, setProject, removeProject } = useProject();
+  const { has } = useModules();
 
   // Settings are per-project; there's nothing to configure in the all view.
   if (!project) return <Navigate to="/projects/all" replace />;
@@ -190,12 +192,14 @@ export function Settings() {
                 </div>
               </Section>
 
-              <Section label="Destinations" hint="Where every new report is filed, as soon as it arrives.">
-                <div className="space-y-2.5">
-                  <GithubDestination projectId={project.id} teamId={project.team.id} />
-                  <AzureDevopsDestination projectId={project.id} teamId={project.team.id} />
-                </div>
-              </Section>
+              {has("integrations") && (
+                <Section label="Destinations" hint="Where every new report is filed, as soon as it arrives.">
+                  <div className="space-y-2.5">
+                    <GithubDestination projectId={project.id} teamId={project.team.id} />
+                    <AzureDevopsDestination projectId={project.id} teamId={project.team.id} />
+                  </div>
+                </Section>
+              )}
 
               <Section label="Danger zone" hint="This can't be undone.">
                 <DangerZone project={project} projects={projects} onDeleted={removeProject} />

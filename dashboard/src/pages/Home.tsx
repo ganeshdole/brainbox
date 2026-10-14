@@ -13,6 +13,7 @@ import { logout } from "../lib/logout";
 import { homeTarget, LAST_PROJECT_KEY } from "../lib/useProject";
 import { onboardingTeam, ROLE_LABELS } from "../lib/team";
 import { normalizeOrigin } from "../lib/utils";
+import { useModules } from "../lib/modules";
 
 /** First-run screen: name the project, optionally lock it to a domain. It goes
  *  into a Team the caller administers when they have one with no projects (all
@@ -163,13 +164,14 @@ export function Home() {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const teamsOn = useModules().has("teams");
 
   // Invites first: they sit outside the paywall, and listing projects would
   // send someone with no plan of their own to checkout before they could join.
   useEffect(() => {
     let cancelled = false;
-    api
-      .myInvites()
+    // Without Teams there is nothing to be invited to.
+    (teamsOn ? api.myInvites() : Promise.resolve([]))
       .then((next) => {
         if (!cancelled) setInvites(next);
       })
@@ -179,13 +181,13 @@ export function Home() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [teamsOn]);
 
   useEffect(() => {
     if (!invites || invites.length > 0) return;
     let cancelled = false;
     // Teams too: one may have no projects, and only these show it.
-    Promise.all([api.listProjects(), api.listTeams()])
+    Promise.all([api.listProjects(), teamsOn ? api.listTeams() : []])
       .then(([nextProjects, nextTeams]) => {
         if (cancelled) return;
         setTeams(nextTeams);
@@ -199,7 +201,7 @@ export function Home() {
     return () => {
       cancelled = true;
     };
-  }, [invites]);
+  }, [invites, teamsOn]);
 
   useEffect(() => {
     if (!projects) return;

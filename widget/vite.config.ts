@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { readFileSync } from "node:fs";
@@ -19,21 +19,11 @@ const externals = [
   "react/jsx-runtime",
 ];
 
-/** In the script-tag bundle, point core's lazy loaders (`lazy.ts`) at the
- *  script-injecting stand-in, so rrweb and modern-screenshot stay out of
- *  `widget.js` and arrive as `widget-capture.js` on first capture. */
-function captureAsSiblingScript(): Plugin {
-  const loader = entry("./src/lib/load-capture.ts");
-  return {
-    name: "brainbox:capture-as-sibling-script",
-    enforce: "pre",
-    async resolveId(source, importer, options) {
-      if (!importer || !source.endsWith("/lazy.ts")) return null;
-      const resolved = await this.resolve(source, importer, { ...options, skipSelf: true });
-      return resolved?.id.includes("/packages/core/src/lazy.ts") ? loader : null;
-    },
-  };
-}
+/** The capture libraries, which `widget.js` must not contain. embed.ts hands
+ *  core a loader that fetches them as `widget-capture.js`, so core's default
+ *  loader is never called there; external, its `import()`s stay as two dead
+ *  expressions instead of pulling both libraries into the bundle. */
+const captureLibs = ["rrweb", "modern-screenshot"];
 
 // Three builds from one source (ADR 0003, ADR 0005):
 //
@@ -49,9 +39,8 @@ function captureAsSiblingScript(): Plugin {
 export default defineConfig(({ command, mode }) => {
   const lib = mode === "lib";
   const capture = mode === "capture";
-  const script = command === "build" && !lib && !capture;
   return {
-    plugins: [react(), tailwindcss(), ...(script ? [captureAsSiblingScript()] : [])],
+    plugins: [react(), tailwindcss()],
     resolve: {
       alias: { "@": entry("./src") },
     },
@@ -102,6 +91,7 @@ export default defineConfig(({ command, mode }) => {
             formats: ["iife"],
             fileName: () => "widget.js",
           },
+          rollupOptions: { external: captureLibs },
           cssCodeSplit: false,
           emptyOutDir: true,
         },

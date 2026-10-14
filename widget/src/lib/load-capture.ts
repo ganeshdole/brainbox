@@ -1,10 +1,10 @@
 import type { record } from "rrweb";
 import type { domToCanvas } from "modern-screenshot";
+import type { CaptureLoader } from "@ganeshdole/brainbox-core";
 
-// The script-tag build's stand-in for `@ganeshdole/brainbox-core`'s `lazy.ts` (swapped in
-// by vite.config.ts). A bundler would split rrweb and modern-screenshot into
-// chunks; an IIFE can't, so they ship as a sibling `widget-capture.js` that
-// this injects on first use.
+// The script-tag build's `CaptureLoader`, handed to core by embed.ts. A
+// bundler would split rrweb and modern-screenshot into chunks; an IIFE can't,
+// so they ship as a sibling `widget-capture.js` that this injects on first use.
 //
 // A classic <script>, not `import()`: a module fetch from a customer's page is
 // cross-origin and would need CORS headers on our static files. A script tag
@@ -53,10 +53,8 @@ export function loadCapture(src = ownSrc): Promise<CaptureLibs> {
   return loading;
 }
 
-// The same surface as core's lazy.ts.
-export const loadRecorder = (): Promise<Pick<CaptureLibs, "record">> => loadCapture();
-export const loadRasteriser = (): Promise<Pick<CaptureLibs, "domToCanvas">> => loadCapture();
-
-export function preloadCapture(): void {
-  loadCapture().catch(() => {});
-}
+/** Both libraries come from the one sibling script. */
+export const siblingScriptLoader: CaptureLoader = {
+  recorder: () => loadCapture(),
+  rasteriser: () => loadCapture(),
+};

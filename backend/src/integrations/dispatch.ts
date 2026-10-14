@@ -1,39 +1,41 @@
 import type { DeliveryResult, Ticket } from "@ganeshdole/brainbox-integrations";
 
-import { env } from "../env.ts";
+import type { Deps } from "../deps.ts";
 import { publicFileUrl } from "../lib/public-files.ts";
 import { toTicket } from "../lib/serialize.ts";
-import { getStorage, readStored } from "../storage/index.ts";
-import type { ConnectionRecord, DeliveryRecord, DestinationRecord, Store } from "../store/index.ts";
-import { destinationFor, PROVIDER_NAME } from "./registry.ts";
+import { readStored } from "../storage/types.ts";
+import type { ConnectionRecord, DeliveryRecord, DestinationRecord } from "../store/types.ts";
+import { PROVIDER_NAME } from "./registry.ts";
 
 /**
  * Send one issue to its project's destinations and record each outcome. Never
- * throws. Idempotent per (issue, destination) unless `force` (retry / manual
+ * throws. Sends nothing when the store has no integrations module. Idempotent per (issue, destination) unless `force` (retry / manual
  * send, which also reaches paused destinations).
  */
 export async function deliverIssue(
-  store: Store,
+  deps: Deps,
   issueId: string,
   opts: { force?: boolean } = {},
 ): Promise<DeliveryRecord[]> {
+  const { store, storage, options } = deps;
+  const { integrations } = store;
+  if (!integrations) return [];
   const issue = await store.issues.get(issueId);
   if (!issue) return [];
 
   const force = opts.force ?? false;
-  const targets = await store.integrations.deliveryTargets(issue.projectId, { includePaused: force });
+  const targets = await integrations.deliveryTargets(issue.projectId, { includePaused: force });
   if (targets.length === 0) return [];
 
-  const storage = getStorage();
   const ticket = toTicket(issue, {
-    dashboardOrigin: env.DASHBOARD_ORIGIN,
-    fileUrl: publicFileUrl,
+    dashboardOrigin: options.dashboardOrigin,
+    fileUrl: (key) => publicFileUrl(options, key),
     loadFile: (key) => readStored(storage, key),
   });
   const out: DeliveryRecord[] = [];
 
   for (const { destination: dest, connection: conn } of targets) {
-    const row = await store.integrations.claimDelivery({
+    const row = await integrations.claimDelivery({
       issueId,
       destinationId: dest.id,
       provider: dest.provider,
@@ -41,11 +43,11 @@ export async function deliverIssue(
     });
     if (!row) continue;
 
-    const result = await sendTicket(store, dest, conn, ticket);
+    const result = await sendTicket(deps, dest, conn, ticket);
     if (!result.ok) {
       console.error(`[integrations] ${dest.provider} delivery failed for issue ${issueId}: ${result.error}`);
     }
-    const updated = await store.integrations.finishDelivery(
+    const updated = await integrations.finishDelivery(
       row.id,
       result.ok ? { ok: true, externalId: result.externalId, url: result.url } : { ok: false, error: result.error },
     );
@@ -61,7 +63,7 @@ export async function deliverIssue(
  * tokens, so a 401 there is ours to fix, not the Customer's.
  */
 export async function sendTicket(
-  store: Store,
+  deps: Deps,
   dest: DestinationRecord,
   conn: ConnectionRecord,
   ticket: Ticket,
@@ -72,12 +74,12 @@ export async function sendTicket(
 
   let result: DeliveryResult;
   try {
-    result = await (await destinationFor(dest, conn)).deliver(ticket);
+    result = await (await deps.integrations.destinationFor(dest, conn)).deliver(ticket);
   } catch (err) {
     result = { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
   if (!result.ok && result.status === 401 && conn.auth !== "app") {
-    await store.integrations.setConnectionStatus(conn.id, "needs_reauth");
+    await deps.store.integrations?.setConnectionStatus(conn.id, "needs_reauth");
     return { ok: false, status: 401, error: reconnect };
   }
   return result;
@@ -85,8 +87,8 @@ export async function sendTicket(
 
 /** What "Send a test report" sends: a made-up report, so the Customer sees
  *  what a real one will look like where it lands. */
-export function testTicket(project: { id: string; name: string }): Ticket {
-  const settings = `${env.DASHBOARD_ORIGIN}/projects/${project.id}/settings`;
+export function testTicket(dashboardOrigin: string, project: { id: string; name: string }): Ticket {
+  const settings = `${dashboardOrigin}/projects/${project.id}/settings`;
   return {
     id: "test",
     createdAt: new Date().toISOString(),

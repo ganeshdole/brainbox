@@ -28,7 +28,10 @@ import type { SealedCredentials } from "./credentials.ts";
 
 // The backend's whole view of persistence. Routes, auth, billing and delivery
 // talk to a `Store`; which database sits behind it is a deployment choice
-// (DATABASE_DRIVER). Every implementation must pass the same integration suite.
+// (DATABASE_DRIVER). A store is a small required core (projects and issues)
+// plus optional modules (sign-in, teams, triage, features, integrations,
+// billing, waitlist), so one written for another database can start with the
+// core alone. Every implementation must pass the same integration suite.
 //
 // Records are plain objects with `Date` timestamps. Ids are strings the store
 // assigns, except `issues.create`, whose id the caller picks so file keys can
@@ -275,169 +278,207 @@ export interface GithubEvent {
 /** "duplicate" means the event id was already recorded and nothing changed. */
 export type WebhookResult = "applied" | "duplicate";
 
-export interface Store {
-  readonly teams: {
-    /** A new Team with `ownerId` as its Owner, in one step. */
-    create(input: { name: string; ownerId: string }): Promise<TeamRecord>;
-    get(id: string): Promise<TeamRecord | null>;
-    rename(id: string, name: string): Promise<TeamRecord | null>;
-    /** Every Team the user belongs to, oldest first, with their role in it. */
-    listForUser(userId: string): Promise<Array<TeamRecord & { role: TeamRole }>>;
-    membership(teamId: string, userId: string): Promise<TeamMemberRecord | null>;
-    /** Oldest first. */
-    members(teamId: string): Promise<TeamMemberProfile[]>;
-    setRole(teamId: string, userId: string, role: TeamRole): Promise<MembershipChange>;
-    removeMember(teamId: string, userId: string): Promise<MembershipChange>;
-
-    /** Insert, or replace the invite already open for (team, email), which
-     *  gets a new id: the old link stops working. */
-    createInvite(input: Omit<TeamInviteRecord, "id" | "createdAt">): Promise<TeamInviteRecord>;
-    getInvite(id: string): Promise<TeamInviteRecord | null>;
-    /** Newest first, expired ones included. */
-    listInvites(teamId: string): Promise<TeamInviteRecord[]>;
-    /** Invites sent to this (lower-cased) address, expired ones included. */
-    invitesForEmail(email: string): Promise<TeamInviteRecord[]>;
-    revokeInvite(teamId: string, id: string): Promise<void>;
-    /** Joins the user to the invite's Team with its role and deletes the
-     *  invite, in one step, unless it is past `now`. Someone already a member
-     *  keeps the role they have. */
-    acceptInvite(id: string, userId: string, now: Date): Promise<InviteAcceptance>;
-  };
-
-  readonly projects: {
-    /** Newest first, each with its issue count and how many of those are
-     *  feature requests. */
-    listForTeams(
-      teamIds: string[],
-    ): Promise<Array<ProjectRecord & { issueCount: number; featureRequestCount: number }>>;
-    create(input: Omit<ProjectRecord, "id" | "createdAt">): Promise<ProjectRecord>;
-    get(id: string): Promise<ProjectRecord | null>;
-    getByKey(key: ProjectKey): Promise<ProjectRecord | null>;
-    update(
-      id: string,
-      patch: { name?: string; allowedOrigins?: string[] },
-    ): Promise<ProjectRecord | null>;
-    /** Also removes its issues, destinations and their deliveries. */
-    delete(id: string): Promise<void>;
-  };
-
-  readonly issues: {
-    /** Newest first. */
-    listForProject(projectId: string): Promise<IssueRecord[]>;
-    get(id: string): Promise<IssueRecord | null>;
-    create(input: NewIssue): Promise<void>;
-    setTranscript(id: string, kind: "audio" | "video", outcome: TranscriptOutcome): Promise<void>;
-    /** Applies one triage patch to every listed issue as `planTriageWrite`
-     *  decides, atomically: the issues and their activity events are all
-     *  written, or (when the patch is rejected for any of them) none are.
-     *  Returns the issues that exist, after the change. */
-    triage(ids: readonly string[], patch: IssueTriagePatch, actorId: string | null): Promise<IssueRecord[]>;
-    /** Oldest first. */
-    listEvents(issueId: string): Promise<IssueEventRecord[]>;
-    /** Attach a feature request to a Feature, or with null send it back to
-     *  waiting. The caller checks both belong to the same project. */
-    setFeature(id: string, featureId: string | null): Promise<void>;
-  };
-
-  readonly features: {
-    /** Newest first, each with how many requests are attached. */
-    listForProject(projectId: string): Promise<Array<FeatureRecord & { requestCount: number }>>;
-    get(id: string): Promise<FeatureRecord | null>;
-    /** Starts `under_review` unless a status is given. */
-    create(input: {
-      projectId: string;
-      title: string;
-      description: string | null;
-      status?: FeatureStatus;
-    }): Promise<FeatureRecord>;
-    update(
-      id: string,
-      patch: { title?: string; description?: string | null; status?: FeatureStatus },
-    ): Promise<FeatureRecord | null>;
-    /** Its requests go back to waiting. */
-    delete(id: string): Promise<void>;
-    /** Moves every request of `fromId` onto `intoId` and deletes `fromId`, in
-     *  one step: two features found to be the same thing become one. */
-    merge(fromId: string, intoId: string): Promise<void>;
-  };
-
-  readonly integrations: {
-    /** Newest first. */
-    listConnections(teamId: string): Promise<ConnectionRecord[]>;
-    getConnection(id: string): Promise<ConnectionRecord | null>;
-    /** Insert, or replace the label, auth and credentials of the same (team,
-     *  provider, externalId). Either way it ends up `active`: saving is how
-     *  a connection is connected again. */
-    saveConnection(input: Omit<ConnectionRecord, "id" | "createdAt" | "status">): Promise<ConnectionRecord>;
-    setConnectionStatus(id: string, status: ConnectionStatus): Promise<void>;
-    /** Also removes its destinations; their deliveries keep their links. */
-    deleteConnection(id: string): Promise<void>;
-
-    listDestinations(projectId: string): Promise<DestinationRecord[]>;
-    /** One destination per (project, provider): insert or replace. */
-    saveDestination(input: NewDestination): Promise<DestinationRecord>;
-    deleteDestination(projectId: string, provider: IntegrationProvider): Promise<void>;
-    /** A project's destinations with their connections; paused ones only on request. */
-    deliveryTargets(
-      projectId: string,
-      opts: { includePaused: boolean },
-    ): Promise<Array<{ destination: DestinationRecord; connection: ConnectionRecord }>>;
-
-    listDeliveries(issueId: string): Promise<DeliveryRecord[]>;
-    /**
-     * Start one delivery as `pending`. Returns null when this (issue,
-     * destination) already has one, which is the idempotency guard; with
-     * `retry` the existing row is reset to pending instead.
-     */
-    claimDelivery(input: {
-      issueId: string;
-      destinationId: string;
-      provider: IntegrationProvider;
-      retry: boolean;
-    }): Promise<DeliveryRecord | null>;
-    /** Record the outcome and count the attempt. A failure keeps any earlier link. */
-    finishDelivery(id: string, outcome: DeliveryOutcome): Promise<DeliveryRecord | null>;
-  };
-
-  readonly billing: {
-    subscriptionFor(userId: string): Promise<SubscriptionRecord | null>;
-  };
-
-  /** Each call records the event id and applies it atomically: a failure leaves
-   *  no record, so the sender's retry is processed rather than skipped. */
-  readonly webhooks: {
-    applySubscriptionEvent(event: SubscriptionEvent): Promise<WebhookResult>;
-    applyGithubEvent(event: GithubEvent): Promise<WebhookResult>;
-  };
-
-  readonly waitlist: {
-    /** Null when the email is already on the list. */
-    add(email: string, source: string): Promise<WaitlistSignupRecord | null>;
-    setEmailStatus(
-      id: string,
-      outcome: { status: "sent" } | { status: "failed"; error: string },
-    ): Promise<void>;
-  };
-
-  /** Attempts at sign-in codes, counted per email so guessing a code is
-   *  capped (auth/code-attempts.ts). */
-  readonly signIn: {
-    /** Records an attempt for this email made `at`, and returns how many of
-     *  its attempts fall at or after `since`, this one included. One atomic
-     *  step, so attempts arriving together each get their own number. Keeps
-     *  only the latest `keep` attempt times. Records nothing and returns 0
-     *  when the email has no code pending, so attempts at addresses that never
-     *  asked for a code store nothing. */
-    recordAttempt(identifier: string, attempt: { at: Date; since: Date; keep: number }): Promise<number>;
-    /** Stores a new code for this email and deletes the ones before it, in one
-     *  atomic step, so codes requested together still leave only one. */
-    replaceCode(code: { identifier: string; token: string; expires: Date }): Promise<void>;
-    /** Deletes every code still pending for this email. */
-    revokeCodes(identifier: string): Promise<void>;
-    /** Deletes this email's count. */
-    forgetAttempts(identifier: string): Promise<void>;
-  };
-
-  /** Auth.js persistence: users, OAuth account links and magic-link tokens. */
-  authAdapter(): Adapter;
+/** Projects: the core of every store. `listForTeams` is how the dashboard
+ *  finds them, so a store without the teams module still keeps each
+ *  project's `teamId` as given. */
+export interface ProjectStore {
+  /** Newest first, each with its issue count and how many of those are
+   *  feature requests. */
+  listForTeams(
+    teamIds: string[],
+  ): Promise<Array<ProjectRecord & { issueCount: number; featureRequestCount: number }>>;
+  create(input: Omit<ProjectRecord, "id" | "createdAt">): Promise<ProjectRecord>;
+  get(id: string): Promise<ProjectRecord | null>;
+  getByKey(key: ProjectKey): Promise<ProjectRecord | null>;
+  update(id: string, patch: { name?: string; allowedOrigins?: string[] }): Promise<ProjectRecord | null>;
+  /** Also removes its issues, and whatever the store's other modules keep
+   *  for them (features, destinations, deliveries, activity). */
+  delete(id: string): Promise<void>;
 }
+
+/** Issues: the core of every store. Triage and features change an issue
+ *  through their own modules; without them an issue stays as created. */
+export interface IssueStore {
+  /** Newest first. */
+  listForProject(projectId: string): Promise<IssueRecord[]>;
+  get(id: string): Promise<IssueRecord | null>;
+  create(input: NewIssue): Promise<void>;
+  setTranscript(id: string, kind: "audio" | "video", outcome: TranscriptOutcome): Promise<void>;
+}
+
+/** Accounts and sign-in: Auth.js persistence (users, OAuth account links,
+ *  magic-link tokens) and the sign-in code attempt counter. */
+export interface AuthStore {
+  adapter(): Adapter;
+  /** Records an attempt for this email made `at`, and returns how many of
+   *  its attempts fall at or after `since`, this one included. One atomic
+   *  step, so attempts arriving together each get their own number. Keeps
+   *  only the latest `keep` attempt times. Records nothing and returns 0
+   *  when the email has no code pending, so attempts at addresses that never
+   *  asked for a code store nothing. (auth/code-attempts.ts) */
+  recordAttempt(identifier: string, attempt: { at: Date; since: Date; keep: number }): Promise<number>;
+  /** Stores a new code for this email and deletes the ones before it, in one
+   *  atomic step, so codes requested together still leave only one. */
+  replaceCode(code: { identifier: string; token: string; expires: Date }): Promise<void>;
+  /** Deletes every code still pending for this email. */
+  revokeCodes(identifier: string): Promise<void>;
+  /** Deletes this email's count. */
+  forgetAttempts(identifier: string): Promise<void>;
+}
+
+/** Teams, their members and invites (ADR 0008). Members are Auth.js users,
+ *  so a store with teams also has auth. */
+export interface TeamStore {
+  /** A new Team with `ownerId` as its Owner, in one step. */
+  create(input: { name: string; ownerId: string }): Promise<TeamRecord>;
+  get(id: string): Promise<TeamRecord | null>;
+  rename(id: string, name: string): Promise<TeamRecord | null>;
+  /** Every Team the user belongs to, oldest first, with their role in it. */
+  listForUser(userId: string): Promise<Array<TeamRecord & { role: TeamRole }>>;
+  membership(teamId: string, userId: string): Promise<TeamMemberRecord | null>;
+  /** Oldest first. */
+  members(teamId: string): Promise<TeamMemberProfile[]>;
+  setRole(teamId: string, userId: string, role: TeamRole): Promise<MembershipChange>;
+  removeMember(teamId: string, userId: string): Promise<MembershipChange>;
+
+  /** Insert, or replace the invite already open for (team, email), which
+   *  gets a new id: the old link stops working. */
+  createInvite(input: Omit<TeamInviteRecord, "id" | "createdAt">): Promise<TeamInviteRecord>;
+  getInvite(id: string): Promise<TeamInviteRecord | null>;
+  /** Newest first, expired ones included. */
+  listInvites(teamId: string): Promise<TeamInviteRecord[]>;
+  /** Invites sent to this (lower-cased) address, expired ones included. */
+  invitesForEmail(email: string): Promise<TeamInviteRecord[]>;
+  revokeInvite(teamId: string, id: string): Promise<void>;
+  /** Joins the user to the invite's Team with its role and deletes the
+   *  invite, in one step, unless it is past `now`. Someone already a member
+   *  keeps the role they have. */
+  acceptInvite(id: string, userId: string, now: Date): Promise<InviteAcceptance>;
+}
+
+/** An issue's status, priority and close reason, and its activity log. */
+export interface TriageStore {
+  /** Applies one triage patch to every listed issue as `planTriageWrite`
+   *  decides, atomically: the issues and their activity events are all
+   *  written, or (when the patch is rejected for any of them) none are.
+   *  Returns the issues that exist, after the change. */
+  apply(ids: readonly string[], patch: IssueTriagePatch, actorId: string | null): Promise<IssueRecord[]>;
+  /** Oldest first. */
+  listEvents(issueId: string): Promise<IssueEventRecord[]>;
+}
+
+/** Features and the feature requests attached to them. */
+export interface FeatureStore {
+  /** Newest first, each with how many requests are attached. */
+  listForProject(projectId: string): Promise<Array<FeatureRecord & { requestCount: number }>>;
+  get(id: string): Promise<FeatureRecord | null>;
+  /** Starts `under_review` unless a status is given. */
+  create(input: {
+    projectId: string;
+    title: string;
+    description: string | null;
+    status?: FeatureStatus;
+  }): Promise<FeatureRecord>;
+  update(
+    id: string,
+    patch: { title?: string; description?: string | null; status?: FeatureStatus },
+  ): Promise<FeatureRecord | null>;
+  /** Its requests go back to waiting. */
+  delete(id: string): Promise<void>;
+  /** Moves every request of `fromId` onto `intoId` and deletes `fromId`, in
+   *  one step: two features found to be the same thing become one. */
+  merge(fromId: string, intoId: string): Promise<void>;
+  /** Attach a feature request to a Feature, or with null send it back to
+   *  waiting. The caller checks both belong to the same project. */
+  attach(issueId: string, featureId: string | null): Promise<void>;
+}
+
+/** Connections to external tools, each project's destinations, and the
+ *  deliveries of issues to them. */
+export interface IntegrationStore {
+  /** Newest first. */
+  listConnections(teamId: string): Promise<ConnectionRecord[]>;
+  getConnection(id: string): Promise<ConnectionRecord | null>;
+  /** Insert, or replace the label, auth and credentials of the same (team,
+   *  provider, externalId). Either way it ends up `active`: saving is how
+   *  a connection is connected again. */
+  saveConnection(input: Omit<ConnectionRecord, "id" | "createdAt" | "status">): Promise<ConnectionRecord>;
+  setConnectionStatus(id: string, status: ConnectionStatus): Promise<void>;
+  /** Also removes its destinations; their deliveries keep their links. */
+  deleteConnection(id: string): Promise<void>;
+
+  listDestinations(projectId: string): Promise<DestinationRecord[]>;
+  /** One destination per (project, provider): insert or replace. */
+  saveDestination(input: NewDestination): Promise<DestinationRecord>;
+  deleteDestination(projectId: string, provider: IntegrationProvider): Promise<void>;
+  /** A project's destinations with their connections; paused ones only on request. */
+  deliveryTargets(
+    projectId: string,
+    opts: { includePaused: boolean },
+  ): Promise<Array<{ destination: DestinationRecord; connection: ConnectionRecord }>>;
+
+  listDeliveries(issueId: string): Promise<DeliveryRecord[]>;
+  /**
+   * Start one delivery as `pending`. Returns null when this (issue,
+   * destination) already has one, which is the idempotency guard; with
+   * `retry` the existing row is reset to pending instead.
+   */
+  claimDelivery(input: {
+    issueId: string;
+    destinationId: string;
+    provider: IntegrationProvider;
+    retry: boolean;
+  }): Promise<DeliveryRecord | null>;
+  /** Record the outcome and count the attempt. A failure keeps any earlier link. */
+  finishDelivery(id: string, outcome: DeliveryOutcome): Promise<DeliveryRecord | null>;
+
+  /** Records the GitHub App webhook's id and applies it atomically: a
+   *  failure leaves no record, so the sender's retry is processed rather
+   *  than skipped. */
+  applyGithubEvent(event: GithubEvent): Promise<WebhookResult>;
+}
+
+/** Subscriptions, as Dodo's webhooks report them. */
+export interface BillingStore {
+  subscriptionFor(userId: string): Promise<SubscriptionRecord | null>;
+  /** Records the webhook's id and applies it atomically: a failure leaves no
+   *  record, so the sender's retry is processed rather than skipped. */
+  applySubscriptionEvent(event: SubscriptionEvent): Promise<WebhookResult>;
+}
+
+/** The marketing site's early-access list. */
+export interface WaitlistStore {
+  /** Null when the email is already on the list. */
+  add(email: string, source: string): Promise<WaitlistSignupRecord | null>;
+  setEmailStatus(id: string, outcome: { status: "sent" } | { status: "failed"; error: string }): Promise<void>;
+}
+
+/** What every store implements: enough to receive reports and read them
+ *  back. Files are not here; they go to `Storage`. */
+export interface CoreStore {
+  readonly projects: ProjectStore;
+  readonly issues: IssueStore;
+}
+
+/** The parts a store may leave out. Each is all or nothing, and the backend
+ *  serves only what the store has: no `features`, no feature routes. */
+export interface StoreModules {
+  readonly auth: AuthStore;
+  readonly teams: TeamStore;
+  readonly triage: TriageStore;
+  readonly features: FeatureStore;
+  readonly integrations: IntegrationStore;
+  readonly billing: BillingStore;
+  readonly waitlist: WaitlistStore;
+}
+
+export type StoreModule = keyof StoreModules;
+
+/** Any store: the core, plus whichever modules it has. */
+export type Store = CoreStore & Partial<StoreModules>;
+
+/** A store with these modules, such as `StoreWith<"auth" | "teams">`. */
+export type StoreWith<M extends StoreModule> = Store & Pick<StoreModules, M>;
+
+/** A store with every module, as Postgres and Convex are. */
+export type FullStore = CoreStore & StoreModules;
