@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createBrainbox, type Brainbox } from "./brainbox.ts";
+import type { CaptureLoader } from "./loader.ts";
 import type { Mark } from "./marks.ts";
+import type { SessionRecordingOptions } from "./session.ts";
 import type { Report, Transport } from "./transport.ts";
 
 // jsdom has no screenshotting; the capture module is swapped for promises the
@@ -16,15 +18,19 @@ vi.mock("./capture.ts", async (importOriginal) => ({
 }));
 
 const recorder = vi.hoisted(() => ({
+  start: vi.fn<(options: SessionRecordingOptions) => void>(),
   stop: vi.fn<() => Promise<{ session: Blob; audio: Blob | null }>>(),
 }));
 vi.mock("./session.ts", () => ({
   canSessionRecord: () => true,
-  startSessionRecording: () => ({
-    stop: recorder.stop,
-    micActive: () => true,
-    setMicMuted: () => {},
-  }),
+  startSessionRecording: (options: SessionRecordingOptions) => {
+    recorder.start(options);
+    return {
+      stop: recorder.stop,
+      micActive: () => true,
+      setMicMuted: () => {},
+    };
+  },
 }));
 
 /** A promise settled from outside. */
@@ -67,6 +73,7 @@ beforeEach(() => {
   revokeObjectURL.mockClear();
   capture.captureViewport.mockReset();
   capture.bakeMarks.mockReset();
+  recorder.start.mockReset();
   recorder.stop.mockReset();
   bb = createBrainbox({ transport });
 });
@@ -193,7 +200,7 @@ describe("Draft recordings", () => {
 
     expect(document.querySelectorAll("[data-brainbox-highlight]")).toHaveLength(0);
     // the marks in view are painted onto the last frame, not left to the DOM
-    expect(capture.bakeMarks).toHaveBeenCalledWith(thumb, [box]);
+    expect(capture.bakeMarks).toHaveBeenCalledWith(thumb, [box], {});
     expect(draft.getState()).toMatchObject({
       hasSession: true,
       hasVoice: true,
@@ -369,7 +376,7 @@ describe("Draft privacy", () => {
     const exclude = document.createElement("div");
     masked.draft({ exclude }).captureScreenshot();
     masked.destroy();
-    expect(capture.captureViewport).toHaveBeenCalledWith({ exclude, privacy });
+    expect(capture.captureViewport).toHaveBeenCalledWith(expect.objectContaining({ exclude, privacy }));
   });
 });
 
@@ -387,5 +394,73 @@ describe("Brainbox destroy", () => {
     shot.resolve(blob("late"));
     await flush();
     expect(draft.getState().screenshotUrl).toBeNull();
+  });
+});
+
+describe("Brainbox options", () => {
+  const loader: CaptureLoader = {
+    recorder: vi.fn(() => new Promise<never>(() => {})),
+    rasteriser: vi.fn(() => new Promise<never>(() => {})),
+  };
+  beforeEach(() => {
+    recorder.stop.mockResolvedValue({ session: blob("session"), audio: null });
+  });
+
+  it("leaves console.error alone with consoleErrors off, and sends none", async () => {
+    bb.destroy();
+    bb = createBrainbox({ transport, consoleErrors: false });
+    expect(console.error).toBe(originalConsoleError);
+    console.error = () => {}; // keep the test output clean
+    try {
+      window.dispatchEvent(new ErrorEvent("error", { message: "boom" }));
+    } finally {
+      console.error = originalConsoleError;
+    }
+    await bb.draft().submit({ text: "x" });
+    expect(sent[0]?.metadata.consoleErrors).toEqual([]);
+  });
+
+  it("hands the screenshot tuning and the loader to every capture and bake", async () => {
+    const screenshot = { maxScale: 1, assetTimeoutMs: 2000, maxBytes: 1024 };
+    const tuned = createBrainbox({ transport, screenshot, loader });
+    capture.captureViewport.mockResolvedValue(blob("plain"));
+    capture.bakeMarks.mockResolvedValue(blob("baked"));
+    const draft = tuned.draft();
+    draft.captureScreenshot();
+    draft.markUp([box]);
+    await flush();
+    tuned.destroy();
+    expect(capture.captureViewport).toHaveBeenCalledWith({ ...screenshot, loader });
+    expect(capture.bakeMarks).toHaveBeenCalledWith(expect.any(Blob), [box], { maxBytes: 1024 });
+  });
+
+  it("records without audio and with the host's rrweb options when asked", () => {
+    const rrweb = { recordCanvas: true };
+    const quiet = createBrainbox({ transport, recording: { audio: false, rrweb }, loader });
+    quiet.draft().startRecording({ maxMs: 5_000 });
+    // one recording can still ask for the mic
+    quiet.draft().startRecording({ audio: true });
+    quiet.destroy();
+    expect(recorder.start.mock.calls[0]?.[0]).toMatchObject({
+      audio: false,
+      rrweb,
+      maxMs: 5_000,
+      loader,
+    });
+    expect(recorder.start.mock.calls[1]?.[0]).toMatchObject({ audio: true, rrweb });
+  });
+
+  it("records with the mic by default", () => {
+    bb.draft().startRecording();
+    // left unset, so startSessionRecording's own default (on) applies
+    expect(recorder.start.mock.calls[0]?.[0].audio).toBeUndefined();
+  });
+
+  it("preloads through the instance's loader", () => {
+    const preloading = createBrainbox({ transport, loader });
+    preloading.preloadCapture();
+    preloading.destroy();
+    expect(loader.recorder).toHaveBeenCalled();
+    expect(loader.rasteriser).toHaveBeenCalled();
   });
 });

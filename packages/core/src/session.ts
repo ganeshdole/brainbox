@@ -1,5 +1,6 @@
+import type { eventWithTime, recordOptions } from "rrweb";
 import { startAudioRecording, type AudioRecorder } from "./audio.ts";
-import { loadRecorder } from "./lazy.ts";
+import { defaultCaptureLoader, type CaptureLoader } from "./loader.ts";
 import {
   BLOCK_CLASS,
   IGNORE_CLASS,
@@ -13,8 +14,48 @@ export interface SessionCapture {
   audio: Blob | null;
 }
 
+/** rrweb `record()` options a host may add or override (`sampling`,
+ *  `slimDOMOptions`, `recordCanvas`, `blockSelector`, ...). `emit` belongs to
+ *  the engine, and input and text masking go through `privacy`, so those
+ *  cannot be loosened from here. */
+export type RrwebRecordOptions = Omit<
+  recordOptions<eventWithTime>,
+  | "emit"
+  | "maskAllInputs"
+  | "maskInputOptions"
+  | "maskInputFn"
+  | "maskTextFn"
+  | "maskTextSelector"
+  | "maskTextClass"
+  | "blockClass"
+  | "ignoreClass"
+>;
+
+/** How recordings are made, for every draft of an instance. */
+export interface RecordingOptions {
+  /** Ask for the mic and record narration with the session. Default true;
+   *  false never shows the permission prompt. */
+  audio?: boolean;
+  /** Extra rrweb options, laid over the engine's defaults. */
+  rrweb?: RrwebRecordOptions;
+}
+
+export interface SessionRecordingOptions extends RecordingOptions {
+  /** Fires at the `maxMs` cap, so the caller can finish with `stop()`. */
+  onAutoStop?: () => void;
+  /** The longest a recording runs. Default 60 000 ms. */
+  maxMs?: number;
+  /** Mask more text than `.rr-mask`. */
+  privacy?: PrivacyOptions;
+  /** Where rrweb comes from. Default `defaultCaptureLoader`. */
+  loader?: CaptureLoader;
+}
+
+/** A recording in progress. */
 export interface SessionRecording {
+  /** Finish: the gzipped rrweb event log and the narration, if any. */
   stop: () => Promise<SessionCapture>;
+  /** Whether the mic came up (the permission prompt can take a while). */
   micActive: () => boolean;
   /** Mute/unmute narration mid-recording. Implemented by disabling the audio
    *  track rather than stopping the recorder: the track keeps producing (now
@@ -36,11 +77,14 @@ export function canSessionRecord(): boolean {
  *  Voice narration via the mic is best-effort: the user may deny the prompt
  *  (or dismiss it) and the DOM recording carries on without audio.
  *  `onAutoStop` fires at the max-duration cap so the caller finalizes via stop(). */
-export function startSessionRecording(
-  onAutoStop: () => void,
+export function startSessionRecording({
+  onAutoStop = () => {},
   maxMs = 60_000,
-  privacy?: PrivacyOptions,
-): SessionRecording {
+  privacy,
+  audio: withAudio = true,
+  rrweb,
+  loader = defaultCaptureLoader,
+}: SessionRecordingOptions = {}): SessionRecording {
   const events: unknown[] = [];
   let startedAt = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -52,27 +96,33 @@ export function startSessionRecording(
     onAutoStop();
   };
   let stopped = false;
-  // rrweb loads on first use (lazy.ts). The session's clock, the mic and the
+  // rrweb loads on first use (loader.ts). The session's clock, the mic and the
   // duration cap all start with the recorder, not before it: the replay's
   // timeline begins at rrweb's first event, and `audioOffsetMs` is measured
   // against it. A Stop that beats the load never starts the recorder at all.
-  const recorder = loadRecorder().then(({ record }) => {
+  const recorder = loader.recorder().then(({ record }) => {
     if (stopped) return undefined;
     startedAt = Date.now();
     timer = setTimeout(fire, maxMs);
     return record({
+      recordCanvas: false,
+      collectFonts: false,
+      ...rrweb,
       emit(event) {
         events.push(event);
       },
-      // privacy: never let typed values (passwords, emails, PII) leave as plaintext
+      // privacy: never let typed values (passwords, emails, PII) leave as
+      // plaintext. Spread after the host's options, so a key the type leaves
+      // out cannot slip in from plain JS either.
       maskAllInputs: true,
       maskInputOptions: { password: true, email: true, tel: true },
+      maskInputFn: undefined,
+      maskTextFn: undefined,
       blockClass: BLOCK_CLASS,
       ignoreClass: IGNORE_CLASS,
       maskTextClass: MASK_CLASS,
+      maskTextSelector: undefined,
       ...recordMaskOptions(privacy),
-      recordCanvas: false,
-      collectFonts: false,
     });
   });
 
@@ -83,7 +133,7 @@ export function startSessionRecording(
     mic?.stream.getAudioTracks().forEach((t) => (t.enabled = !muted));
   };
   const micReady = recorder
-    .then((started) => (started ? startAudioRecording() : null))
+    .then((started) => (started && withAudio ? startAudioRecording() : null))
     .then((r) => {
       if (!r) return;
       // permission granted after Stop was already pressed - release the mic

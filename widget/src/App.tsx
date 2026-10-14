@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   canSessionRecord,
-  preloadCapture,
   type Brainbox,
   type Importance,
   type IssueKind,
@@ -78,8 +77,8 @@ export function App({
   // screenshot or recording they pick isn't waiting on the network.
   const open = status !== "idle";
   useEffect(() => {
-    if (open) preloadCapture();
-  }, [open]);
+    if (open) brainbox.preloadCapture();
+  }, [open, brainbox]);
 
   // Not a dialog while recording: then the user is working in the host page.
   const modal = open && status !== "recording";
