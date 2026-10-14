@@ -54,20 +54,22 @@ export function parseOrganization(input: string): string | null {
   const value = input.trim();
   const name = /^[A-Za-z0-9][A-Za-z0-9-]{0,49}$/;
   if (name.test(value)) return value;
-  let url: URL;
+  let org: string | undefined;
   try {
-    url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
+    const url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
+    const host = url.hostname.toLowerCase();
+    const segment = url.pathname.split("/").find(Boolean);
+    // decodeURIComponent throws on a malformed escape like %ZZ: that's not an organization either.
+    org =
+      host === "dev.azure.com"
+        ? segment && decodeURIComponent(segment)
+        : host.endsWith(".visualstudio.com")
+          ? host.slice(0, -".visualstudio.com".length)
+          : undefined;
   } catch {
     return null;
   }
-  const host = url.hostname.toLowerCase();
-  const org =
-    host === "dev.azure.com"
-      ? url.pathname.split("/").find(Boolean)
-      : host.endsWith(".visualstudio.com")
-        ? host.slice(0, -".visualstudio.com".length)
-        : undefined;
-  return org && name.test(decodeURIComponent(org)) ? decodeURIComponent(org) : null;
+  return org && name.test(org) ? org : null;
 }
 
 export function sealToken(

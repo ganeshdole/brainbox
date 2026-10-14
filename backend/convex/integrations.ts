@@ -168,7 +168,8 @@ export const listDeliveries = serverQuery({
 
 /**
  * Start one delivery as pending. Null when this (issue, destination) already
- * has one; with `retry` that one is reset to pending instead.
+ * has one; with `retry` that one is reset to pending instead, unless it was
+ * sent: a retry never files the same report twice.
  */
 export const claimDelivery = serverMutation({
   args: { issueId: v.string(), destinationId: v.string(), provider, retry: v.boolean() },
@@ -179,7 +180,7 @@ export const claimDelivery = serverMutation({
       .withIndex("by_issue_destination", (q) => q.eq("issueId", issueId).eq("destinationId", destinationId))
       .unique();
     if (existing) {
-      if (!retry) return null;
+      if (!retry || existing.status === "sent") return null;
       await ctx.db.patch(existing._id, { status: "pending", error: null, updatedAt: now });
       const reset = await ctx.db.get(existing._id);
       return reset && strip(reset);

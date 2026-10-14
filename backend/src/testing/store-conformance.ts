@@ -573,7 +573,7 @@ function integrationTests(get: () => StoreWith<"integrations">) {
     expect(await store.integrations.listDestinations(project.id)).toEqual([]);
   });
 
-  it("claims a delivery once, unless retrying, and records its outcome", async () => {
+  it("claims a delivery once, unless retrying one not sent, and records its outcome", async () => {
     const store = get();
     const { conn, project } = await connected(store);
     const dest = await store.integrations.saveDestination({
@@ -591,6 +591,8 @@ function integrationTests(get: () => StoreWith<"integrations">) {
 
     const sent = await store.integrations.finishDelivery(must(row).id, { ok: true, externalId: "42", url: "https://gh/42" });
     expect(sent).toMatchObject({ status: "sent", externalId: "42", externalUrl: "https://gh/42", attempts: 1 });
+    // A retry never files the same report twice.
+    expect(await store.integrations.claimDelivery({ ...claim, retry: true })).toBeNull();
     const failed = await store.integrations.finishDelivery(must(row).id, { ok: false, error: "down" });
     expect(failed).toMatchObject({ status: "failed", error: "down", externalUrl: "https://gh/42", attempts: 2 });
     expect(await store.integrations.listDeliveries(issue.id)).toEqual([failed]);

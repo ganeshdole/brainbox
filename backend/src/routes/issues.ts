@@ -10,6 +10,9 @@ import type { AppEnv } from "../types.ts";
 
 const featureLink = z.object({ featureId: z.string().min(1).nullable() });
 
+/** A manual send or retry; `provider` resends to that destination only. */
+const sendSchema = z.object({ provider: z.enum(["github", "azure-devops"]).optional() }).nullable();
+
 const triageSchema = z
   .object({
     status: z.enum(["new", "open", "in_progress", "resolved", "closed"]).optional(),
@@ -109,11 +112,21 @@ export const issueFeatureRoute = new Hono<AppEnv>().put("/:id/feature", async (c
   return c.json(await toIssue(row, c.get("deps").storage));
 });
 
-/** Send an issue to its destinations now. Mounted with the integrations module. */
+/** Send an issue to its destinations now, and answer with every delivery of
+ *  the issue, not just the ones sent now. Mounted with the integrations module. */
 export const issueDeliveriesRoute = new Hono<AppEnv>().post("/:id/deliveries", async (c) => {
+  const parsed = sendSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: "Invalid body", issues: parsed.error.issues }, 400);
   const access = await issueAccess(c, c.req.param("id"));
   if (access instanceof Response) return access;
-  const results = await deliverIssue(c.get("deps"), access.issue.id, { force: true });
-  if (results.length === 0) return c.json({ error: "No destination configured" }, 409);
-  return c.json(results.map(toDelivery));
+  const integrations = requireModule(c.get("store"), "integrations");
+  const provider = parsed.data?.provider;
+  // A delivery outlives its destination, so check what is configured, not what was sent.
+  const targets = await integrations.deliveryTargets(access.issue.projectId, { includePaused: true });
+  if (!targets.some((t) => !provider || t.destination.provider === provider)) {
+    return c.json({ error: "No destination configured" }, 409);
+  }
+  await deliverIssue(c.get("deps"), access.issue.id, { force: true, provider });
+  const deliveries = await integrations.listDeliveries(access.issue.id);
+  return c.json(deliveries.map(toDelivery));
 });

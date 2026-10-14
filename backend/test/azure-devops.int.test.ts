@@ -4,6 +4,7 @@ import { app } from "../src/app.ts";
 import { deliverIssue } from "../src/integrations/dispatch.ts";
 import { getStore } from "../src/store/index.ts";
 import { fakeAzureDevops, fieldOf } from "./azure-devops-fake.ts";
+import { fakeGithub } from "./github-fake.ts";
 import { stored, testDeps } from "./harness.ts";
 import {
   ADO_CONFIG,
@@ -11,6 +12,7 @@ import {
   makeAzureDevopsConnection,
   makeAzureDevopsDestination,
   makeConnection,
+  makeDestination,
   makeIssue,
   makeProject,
   makeUser,
@@ -333,6 +335,72 @@ describe("delivering to Azure DevOps", () => {
     const [skipped] = await deliverIssue(testDeps, second.id);
     expect(skipped?.status).toBe("failed");
     expect(ado.calls).toHaveLength(callsBefore);
+  });
+});
+
+describe("retrying a delivery", () => {
+  it("resends to the destination that failed, never to one the report already reached", async () => {
+    const gh = fakeGithub();
+    let down = true;
+    const ado = fakeAzureDevops({
+      rule: () => (down ? { status: 503, body: { message: "TF400898: Service unavailable" } } : null),
+    });
+    const { me, project, headers } = await setup();
+    await makeDestination(project.id, (await makeConnection(me.id)).id);
+    await makeAzureDevopsDestination(project.id, (await makeAzureDevopsConnection(me.id)).id);
+    const issue = await makeIssue(project.id, { screenshotKey: null });
+
+    const first = await deliverIssue(testDeps, issue.id);
+    expect(first.map((d) => [d.provider, d.status]).sort()).toEqual([
+      ["azure-devops", "failed"],
+      ["github", "sent"],
+    ]);
+
+    // A retry with nothing named still skips what was sent.
+    const again = await app.request(`/api/issues/${issue.id}/deliveries`, { method: "POST", headers });
+    expect(again.status).toBe(200);
+    expect(gh.issueCalls()).toHaveLength(1);
+
+    down = false;
+    const res = await app.request(`/api/issues/${issue.id}/deliveries`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ provider: "azure-devops" }),
+    });
+    expect(res.status).toBe(200);
+    const all = (await res.json()) as Array<{ provider: string; status: string }>;
+    expect(all.map((d) => [d.provider, d.status]).sort()).toEqual([
+      ["azure-devops", "sent"],
+      ["github", "sent"],
+    ]);
+    expect(gh.issueCalls()).toHaveLength(1);
+    // Two refused while it was down, one filed.
+    expect(ado.created()).toHaveLength(3);
+
+    const bad = await app.request(`/api/issues/${issue.id}/deliveries`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ provider: "jira" }),
+    });
+    expect(bad.status).toBe(400);
+  });
+
+  it("says nothing is configured when the failed delivery's destination was removed", async () => {
+    fakeAzureDevops({ rule: () => ({ status: 503, body: { message: "TF400898: Service unavailable" } }) });
+    const { me, project, headers } = await setup();
+    await makeAzureDevopsDestination(project.id, (await makeAzureDevopsConnection(me.id)).id);
+    const issue = await makeIssue(project.id, { screenshotKey: null });
+    const [failed] = await deliverIssue(testDeps, issue.id);
+    expect(failed?.status).toBe("failed");
+
+    await getStore().integrations.deleteDestination(project.id, "azure-devops");
+    const res = await app.request(`/api/issues/${issue.id}/deliveries`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ provider: "azure-devops" }),
+    });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "No destination configured" });
   });
 });
 

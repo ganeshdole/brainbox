@@ -79,3 +79,15 @@ export function bugVisibilityWarning(
   }
   return null;
 }
+
+/** What an iteration picker saves: null while "Fixed" has no iteration chosen,
+ *  so it can't be saved as something else. */
+export function iterationInput(
+  kind: AzureDevopsIterationConfig["kind"],
+  fixedPath: string,
+  backlogIteration: string,
+): AzureDevopsIterationConfig | null {
+  if (kind === "current") return { kind: "current" };
+  if (kind === "fixed") return fixedPath ? { kind: "fixed", path: fixedPath } : null;
+  return { kind: "backlog", path: backlogIteration };
+}
