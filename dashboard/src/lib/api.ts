@@ -20,6 +20,7 @@ import type {
   Issue,
   IssueEvent,
   IssueTriagePatch,
+  Me,
   PlanId,
   Project,
   ProjectDestination,
@@ -126,6 +127,8 @@ export const api = {
   // Public: the login page reads it before anyone is signed in. A backend
   // older than this endpoint answers 401, which must not redirect.
   getSignInOptions: () => req<SignInOptions>("/api/sign-in-options", undefined, { redirects: false }),
+  /** The signed-in Account, and which optional parts this backend has. */
+  getMe: () => req<Partial<Me>>("/api/me"),
   listProjects: () => req<Project[]>("/api/projects"),
   /** Into `teamId` when given; otherwise into the Team the caller owns, made
    *  for them when they own none. */

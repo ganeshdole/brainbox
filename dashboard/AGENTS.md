@@ -10,6 +10,12 @@ Root rules in `/AGENTS.md` apply.
 - All backend calls go through the typed client in `src/lib/api.ts` - add a
   method there rather than calling `fetch` from a component. It handles the 401 →
   `/login` redirect and error unwrapping centrally.
+- The backend may be built without some optional parts (teams, triage,
+  features, integrations, billing; ADR 0010). `ProtectedRoute` reads them
+  from `/api/me` once, and `useModules().has("features")` decides whether to
+  show what needs one. Pages for a missing part sit behind `<RequireModule>`
+  in `App.tsx`. A new screen or control that calls a module's API checks for
+  it the same way.
 - API base URL comes from `src/lib/authConfig.ts`. Auth is a session cookie sent
   with `credentials: "include"`; there's no token to thread through the UI.
 

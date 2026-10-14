@@ -265,7 +265,10 @@ modules your store has:
 So a store can start with the core alone and grow. Without `teams`, everyone
 who can sign in owns every project, so `createApp` refuses to start unless
 `auth.allowedEmailDomains` limits who that is. `GET /api/me` lists the
-modules this backend has.
+modules this backend has, and the dashboard hides what needs the others: no
+Features page without `features` (feature requests then show among the
+reports), no status tabs or triage controls without `triage`, no destinations
+without `integrations`, no Team page or invites without `teams`.
 
 `createPostgresStore(connectPostgres(url))` and
 `createConvexStore(createConvexCaller(url, secret))` are the two stores this

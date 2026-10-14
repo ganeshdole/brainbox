@@ -28,6 +28,7 @@ import {
 import { priorityLabel, statusLabel, TRIAGE_TABS, byPriority, defaultTab, type TriageTabKey } from "../lib/triage";
 import { ALL_PROJECTS, useProject } from "../lib/useProject";
 import { cn, isToday, timeAgo } from "../lib/utils";
+import { useModules } from "../lib/modules";
 
 
 /** Evidence readout: what the report captured, as a mono chip. */
@@ -54,7 +55,7 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ReportRow({ issue, projectLabel }: { issue: Issue; projectLabel?: string }) {
+function ReportRow({ issue, projectLabel, triage }: { issue: Issue; projectLabel?: string; triage: boolean }) {
   const to = `/projects/${issue.projectId}/issues/${issue.id}`;
   const errorCount = issue.metadata.consoleErrors.length;
   // The project pins the domain, so the meta line shows only the path - and
@@ -103,10 +104,12 @@ function ReportRow({ issue, projectLabel }: { issue: Issue; projectLabel?: strin
         )}
       </span>
       <span className="flex min-w-0 flex-1 items-center gap-2">
-        <span title={statusLabel(issue.status)} className="flex">
-          <StatusDot status={issue.status} />
-        </span>
-        {issue.priority !== "none" && (
+        {triage && (
+          <span title={statusLabel(issue.status)} className="flex">
+            <StatusDot status={issue.status} />
+          </span>
+        )}
+        {triage && issue.priority !== "none" && (
           <span title={priorityLabel(issue.priority)} className="flex">
             <PriorityIcon priority={issue.priority} />
           </span>
@@ -160,7 +163,8 @@ function ReportList({
   /** Present in the all-projects view: id → name for the row meta line. */
   projectNames?: Map<string, string>;
   selected: ReadonlySet<string>;
-  onToggle: (id: string) => void;
+  /** Absent when the backend has no triage: nothing to select rows for. */
+  onToggle?: (id: string) => void;
 }) {
   return (
     <ul className="overflow-hidden rounded-xl border border-default bg-elevated">
@@ -173,20 +177,22 @@ function ReportList({
           )}
         >
           {/* outside the row link, so ticking never opens the report */}
-          <label className="flex cursor-pointer items-center self-stretch pl-4">
-            <input
-              type="checkbox"
-              checked={selected.has(issue.id)}
-              onChange={() => onToggle(issue.id)}
-              aria-label={`Select "${issueTitle(issue)}"`}
-              className={cn(
-                "size-3.5 accent-current transition",
-                selected.size === 0 && "opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100",
-              )}
-            />
-          </label>
+          {onToggle && (
+            <label className="flex cursor-pointer items-center self-stretch pl-4">
+              <input
+                type="checkbox"
+                checked={selected.has(issue.id)}
+                onChange={() => onToggle(issue.id)}
+                aria-label={`Select "${issueTitle(issue)}"`}
+                className={cn(
+                  "size-3.5 accent-current transition",
+                  selected.size === 0 && "opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100",
+                )}
+              />
+            </label>
+          )}
           <div className="min-w-0 flex-1">
-            <ReportRow issue={issue} projectLabel={projectNames?.get(issue.projectId)} />
+            <ReportRow issue={issue} projectLabel={projectNames?.get(issue.projectId)} triage={!!onToggle} />
           </div>
         </li>
       ))}
@@ -229,6 +235,11 @@ function BulkBar({
 
 export function Reports() {
   const { project, projects } = useProject();
+  const { has } = useModules();
+  // Without triage every report stays as it arrived: one list, no tabs.
+  const triageOn = has("triage");
+  // Feature requests are tracked under Features, when there is one.
+  const featuresOn = has("features");
   const [filter, setFilter] = useState<ReportFilterKey>("all");
   // Both keyed by scope, so another project starts on its default tab with
   // nothing ticked. No tab picked yet means it follows the data (defaultTab).
@@ -255,8 +266,9 @@ export function Reports() {
       : Promise.all(projects.map((p) => api.listIssues(p.id))).then((lists) => lists.flat());
     load
       .then((issues) => {
-        // feature requests are tracked under Features
-        if (!cancelled) setResult({ scope, issues: newestFirst(issues.filter(isBugReport)) });
+        if (!cancelled) {
+          setResult({ scope, issues: newestFirst(featuresOn ? issues.filter(isBugReport) : issues) });
+        }
       })
       .catch((e: Error) => {
         // A 401/402 is already navigating away; rendering it just flashes a
@@ -266,7 +278,7 @@ export function Reports() {
     return () => {
       cancelled = true;
     };
-  }, [project, projects, scope]);
+  }, [project, projects, scope, featuresOn]);
 
   const current = result?.scope === scope ? result : null;
   const issues = current?.issues ?? null;
@@ -325,7 +337,7 @@ export function Reports() {
   const hidden = project ? undefined : hiddenProjects;
   const scoped = issues?.filter((i) => !hidden?.has(i.projectId)) ?? null;
   const active = REPORT_FILTERS.find((f) => f.key === filter) ?? REPORT_FILTERS[0];
-  const activeTab = picked?.scope === scope ? picked.tab : defaultTab(scoped ?? []);
+  const activeTab = !triageOn ? "all" : picked?.scope === scope ? picked.tab : defaultTab(scoped ?? []);
   const selected: ReadonlySet<string> = ticks?.scope === scope ? ticks.ids : new Set();
   const setSelected = (ids: ReadonlySet<string>) => setTicks({ scope, ids });
   const tabDef = TRIAGE_TABS.find((t) => t.key === activeTab) ?? TRIAGE_TABS[0];
@@ -441,7 +453,7 @@ export function Reports() {
           )}
         </div>
 
-        {scoped && scoped.length > 0 && (
+        {triageOn && scoped && scoped.length > 0 && (
           <div className="mt-5 flex flex-wrap items-center gap-1 border-b border-default">
             {TRIAGE_TABS.map((t) => (
               <button
@@ -500,14 +512,14 @@ export function Reports() {
             </ul>
           )}
           {visible && visible.length > 0 && !grouped && (
-            <ReportList issues={visible} projectNames={projectNames} selected={selected} onToggle={toggle} />
+            <ReportList issues={visible} projectNames={projectNames} selected={selected} onToggle={triageOn ? toggle : undefined} />
           )}
           {visible && grouped && (
             <>
               <GroupLabel>Today</GroupLabel>
-              <ReportList issues={today} projectNames={projectNames} selected={selected} onToggle={toggle} />
+              <ReportList issues={today} projectNames={projectNames} selected={selected} onToggle={triageOn ? toggle : undefined} />
               <GroupLabel>Earlier</GroupLabel>
-              <ReportList issues={earlier} projectNames={projectNames} selected={selected} onToggle={toggle} />
+              <ReportList issues={earlier} projectNames={projectNames} selected={selected} onToggle={triageOn ? toggle : undefined} />
             </>
           )}
           {visible && visible.length === 0 && (
