@@ -6,12 +6,12 @@ import { BrainboxProvider } from "@ganeshdole/brainbox-react";
 import { BrainboxWidget } from "./widget.tsx";
 import { useBrainboxWidget } from "./use-brainbox-widget.ts";
 
-// The screens are a chunk of their own (`ui.tsx`), so a host page that never
+// The screens are a chunk of their own (`widget-ui.tsx`), so a host page that never
 // opens the widget never downloads them (#101). Here the chunk is a stand-in
 // that records when it is loaded.
 
 const loaded = vi.hoisted(() => ({ count: 0 }));
-vi.mock("./ui.tsx", () => {
+vi.mock("./widget-ui.tsx", () => {
   loaded.count += 1;
   return { default: () => <p>the widget UI</p> };
 });

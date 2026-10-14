@@ -18,6 +18,7 @@
     "src/test-setup.ts",
     "src/embed.ts",
     "src/capture-entry.ts",
-    "src/lib/load-capture.ts"
+    "src/lib/load-capture.ts",
+    "src/dev"
   ]
 }

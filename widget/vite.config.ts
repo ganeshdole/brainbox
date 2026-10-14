@@ -43,9 +43,9 @@ function captureAsSiblingScript(): Plugin {
 // - `--mode capture`: `widget-capture.js`, rrweb and modern-screenshot as a
 //   second IIFE, fetched by `widget.js` the first time someone captures. Most
 //   page views never file a report, so they never pay for these.
-// - `--mode lib`: an ES module of the library entry for bundler hosts, with
-//   React and the other @brainbox packages left external so the host ends up
-//   with one copy of each.
+// - `--mode lib`: ES modules of the library entries (`.`, `./ui`, `./markup`)
+//   for bundler hosts, with React and the other @brainbox packages left
+//   external so the host ends up with one copy of each.
 export default defineConfig(({ command, mode }) => {
   const lib = mode === "lib";
   const capture = mode === "capture";
@@ -70,12 +70,27 @@ export default defineConfig(({ command, mode }) => {
         }
       : lib
       ? {
+          // One build for every entry, so the screens `./ui` exports and the
+          // chunk `<BrainboxWidget />` loads lazily share their modules.
           lib: {
-            entry: entry("./src/index.ts"),
+            entry: {
+              index: entry("./src/index.ts"),
+              ui: entry("./src/ui.ts"),
+              markup: entry("./src/markup.ts"),
+            },
             formats: ["es"],
-            fileName: () => "index.js",
+            fileName: (_format, name) => `${name}.js`,
           },
-          rollupOptions: { external: externals },
+          rollupOptions: {
+            external: externals,
+            // The stylesheet in a chunk of its own, which `src/ui.ts` reaches
+            // last, so it is imported after the screens: the lazy chunk a host
+            // bundles gzips ~0.7 KB smaller with their class names ahead of
+            // the CSS.
+            output: {
+              manualChunks: (id) => (id.includes("/src/lib/stylesheet.ts") ? "stylesheet" : undefined),
+            },
+          },
           cssCodeSplit: false,
           // the IIFE build has already emptied dist/
           emptyOutDir: false,

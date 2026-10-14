@@ -21,6 +21,24 @@ const TOOLS: { tool: Tool; label: string; key: string; Icon: typeof Square }[] =
   { tool: "text", label: "Text", key: "t", Icon: Type },
 ];
 
+/** The markup step's tools, colour, undo and Next. Controlled: it holds only
+ *  whether its colour popover is open. Sits at the bottom of a positioned
+ *  drawing surface and keeps its own presses off it. */
+export interface MarkupToolbarProps {
+  tool: Tool;
+  color: string;
+  canUndo: boolean;
+  /** A mark is selected. */
+  canDelete: boolean;
+  onTool: (t: Tool) => void;
+  onColor: (c: string) => void;
+  onUndo: () => void;
+  onDelete: () => void;
+  onCancel: () => void;
+  /** Next: the marks are done. */
+  onDone: () => void;
+}
+
 export function MarkupToolbar({
   tool,
   color,
@@ -32,18 +50,7 @@ export function MarkupToolbar({
   onDelete,
   onCancel,
   onDone,
-}: {
-  tool: Tool;
-  color: string;
-  canUndo: boolean;
-  canDelete: boolean;
-  onTool: (t: Tool) => void;
-  onColor: (c: string) => void;
-  onUndo: () => void;
-  onDelete: () => void;
-  onCancel: () => void;
-  onDone: () => void;
-}) {
+}: MarkupToolbarProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const picker = useRef<HTMLDivElement>(null);
 

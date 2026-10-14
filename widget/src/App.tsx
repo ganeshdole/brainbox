@@ -12,13 +12,8 @@ import { useDraft } from "@ganeshdole/brainbox-react";
 import type { TriggerMode } from "@ganeshdole/brainbox-shared";
 import type { Position } from "./lib/position.ts";
 import { widgetStore } from "./lib/widget-store.ts";
-import { Launcher } from "./components/Launcher.tsx";
-import { Chooser } from "./components/Chooser.tsx";
-import { MarkupOverlay } from "./components/MarkupOverlay.tsx";
-import { RecordOverlay } from "./components/RecordOverlay.tsx";
-import { Composer } from "./components/Composer.tsx";
-import { FeatureComposer } from "./components/FeatureComposer.tsx";
-import { Result } from "./components/Result.tsx";
+import type { WidgetComponents } from "./slots.ts";
+import * as builtIn from "./components/screens.ts";
 
 /** Which screen is showing. The report itself - screenshot, bake, recording,
  *  what gets sent - lives in the core `Draft`; this is only the UI's position
@@ -40,6 +35,7 @@ export function App({
   trigger,
   position,
   featureRequests,
+  components = {},
 }: {
   brainbox: Brainbox;
   /** The shadow host: left out of screenshots. */
@@ -48,7 +44,17 @@ export function App({
   position: Position;
   /** Whether the chooser offers "Suggest a feature". */
   featureRequests: boolean;
+  /** The host's own screens, in place of ours, step by step. */
+  components?: WidgetComponents;
 }) {
+  const Launcher = components.Launcher ?? builtIn.Launcher;
+  const Chooser = components.Chooser ?? builtIn.Chooser;
+  const MarkupOverlay = components.MarkupOverlay ?? builtIn.MarkupOverlay;
+  const RecordOverlay = components.RecordOverlay ?? builtIn.RecordOverlay;
+  const Composer = components.Composer ?? builtIn.Composer;
+  const FeatureComposer = components.FeatureComposer ?? builtIn.FeatureComposer;
+  const Result = components.Result ?? builtIn.Result;
+
   // Open/closed is shared with the host (`useBrainboxWidget`, `mount().open()`),
   // so it lives outside this component and the screen follows it.
   const ui = useMemo(() => widgetStore(brainbox), [brainbox]);
@@ -216,9 +222,9 @@ export function App({
       )}
       {status === "marking" && (
         <MarkupOverlay
-          frozenUrl={report.screenshotUrl ?? undefined}
-          pending={report.screenshotPending}
-          failed={report.screenshotFailed}
+          screenshotUrl={report.screenshotUrl ?? undefined}
+          capturePending={report.screenshotPending}
+          captureFailed={report.screenshotFailed}
           onDone={onMarksDone}
           onCancel={kind === "feature" ? dropScreenshot : reset}
         />

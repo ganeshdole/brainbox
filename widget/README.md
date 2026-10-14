@@ -142,6 +142,160 @@ widget.setFields([{ label: "Plan", value: "Pro" }]);
 widget.destroy();
 ```
 
+## Compose your own
+
+The widget is a flow over a handful of screens, and each one is yours to
+replace or reuse. Three entry points, each importing only what it needs:
+
+| Import | What's in it |
+|---|---|
+| `@ganeshdole/brainbox-widget` | `<BrainboxWidget />`, `mount()`, and the prop types. A few KB; the screens load on first open |
+| `@ganeshdole/brainbox-widget/ui` | every screen, the drawing and mic hooks, and the style helpers below |
+| `@ganeshdole/brainbox-widget/markup` | just the markup step: overlay, toolbar, mark shapes, `useDrawing`, `DraftMarkup`, and the style helpers |
+
+Every screen is controlled. It takes its data as props and reports back
+through callbacks, and none of them reads the widget's store or a Brainbox
+instance, so it works outside our flow.
+
+| Screen | What it is | Moves on with |
+|---|---|---|
+| `Launcher` | the floating button | `onClick` |
+| `Chooser` | screenshot, record, or suggest a feature | `onScreenshot`, `onRecord`, `onFeature?`, `onCancel` |
+| `MarkupOverlay` | drawing on the frozen page | `onDone(marks)`, `onCancel` |
+| `RecordOverlay` | the bar while a session records | `onStop` |
+| `Composer` | a bug report's words and voice | `onSubmit(text, audio)`, `onCancel` |
+| `FeatureComposer` | the feature-request form | `onSubmit(text, audio, importance)`, `onScreenshot`, `onRemoveScreenshot`, `onCancel` |
+| `Result` | sending, sent or failed | `onClose` |
+
+Their props are exported as `LauncherProps`, `ChooserProps` and so on, with
+each field documented. Smaller pieces: `VoiceNote`, `BarRow`, `MarkShape`,
+`MarkTextInput`, `MarkupToolbar`, `useDrawing` and `useMultibandVolume`.
+
+### Replace one step
+
+`components` swaps any step for your own component and keeps the rest of
+ours. Here our markup and recording stay, and the composer is yours:
+
+```tsx
+import { BrainboxWidget, type ComposerProps } from "@ganeshdole/brainbox-widget";
+
+function MyComposer({ screenshotUrl, capturePending, onSubmit, onCancel }: ComposerProps) {
+  const [text, setText] = useState("");
+  return (
+    <div className="my-composer">
+      <style>{myComposerCss}</style>
+      {capturePending ? <Spinner /> : screenshotUrl && <img src={screenshotUrl} alt="" />}
+      <textarea value={text} onChange={(e) => setText(e.target.value)} />
+      <button onClick={() => onSubmit(text, null)}>Send</button>
+      <button onClick={onCancel}>Cancel</button>
+    </div>
+  );
+}
+
+const components = { Composer: MyComposer };   // outside render, or it remounts
+
+<BrainboxWidget components={components} />
+mount({ transport, components });              // same, without a React tree of yours
+```
+
+The slots are `Launcher`, `Chooser`, `MarkupOverlay`, `RecordOverlay`,
+`Composer`, `FeatureComposer` and `Result`, typed as `WidgetComponents`. Each
+gets the props of the built-in screen of the same name. Call its callbacks
+to move the flow on: `onSubmit` sends the report and shows `Result`,
+`onCancel` throws it away. The script tag takes no components, since it
+brings its own React.
+
+Your component renders inside the widget's shadow root, so two things
+follow. Your page's stylesheets don't reach it: bring its CSS along (a
+`<style>` inside it, as above, or inline styles), or `createPortal` it out
+to `document.body` to use your app's. And it starts from our reset
+(Tailwind's preflight), so a `<button>` has no border or background until
+you give it one.
+
+### Markup on its own
+
+The markup step works without the widget, over a core `Draft` or over any
+image.
+
+Over a draft, `DraftMarkup` starts the screenshot when it mounts and hands
+the marks to `draft.markUp()`, which bakes them onto the shot in the
+background. The draft needs the element to keep out of its screenshot, so
+create the shadow host first:
+
+```tsx
+import { useBrainbox } from "@ganeshdole/brainbox-react";
+import { BrainboxShadow, createShadowHost, DraftMarkup } from "@ganeshdole/brainbox-widget/markup";
+
+function MarkItUp({ onDone }: { onDone: () => void }) {
+  const brainbox = useBrainbox();
+  const [host] = useState(createShadowHost);
+  const draft = useMemo(() => brainbox?.draft({ exclude: host.element }), [brainbox, host]);
+  if (!draft) return null;
+  return (
+    <BrainboxShadow host={host} theme="light">
+      <DraftMarkup draft={draft} onDone={onDone} onCancel={() => draft.cancel()} />
+    </BrainboxShadow>
+  );
+}
+// later: await draft.submit({ text }) sends the baked screenshot
+```
+
+Over a plain image, `MarkupOverlay` takes `screenshotUrl` and gives you the
+marks. They are core `Mark`s in viewport CSS pixels over the full-viewport
+image. `paintMarks(ctx, marks)` from `@ganeshdole/brainbox-core` draws them
+onto a canvas of your own.
+
+```tsx
+<BrainboxShadow>
+  <MarkupOverlay screenshotUrl={url} hint="Circle what to change" onDone={save} onCancel={close} />
+</BrainboxShadow>
+```
+
+To build your own surface, use `useDrawing({ color, onCommit })` for the
+drag-to-draw, `MarkShape` to render a mark as SVG, and `MarkupToolbar` for
+the tool row.
+
+### Styles
+
+The screens are styled by the widget's stylesheet, which is scoped to a
+shadow root on purpose. It carries Tailwind's preflight and utility class
+names that would reset or collide with your page, so there is no global
+`.css` file. Two ways in:
+
+- `<BrainboxShadow theme>` renders its children into a shadow root on
+  `<body>`, the same as the widget does: the stylesheet, the theme, and your
+  page's CSS and outside-click listeners kept away. Pass `host` from
+  `createShadowHost()` when you need the element first. This is what you
+  want almost always.
+- `widgetCss` is the stylesheet as a string, for a shadow root of your own.
+  Render it in a `<style>` inside the root, around an element with the
+  `bb-root` class (plus `dark` for the dark theme).
+
+If you import a screen and never use `BrainboxShadow` or `widgetCss`, the
+stylesheet (about 40 KB, 10 KB gzipped) is left out of your bundle.
+
+### Theming
+
+Colours are CSS variables, the same design tokens the dashboard uses. The
+container inside every Brainbox shadow root is the part `root`, so your page
+can set the tokens from outside, in either theme:
+
+```css
+#brainbox-widget::part(root) {
+  --bg-brand: #6d28d9;        /* primary buttons, the launcher, the active tool */
+  --bg-brand-hover: #5b21b6;
+  --text-on-brand: #ffffff;
+}
+```
+
+The surfaces (`--bg-elevated`, `--bg-background`), text (`--text-emphasis`,
+`--text-default`, `--text-muted`) and borders (`--border-default`) work the
+same way. `src/styles/tokens.css` lists them all.
+
+`widget/compose.html` (`pnpm dev`, then `/compose.html`) is a dev page with
+all of the above running: a composer override, the markup brick over a
+draft and over an image, and a themed brand colour.
+
 ## Where things live
 
 | Concern | Package |
@@ -158,8 +312,9 @@ Brainbox Cloud; see `@ganeshdole/brainbox-core` for pointing one at your own bac
 `pnpm build` emits `dist/widget.js` (the script-tag IIFE, everything bundled
 except the capture libraries), `dist/widget-capture.js` (rrweb and
 modern-screenshot, which `widget.js` loads from beside itself the first time the
-widget opens - serve the two files from the same folder), `dist/index.js` (an ES module of the library entry with React and the other
-`@ganeshdole/brainbox-*` packages external) and the `.d.ts` files. The library
+widget opens - serve the two files from the same folder), `dist/index.js`, `dist/ui.js` and `dist/markup.js` (ES modules of the
+library entries, sharing their chunks, with React and the other
+`@ganeshdole/brainbox-*` packages external) and the `.d.ts` files. The main
 entry is a few KB: the screens and their stylesheet are a split chunk that
 `<BrainboxWidget />` loads when its launcher first shows or, with
 `trigger="manual"`, when you first `open()` or `start()` it. Inside

@@ -1,7 +1,15 @@
 import { MessageSquarePlus } from "./icons.tsx";
 import { posClass, type Position } from "../lib/position.ts";
 
-export function Launcher({ position, onClick }: { position: Position; onClick: () => void }) {
+/** The floating button that opens the widget, shown with `trigger="floating"`. */
+export interface LauncherProps {
+  /** The viewport corner it sits in. */
+  position: Position;
+  /** Open the widget: the built-in flow moves on to the chooser. */
+  onClick: () => void;
+}
+
+export function Launcher({ position, onClick }: LauncherProps) {
   return (
     <button
       onClick={onClick}

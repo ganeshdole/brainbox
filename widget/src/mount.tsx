@@ -9,6 +9,7 @@ import { BrainboxProvider } from "@ganeshdole/brainbox-react";
 import type { TriggerMode, WidgetTheme } from "@ganeshdole/brainbox-shared";
 import type { Position } from "./lib/position.ts";
 import { widgetStore, type StartMode } from "./lib/widget-store.ts";
+import type { WidgetComponents } from "./slots.ts";
 import { BrainboxWidget } from "./widget.tsx";
 
 export interface MountOptions extends BrainboxOptions {
@@ -17,6 +18,9 @@ export interface MountOptions extends BrainboxOptions {
   theme?: WidgetTheme;
   /** Offer "Suggest a feature" in the chooser (default `true`). */
   featureRequests?: boolean;
+  /** Your own React components for any step; see `BrainboxWidgetProps`. They
+   *  must use the same React as this package. */
+  components?: WidgetComponents;
 }
 
 /** The mounted widget, for a host with no React tree of its own. */
@@ -41,6 +45,7 @@ export function mount({
   position,
   theme,
   featureRequests,
+  components,
   ...options
 }: MountOptions): WidgetHandle {
   const brainbox = createBrainbox(options);
@@ -59,6 +64,7 @@ export function mount({
         position={position}
         theme={theme}
         featureRequests={featureRequests}
+        components={components}
       />
     </BrainboxProvider>,
   );

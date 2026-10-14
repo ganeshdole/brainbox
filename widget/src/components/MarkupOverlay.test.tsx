@@ -45,7 +45,7 @@ describe("MarkupOverlay", () => {
   it("keeps a note that's still being typed when the user presses Next", () => {
     const onDone = vi.fn<(marks: Mark[]) => void>();
     act(() => {
-      root.render(<MarkupOverlay pending={false} failed={false} onDone={onDone} onCancel={() => {}} />);
+      root.render(<MarkupOverlay onDone={onDone} onCancel={() => {}} />);
     });
 
     typeNote("this is broken");
@@ -60,7 +60,7 @@ describe("MarkupOverlay", () => {
   it("drops an empty text box rather than sending a blank mark", () => {
     const onDone = vi.fn<(marks: Mark[]) => void>();
     act(() => {
-      root.render(<MarkupOverlay pending={false} failed={false} onDone={onDone} onCancel={() => {}} />);
+      root.render(<MarkupOverlay onDone={onDone} onCancel={() => {}} />);
     });
 
     typeNote("   ");

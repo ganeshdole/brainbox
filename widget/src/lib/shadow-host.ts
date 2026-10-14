@@ -4,7 +4,9 @@ export interface ShadowHost {
   /** The element for the host document. Hidden while screenshotting. */
   element: HTMLElement;
   /** Where to render. Carries `.bb-root`, plus the `.dark` class the
-   *  stylesheet keys colours off when the theme is dark (lib/theme.ts). */
+   *  stylesheet keys colours off when the theme is dark (lib/theme.ts). It is
+   *  the shadow part `root`, so the host page can set the design tokens on it:
+   *  `#brainbox-widget::part(root) { --bg-brand: #6d28d9 }`. */
   container: HTMLElement;
 }
 
@@ -41,7 +43,7 @@ function stopAtHost(event: Event): void {
 }
 
 /** Build the shadow host (ADR 0001: host CSS cannot reach in, ours cannot leak
- *  out). The stylesheet arrives with the UI chunk (`ui.tsx`), which renders it
+ *  out). The stylesheet arrives with the UI chunk (`widget-ui.tsx`), which renders it
  *  into `container`. Detached: the caller appends `element` to `<body>` when
  *  it is ready to show it. */
 export function createShadowHost(): ShadowHost {
@@ -65,6 +67,9 @@ export function createShadowHost(): ShadowHost {
 
   const container = document.createElement("div");
   container.className = "bb-root dark";
+  // Page styles on `::part(root)` beat the tokens the stylesheet declares on
+  // `.dark`, in either theme: across shadow boundaries the outer rule wins.
+  container.setAttribute("part", "root");
   shadow.appendChild(container);
 
   return { element, container };
