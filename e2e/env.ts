@@ -9,7 +9,13 @@ export const API_PORT = 8798;
 export const DASHBOARD_PORT = 5184;
 /** The fake Azure DevOps (backend/scripts/fake-azure-devops.ts). */
 export const FAKE_ADO_PORT = 8799;
+/** A second backend, built from parts (backend/scripts/e2e-parts-backend.ts),
+ *  and a dashboard in front of it: tests/parts.spec.ts. */
+export const PARTS_API_PORT = 8796;
+export const PARTS_DASHBOARD_PORT = 5186;
 export const API_URL = `http://localhost:${API_PORT}`;
+export const PARTS_API_URL = `http://localhost:${PARTS_API_PORT}`;
+export const PARTS_DASHBOARD_URL = `http://localhost:${PARTS_DASHBOARD_PORT}`;
 export const DASHBOARD_URL = `http://localhost:${DASHBOARD_PORT}`;
 export const FAKE_ADO_URL = `http://localhost:${FAKE_ADO_PORT}`;
 
@@ -25,6 +31,7 @@ export const COMPANY_DOMAIN = "acme.test";
 /** The backend's output. The console email driver writes sign-in codes and
  *  invites here, which is how the tests read their email. */
 export const BACKEND_LOG = fileURLToPath(new URL("test-results/backend.log", import.meta.url));
+export const PARTS_BACKEND_LOG = fileURLToPath(new URL("test-results/parts-backend.log", import.meta.url));
 
 export const backendEnv: Record<string, string> = {
   DATABASE_DRIVER: "postgres",
@@ -44,4 +51,14 @@ export const backendEnv: Record<string, string> = {
   // Azure DevOps goes to the fake, which accepts the token "fake-pat".
   INTEGRATIONS_ENCRYPTION_KEY: Buffer.alloc(32, 9).toString("base64"),
   AZURE_DEVOPS_URL: FAKE_ADO_URL,
+};
+
+/** The backend from parts: the same database and settings, on its own port
+ *  and in front of its own dashboard. */
+export const partsBackendEnv: Record<string, string> = {
+  ...backendEnv,
+  AUTH_URL: `${PARTS_API_URL}/api/auth`,
+  DASHBOARD_ORIGIN: PARTS_DASHBOARD_URL,
+  PUBLIC_API_URL: PARTS_API_URL,
+  PORT: String(PARTS_API_PORT),
 };
