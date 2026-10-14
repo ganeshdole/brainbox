@@ -10,6 +10,26 @@ const IMPORTANCE: Array<{ value: Importance; label: string }> = [
   { value: "critical", label: "Blocking me" },
 ];
 
+export interface FeatureComposerProps {
+  /** The attached screenshot, marked up, as an object URL. */
+  screenshotUrl?: string;
+  /** The attached screenshot is still rasterising or baking. */
+  capturePending?: boolean;
+  /** The screenshot could not be taken. The request still goes out. */
+  captureFailed?: boolean;
+  /** The viewport corner it sits in. */
+  position: Position;
+  /** Take a screenshot to mark up. The built-in flow keeps this form mounted,
+   *  hidden, until the markup is done, so what was typed survives. */
+  onScreenshot: () => void;
+  /** Drop the attached screenshot and stay on the form. */
+  onRemoveScreenshot: () => void;
+  /** Throw the request away and close. */
+  onCancel: () => void;
+  /** Send it. A feature request needs text or a voice note. */
+  onSubmit: (text: string, audio: Blob | null, importance: Importance | undefined) => void;
+}
+
 /** The feature-request form. Words lead, typed or spoken: an idea is told, not
  *  shown. How much it matters and a screenshot are both optional. */
 export function FeatureComposer({
@@ -21,17 +41,7 @@ export function FeatureComposer({
   onRemoveScreenshot,
   onCancel,
   onSubmit,
-}: {
-  screenshotUrl?: string;
-  capturePending?: boolean;
-  captureFailed?: boolean;
-  position: Position;
-  /** Take a screenshot to mark up; the form waits, hidden, until it is done. */
-  onScreenshot: () => void;
-  onRemoveScreenshot: () => void;
-  onCancel: () => void;
-  onSubmit: (text: string, audio: Blob | null, importance: Importance | undefined) => void;
-}) {
+}: FeatureComposerProps) {
   const [text, setText] = useState("");
   const [audio, setAudio] = useState<Blob | null>(null);
   const [importance, setImportance] = useState<Importance | undefined>();

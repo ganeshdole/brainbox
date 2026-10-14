@@ -10,10 +10,14 @@ import {
   type Mark,
 } from "@ganeshdole/brainbox-core";
 
-/** One mark as SVG. Shared by the markup step and the in-recording overlay so
+export interface MarkShapeProps {
+  mark: Mark;
+}
+
+/** One mark as SVG, for inside an `<svg>`. Shared by the markup step and the in-recording overlay so
  *  a box drawn in one looks identical in the other - and matches the bake,
  *  which draws the same geometry onto a canvas. */
-export const MarkShape = memo(function MarkShape({ mark }: { mark: Mark }) {
+export const MarkShape = memo(function MarkShape({ mark }: MarkShapeProps) {
   switch (mark.kind) {
     case "box":
       return (
@@ -82,19 +86,19 @@ export const MarkShape = memo(function MarkShape({ mark }: { mark: Mark }) {
 
 /** The floating input a text mark is typed into, positioned so the text sits
  *  where the baked glyphs will land. */
-export function MarkTextInput({
-  at,
-  color,
-  onChange,
-  onCommit,
-  onCancel,
-}: {
+export interface MarkTextInputProps {
+  /** Where the text's baseline starts, in the surface's coordinates, and what
+   *  has been typed so far. */
   at: { x: number; y: number; value: string };
   color: string;
   onChange: (value: string) => void;
+  /** Enter. */
   onCommit: () => void;
+  /** Escape. */
   onCancel: () => void;
-}) {
+}
+
+export function MarkTextInput({ at, color, onChange, onCommit, onCancel }: MarkTextInputProps) {
   const ref = useRef<HTMLInputElement>(null);
   // The box mounts from the pointerdown that placed it, and that same click's
   // mousedown lands after `autoFocus` and moves focus to whatever was clicked.

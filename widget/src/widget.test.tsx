@@ -37,10 +37,10 @@ function HostControls() {
     </>
   );
 }
-/** Let the widget's lazily loaded UI chunk (`ui.tsx`) arrive and render. */
+/** Let the widget's lazily loaded UI chunk (`widget-ui.tsx`) arrive and render. */
 const uiReady = () =>
   act(async () => {
-    await import("./ui.tsx");
+    await import("./widget-ui.tsx");
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 /** A button inside the widget, by the start of its label. */

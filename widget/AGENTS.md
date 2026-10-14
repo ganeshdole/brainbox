@@ -14,11 +14,31 @@ Root rules in `/AGENTS.md` apply.
 - `<BrainboxWidget />` and `useBrainboxWidget()` are for a host's own React
   tree, under a `<BrainboxProvider>`.
 
-All three render `src/App.tsx` (through `src/ui.tsx`, the lazily loaded chunk
-that also carries the stylesheet), which holds a core `Draft` and shows screens
-off its state. Whether the UI is open lives in `src/lib/widget-store.ts`, one
+All three render `src/App.tsx` (through `src/widget-ui.tsx`, the lazily
+loaded chunk that also carries the stylesheet), which holds a core `Draft` and
+shows screens off its state. Whether the UI is open lives in `src/lib/widget-store.ts`, one
 store per instance, so a host button and the widget agree without a second
 provider. Core has no idea of "open".
+
+## The screens are public API
+
+Besides the main entry, `src/ui.ts` (`./ui`) exports every screen and
+`src/markup.ts` (`./markup`) the markup step on its own. Hosts compose them
+or swap one into our flow through `components` (`src/slots.ts`). So:
+
+- A screen is controlled. It takes props and calls callbacks, and never reads
+  `widget-store`, a `Brainbox` or a `Draft`; that wiring lives in `App.tsx`
+  (or `DraftMarkup`, the one binding to a draft). Its props interface
+  (`ComposerProps`, ...) is exported and documented field by field, and
+  changing it is a breaking change for 0.x hosts. Add optional props rather
+  than changing existing ones.
+- A new step in the flow gets a slot in `WidgetComponents`, read in `App.tsx`
+  as `components.X ?? builtIn.X`, and a slot test in `slots.test.tsx`.
+- `src/index.ts` must stay small: it may only `export type` from the screens.
+  A runtime import from `components/` there pulls the whole UI into every
+  host's first load. Check `dist/index.js` after `pnpm build`.
+- `widgetCss` (`lib/stylesheet.ts`) stays `/* @__PURE__ */`, so a host that
+  imports a screen without our styles doesn't ship 40 KB of CSS.
 
 ## What makes the widget different
 
@@ -49,8 +69,10 @@ as a second IIFE that `widget.js` injects on first open (`embed.ts` passes
 `siblingScriptLoader` from `src/lib/load-capture.ts` to core as its `loader`,
 and the IIFE build marks rrweb and modern-screenshot external so core's
 default `import()`s don't pull them in);
-and `dist/index.js` plus a split `ui-*.js` chunk, an ES module of
-the library entry with React and the other `@ganeshdole/brainbox-*` packages external.
+and `dist/index.js`, `dist/ui.js` and `dist/markup.js`, one ES build of
+the three library entries sharing their chunks (the lazy `widget-ui-*.js`
+among them), with React and the other `@ganeshdole/brainbox-*` packages
+external.
 Inside the monorepo the package is consumed from source (`src/index.ts`).
 
 ## Tests
@@ -58,4 +80,7 @@ Inside the monorepo the package is consumed from source (`src/index.ts`).
 Vitest under jsdom. `lib/*` functions are tested directly. `widget.test.tsx`,
 `mount.test.tsx` and `embed.test.ts` render the real tree with
 `react-dom/client` inside `act()` and read the shadow root. `!` is allowed in
-`*.test.ts(x)`. Run: `pnpm -F @ganeshdole/brainbox-widget test`.
+`*.test.ts(x)`. `ui.test.tsx`, `slots.test.tsx` and `markup.test.tsx` cover
+the public screens, one test per `components` slot, and the standalone
+markup. `compose.html` is the dev page for those (`pnpm dev`, then
+`/compose.html`). Run: `pnpm -F @ganeshdole/brainbox-widget test`.

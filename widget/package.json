@@ -15,6 +15,14 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./ui": {
+      "types": "./src/ui.ts",
+      "default": "./src/ui.ts"
+    },
+    "./markup": {
+      "types": "./src/markup.ts",
+      "default": "./src/markup.ts"
     }
   },
   "main": "./src/index.ts",
@@ -31,6 +39,14 @@
       ".": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
+      },
+      "./ui": {
+        "types": "./dist/ui.d.ts",
+        "default": "./dist/ui.js"
+      },
+      "./markup": {
+        "types": "./dist/markup.d.ts",
+        "default": "./dist/markup.js"
       }
     }
   },

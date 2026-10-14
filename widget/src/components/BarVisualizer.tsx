@@ -4,13 +4,14 @@ import { barHeight } from "../lib/multiband.ts";
 /** A row of level bars, themed with brainbox tokens rather than the shadcn ones
  *  ElevenLabs UI's `bar-visualizer` ships with. `dimFrom` greys everything at or
  *  past that index, which is how a recorded clip doubles as a playback scrubber. */
-export const BarRow = memo(function BarRow({
-  levels,
-  dimFrom,
-}: {
+export interface BarRowProps {
+  /** One 0..1 level per bar. */
   levels: readonly number[];
+  /** Grey out the bars from this index on. */
   dimFrom?: number;
-}) {
+}
+
+export const BarRow = memo(function BarRow({ levels, dimFrom }: BarRowProps) {
   return (
     <span
       className="flex h-8 flex-1 items-center justify-center gap-[2px] overflow-hidden"

@@ -14,17 +14,17 @@ const MAX_SECS = 120;
 
 type Phase = "idle" | "recording" | "recorded";
 
-/** Voice capture as the primary way to file a report: one big mic target, bars
- *  that track the speaker's voice per frequency band, and playback before
- *  sending - people won't submit audio they can't hear back. */
-export function VoiceNote({
-  onChange,
-  prompt = "Say what went wrong",
-}: {
+export interface VoiceNoteProps {
+  /** The recorded clip once the user stops, or null when they delete it. */
   onChange: (b: Blob | null) => void;
   /** The idle label, asking for what the form's textarea asks for. */
   prompt?: string;
-}) {
+}
+
+/** Voice capture as the primary way to file a report: one big mic target, bars
+ *  that track the speaker's voice per frequency band, and playback before
+ *  sending - people won't submit audio they can't hear back. */
+export function VoiceNote({ onChange, prompt = "Say what went wrong" }: VoiceNoteProps) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [envelope, setEnvelope] = useState<number[]>([]);

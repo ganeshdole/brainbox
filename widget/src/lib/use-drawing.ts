@@ -9,7 +9,27 @@ export function isDragTool(t: string): t is DragTool {
   return t === "box" || t === "arrow" || t === "pen";
 }
 
+export interface DrawingOptions {
+  /** The colour new marks are drawn in. */
+  color: string;
+  /** A finished, non-degenerate mark, on pointer up. */
+  onCommit: (m: Mark) => void;
+}
+
+/** Wire `begin` to the surface's pointerdown (with the armed tool), `extend`
+ *  to pointermove and `finish` to pointerup and pointercancel. Coordinates
+ *  are the events' `clientX`/`clientY`, so the surface should cover the
+ *  viewport, as both of ours do. */
+export interface Drawing {
+  /** The mark being dragged out, re-rendered at most once per frame. */
+  draft: Mark | null;
+  begin: (tool: DragTool, e: React.PointerEvent) => void;
+  extend: (e: React.PointerEvent) => void;
+  finish: () => void;
+}
+
 let seq = 0;
+/** A fresh id for a mark, unique on this page. */
 export const nextMarkId = () => `m${++seq}`;
 
 /**
@@ -22,18 +42,7 @@ export const nextMarkId = () => `m${++seq}`;
  * refreshes, and re-rendering per sample is exactly what makes a drawing
  * surface feel like it's lagging behind the cursor.
  */
-export function useDrawing({
-  color,
-  onCommit,
-}: {
-  color: string;
-  onCommit: (m: Mark) => void;
-}): {
-  draft: Mark | null;
-  begin: (tool: DragTool, e: React.PointerEvent) => void;
-  extend: (e: React.PointerEvent) => void;
-  finish: () => void;
-} {
+export function useDrawing({ color, onCommit }: DrawingOptions): Drawing {
   const [draft, setDraft] = useState<Mark | null>(null);
   const live = useRef<Mark | null>(null);
   const origin = useRef<Point | null>(null);

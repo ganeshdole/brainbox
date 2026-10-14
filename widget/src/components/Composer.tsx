@@ -3,9 +3,29 @@ import { ImageOff, Loader2, Pencil, Play, Send, X } from "./icons.tsx";
 import { VoiceNote } from "./VoiceNote.tsx";
 import { posClass, type Position } from "../lib/position.ts";
 
+/** The bug report's last step: the capture, and what the user says about it. */
+export interface ComposerProps {
+  /** The screenshot, or a recording's last frame, as an object URL. Already
+   *  carries the user's marks once their bake lands. */
+  screenshotUrl?: string;
+  /** A session recording is attached. */
+  sessionReady?: boolean;
+  /** The recording caught the user's voice, so the composer needn't ask for it. */
+  voiceCaptured?: boolean;
+  /** Screenshot still rasterising - the composer opens without waiting for it. */
+  capturePending?: boolean;
+  /** The screenshot could not be taken. The report still goes out with words. */
+  captureFailed?: boolean;
+  /** The viewport corner it sits in. */
+  position: Position;
+  /** Throw the report away and close. */
+  onCancel: () => void;
+  /** Send the report with what the user typed and the voice note, if any. */
+  onSubmit: (text: string, audio: Blob | null) => void;
+}
+
 export function Composer({
   screenshotUrl,
-  videoUrl,
   sessionReady,
   voiceCaptured,
   capturePending,
@@ -13,23 +33,12 @@ export function Composer({
   position,
   onCancel,
   onSubmit,
-}: {
-  screenshotUrl?: string;
-  videoUrl?: string;
-  sessionReady?: boolean;
-  voiceCaptured?: boolean;
-  /** Screenshot still rasterising - the composer opens without waiting for it. */
-  capturePending?: boolean;
-  captureFailed?: boolean;
-  position: Position;
-  onCancel: () => void;
-  onSubmit: (text: string, audio: Blob | null) => void;
-}) {
+}: ComposerProps) {
   const [text, setText] = useState("");
   const [audio, setAudio] = useState<Blob | null>(null);
   // The record flow already captures voice, so the composer only offers a mic
   // when there isn't one attached already.
-  const voiceDone = !!videoUrl || !!voiceCaptured;
+  const voiceDone = !!voiceCaptured;
   const [typing, setTyping] = useState(voiceDone);
 
   const canSend = !captureFailed || !!text.trim() || !!audio || voiceDone || !!sessionReady;
@@ -56,12 +65,6 @@ export function Composer({
           <ImageOff className="h-3.5 w-3.5 shrink-0" /> Couldn&apos;t grab the screenshot - your
           note still gets through.
         </p>
-      ) : videoUrl ? (
-        <video
-          controls
-          src={videoUrl}
-          className="mb-3 max-h-48 w-full rounded-lg border border-default"
-        />
       ) : sessionReady && screenshotUrl ? (
         <div className="relative mb-3 overflow-hidden rounded-lg border border-default">
           <img

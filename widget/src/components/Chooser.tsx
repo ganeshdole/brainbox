@@ -1,6 +1,24 @@
 import { Camera, Lightbulb, Video, X } from "./icons.tsx";
 import { posClass, type Position } from "../lib/position.ts";
 
+/** The first panel after opening: what kind of report this is. */
+export interface ChooserProps {
+  /** The viewport corner it sits in. */
+  position: Position;
+  /** Whether this browser can record a session (`canSessionRecord()` from
+   *  core). The built-in chooser hides Record when it can't. */
+  canRecord: boolean;
+  /** Freeze the page and mark it up. */
+  onScreenshot: () => void;
+  /** Start a session recording. */
+  onRecord: () => void;
+  /** Open the feature-request form. Unset when the host turned feature
+   *  requests off, and the option should not be offered. */
+  onFeature?: () => void;
+  /** Close the widget. */
+  onCancel: () => void;
+}
+
 export function Chooser({
   position,
   canRecord,
@@ -8,15 +26,7 @@ export function Chooser({
   onRecord,
   onFeature,
   onCancel,
-}: {
-  position: Position;
-  canRecord: boolean;
-  onScreenshot: () => void;
-  onRecord: () => void;
-  /** Offers "Suggest a feature" when set. */
-  onFeature?: () => void;
-  onCancel: () => void;
-}) {
+}: ChooserProps) {
   return (
     <div
       className={`fixed ${posClass(position)} z-[2147483647] w-72 rounded-2xl border border-default bg-elevated p-4 shadow-3xl`}

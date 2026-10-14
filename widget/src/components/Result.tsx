@@ -4,6 +4,23 @@ import { posClass, type Position } from "../lib/position.ts";
 
 const SUCCESS_DISMISS_MS = 3000;
 
+/** After Send: sending, sent, or failed. */
+export interface ResultProps {
+  kind: "loading" | "success" | "error";
+  /** The sent report's id, when the transport returned one. */
+  id?: string;
+  /** Why sending failed. */
+  message?: string;
+  /** What a success says: the built-in flow thanks a feature request
+   *  differently from a bug report. */
+  thanks?: string;
+  /** The viewport corner it sits in. */
+  position: Position;
+  /** Close the widget. Unset while sending. The built-in success closes
+   *  itself after a few seconds. */
+  onClose?: () => void;
+}
+
 export function Result({
   kind,
   id,
@@ -11,15 +28,7 @@ export function Result({
   thanks = "Thanks! Feedback sent.",
   position,
   onClose,
-}: {
-  kind: "loading" | "success" | "error";
-  id?: string;
-  message?: string;
-  /** What a success says. */
-  thanks?: string;
-  position: Position;
-  onClose?: () => void;
-}) {
+}: ResultProps) {
   // success is a confirmation, not a decision - dismiss itself. Errors stay.
   useEffect(() => {
     if (kind !== "success" || !onClose) return;

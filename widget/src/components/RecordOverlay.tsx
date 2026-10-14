@@ -26,18 +26,25 @@ const TOOLS: { tool: Exclude<RecordTool, null | "select">; label: string; Icon: 
   { tool: "text", label: "Text", Icon: Type },
 ];
 
+/** The bar shown while a session records: the clock, the mic, and tools to
+ *  draw on the live page. Each prop comes off a core `Recording`. */
+export interface RecordOverlayProps {
+  /** The recording's marks on the host page - drawn here, cleared by core. */
+  annotations: Annotations;
+  /** Finish the recording; the built-in flow then shows the composer. */
+  onStop: () => void;
+  /** Whether the mic came up. Polled, since the permission prompt can be
+   *  answered seconds in. */
+  micActive: () => boolean;
+  onMuteChange: (muted: boolean) => void;
+}
+
 export function RecordOverlay({
   annotations,
   onStop,
   micActive,
   onMuteChange,
-}: {
-  /** The recording's marks on the host page - drawn here, cleared by core. */
-  annotations: Annotations;
-  onStop: () => void;
-  micActive: () => boolean;
-  onMuteChange: (muted: boolean) => void;
-}) {
+}: RecordOverlayProps) {
   const [secs, setSecs] = useState(0);
   const [tool, setTool] = useState<RecordTool>(null);
   const [color, setColor] = useState(DEFAULT_COLOR);

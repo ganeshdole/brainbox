@@ -22,6 +22,23 @@ const KEY_TO_TOOL: Record<string, Tool> = {
   t: "text",
 };
 
+export interface MarkupOverlayProps {
+  /** The frozen page, once rasterised, shown full-viewport. Until then the
+   *  live page shows through, dimmed. Any image works; marks are in viewport
+   *  CSS pixels over it. */
+  screenshotUrl?: string;
+  /** The screenshot is still rasterising. Drawing doesn't wait for it. */
+  capturePending?: boolean;
+  /** The screenshot could not be taken. */
+  captureFailed?: boolean;
+  /** What the pill above the toolbar says once the screenshot is up. */
+  hint?: string;
+  /** Next: every mark drawn, including a note still being typed. */
+  onDone: (marks: Mark[]) => void;
+  /** Cancel or Escape. */
+  onCancel: () => void;
+}
+
 /**
  * The markup step: the page is frozen and the end-user draws on it - boxes,
  * arrows, freehand, text - before saying what's wrong.
@@ -31,19 +48,13 @@ const KEY_TO_TOOL: Record<string, Tool> = {
  * on the capture, and everything stays undoable right up to Done.
  */
 export function MarkupOverlay({
-  frozenUrl,
-  pending,
-  failed,
+  screenshotUrl,
+  capturePending = false,
+  captureFailed = false,
+  hint = "This is a snapshot of the page. Mark what's wrong, or hit Next",
   onDone,
   onCancel,
-}: {
-  /** The frozen page, once rasterised. Until then the live page shows through. */
-  frozenUrl?: string;
-  pending: boolean;
-  failed: boolean;
-  onDone: (marks: Mark[]) => void;
-  onCancel: () => void;
-}) {
+}: MarkupOverlayProps) {
   const [tool, setTool] = useState<Tool>("box");
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [marks, setMarks] = useState<Mark[]>([]);
@@ -185,9 +196,9 @@ export function MarkupOverlay({
       onPointerUp={finish}
       onPointerCancel={finish}
     >
-      {frozenUrl ? (
+      {screenshotUrl ? (
         <img
-          src={frozenUrl}
+          src={screenshotUrl}
           alt=""
           aria-hidden="true"
           draggable={false}
@@ -235,11 +246,11 @@ export function MarkupOverlay({
           hides what they came to mark up. `bottom-24` clears the toolbar, whose
           height is fixed by its `h-9` controls. */}
       <div className="pointer-events-none absolute inset-x-0 bottom-24 flex justify-center">
-        {pending ? (
+        {capturePending ? (
           <span className="flex items-center gap-2 rounded-full bg-elevated px-3 py-1 text-xs text-default">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Freezing the page
           </span>
-        ) : failed ? (
+        ) : captureFailed ? (
           <span className="flex items-center gap-2 rounded-full bg-warning px-3 py-1 text-xs text-warning">
             <ImageOff className="h-3.5 w-3.5" /> Couldn&apos;t grab the screenshot - your note
             still sends
@@ -247,9 +258,7 @@ export function MarkupOverlay({
         ) : (
           // Say plainly that this is a picture: people otherwise try to click
           // the page, which Record is for.
-          <span className="rounded-full bg-elevated px-3 py-1 text-xs text-muted">
-            This is a snapshot of the page. Mark what&apos;s wrong, or hit Next
-          </span>
+          <span className="rounded-full bg-elevated px-3 py-1 text-xs text-muted">{hint}</span>
         )}
       </div>
 
