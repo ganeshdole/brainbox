@@ -14,6 +14,12 @@ and Convex are the stores, picked by `DATABASE_DRIVER`. Root rules in
   outside a request, `getStore()`. Never import the Drizzle client or schema
   outside `src/store/postgres.ts` and `src/db/`: another store has to be able to
   replace it. A new query is a new `Store` method, implemented by every store.
+- `Store` is a required core (`projects`, `issues`: what ingest and reading
+  issues need) plus optional modules, each its own interface: `auth`, `teams`,
+  `triage`, `features`, `integrations`, `billing`, `waitlist`. Postgres and
+  Convex implement all of them (`FullStore`). A method goes in the module
+  whose feature needs it, not in the core, unless ingest or reading an issue
+  can't work without it.
 - Rules that every store must apply identically live as plain functions beside
   the stores (e.g. `store/subscription-write.ts`), not inside one store.
 - The Postgres schema is in `src/db/schema/`. The Convex store is

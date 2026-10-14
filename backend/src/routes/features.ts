@@ -6,7 +6,7 @@ import type { Feature, FeatureDetail } from "@ganeshdole/brainbox-shared";
 import { projectAccess } from "../lib/access.ts";
 import { toFeature, toIssue } from "../lib/serialize.ts";
 import { getStorage } from "../storage/index.ts";
-import type { FeatureRecord, Store } from "../store/index.ts";
+import type { FeatureRecord, FullStore } from "../store/index.ts";
 import type { AppEnv } from "../types.ts";
 
 // A project's features: the things its users want built, each collecting the
@@ -48,7 +48,7 @@ async function featureAccess(c: Context<AppEnv>, id: string): Promise<FeatureRec
 }
 
 /** The feature as the API shows it, with its current request count. */
-async function present(store: Store, feature: FeatureRecord): Promise<Feature> {
+async function present(store: FullStore, feature: FeatureRecord): Promise<Feature> {
   const listed = await store.features.listForProject(feature.projectId);
   return toFeature(feature, listed.find((f) => f.id === feature.id)?.requestCount ?? 0);
 }
@@ -84,7 +84,7 @@ export const featuresRoute = new Hono<AppEnv>()
       description: parsed.data.description ?? null,
       status: parsed.data.status,
     });
-    for (const id of requestIds) await store.issues.setFeature(id, feature.id);
+    for (const id of requestIds) await store.features.attach(id, feature.id);
     return c.json(toFeature(feature, requestIds.length), 201);
   })
   .get("/features/:id", async (c) => {

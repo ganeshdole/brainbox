@@ -58,7 +58,7 @@ export const issuesRoute = new Hono<AppEnv>()
     if (!parsed.success) return c.json({ error: "Invalid body", issues: parsed.error.issues }, 400);
     const error = triageError(access.issue, parsed.data);
     if (error) return c.json({ error }, 400);
-    const [row] = await c.get("store").issues.triage([access.issue.id], parsed.data, access.uid);
+    const [row] = await c.get("store").triage.apply([access.issue.id], parsed.data, access.uid);
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json(await toIssue(row, getStorage()));
   })
@@ -77,7 +77,7 @@ export const issuesRoute = new Hono<AppEnv>()
       const error = triageError(access.issue, patch);
       if (error) return c.json({ error, id }, 400);
     }
-    const updated = await c.get("store").issues.triage(unique, patch, uid);
+    const updated = await c.get("store").triage.apply(unique, patch, uid);
     const storage = getStorage();
     return c.json(await Promise.all(updated.map((row) => toIssue(row, storage))));
   })
@@ -85,8 +85,8 @@ export const issuesRoute = new Hono<AppEnv>()
     const access = await issueAccess(c, c.req.param("id"));
     if (access instanceof Response) return access;
     const store = c.get("store");
-    const events = await store.issues.listEvents(access.issue.id);
-    const adapter = store.authAdapter();
+    const events = await store.triage.listEvents(access.issue.id);
+    const adapter = store.auth.adapter();
     const names = new Map<string, string>();
     for (const actorId of new Set(events.map((e) => e.actorId))) {
       if (!actorId) continue;
@@ -113,7 +113,7 @@ export const issuesRoute = new Hono<AppEnv>()
         return c.json({ error: "Feature not found" }, 404);
       }
     }
-    await store.issues.setFeature(issue.id, featureId);
+    await store.features.attach(issue.id, featureId);
     const row = await store.issues.get(issue.id);
     if (!row) return c.json({ error: "Not found" }, 404);
     return c.json(await toIssue(row, getStorage()));

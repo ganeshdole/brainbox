@@ -25,7 +25,7 @@ async function received(c: Context<AppEnv>, invite: TeamInviteRecord): Promise<R
   const store = c.get("store");
   const team = await store.teams.get(invite.teamId);
   if (!team) return null;
-  const inviter = invite.invitedBy ? await store.authAdapter().getUser?.(invite.invitedBy) : null;
+  const inviter = invite.invitedBy ? await store.auth.adapter().getUser?.(invite.invitedBy) : null;
   return {
     id: invite.id,
     teamId: team.id,

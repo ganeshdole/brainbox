@@ -69,7 +69,7 @@ webhooks.post("/dodo", async (c) => {
     // transaction. Recording first is what makes redelivery a no-op; doing
     // both atomically means a failure leaves no record, so Dodo's retry is
     // processed rather than skipped as a duplicate.
-    const result = await c.get("store").webhooks.applySubscriptionEvent({
+    const result = await c.get("store").billing.applySubscriptionEvent({
       eventId: headers["webhook-id"],
       eventType: type,
       change: subscriptionChange(type, event.data ?? {}, sentAt),
@@ -110,7 +110,7 @@ webhooks.post("/github", async (c) => {
     type === "installation" && payload.action === "deleted" && installationId !== undefined;
 
   try {
-    const result = await c.get("store").webhooks.applyGithubEvent({
+    const result = await c.get("store").integrations.applyGithubEvent({
       eventId: `github:${deliveryId}`,
       eventType: `${type}.${payload.action ?? ""}`,
       removedInstallation: uninstalled ? String(installationId) : null,

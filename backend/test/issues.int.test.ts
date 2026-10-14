@@ -93,7 +93,7 @@ describe("issue triage", () => {
     const cookie = await authCookie(me.id);
 
     expect((await patch(`/api/issues/${issue.id}`, cookie, { status: "new" })).status).toBe(200);
-    expect(await getStore().issues.listEvents(issue.id)).toEqual([]);
+    expect(await getStore().triage.listEvents(issue.id)).toEqual([]);
   });
 
   it("keeps a close reason only while the issue is closed", async () => {
@@ -141,7 +141,7 @@ describe("issue triage", () => {
     await patch(`/api/issues/${issue.id}`, cookie, { status: "closed", closeReason: "wont_fix" });
     await patch(`/api/issues/${issue.id}`, cookie, { closeReason: "duplicate" });
 
-    const events = await getStore().issues.listEvents(issue.id);
+    const events = await getStore().triage.listEvents(issue.id);
     expect(events.filter((e) => e.kind === "close_reason").map((e) => [e.from, e.to])).toEqual([
       [null, "wont_fix"],
       ["wont_fix", "duplicate"],
@@ -154,14 +154,14 @@ describe("issue triage", () => {
     // ids fixed so the closed one is written first in either store's order
     const first = await makeIssue(project.id, { id: "00000000-0000-4000-8000-000000000001" });
     const second = await makeIssue(project.id, { id: "00000000-0000-4000-8000-000000000002" });
-    await getStore().issues.triage([first.id], { status: "closed", closeReason: "wont_fix" }, me.id);
+    await getStore().triage.apply([first.id], { status: "closed", closeReason: "wont_fix" }, me.id);
 
     // fine for the closed one, rejected for the open one
-    await expect(getStore().issues.triage([first.id, second.id], { closeReason: "spam" }, me.id)).rejects.toThrow(
+    await expect(getStore().triage.apply([first.id, second.id], { closeReason: "spam" }, me.id)).rejects.toThrow(
       /needs status closed/,
     );
     expect((await stored.issues(first.id))[0]!.closeReason).toBe("wont_fix");
-    expect(await getStore().issues.listEvents(first.id)).toHaveLength(2);
+    expect(await getStore().triage.listEvents(first.id)).toHaveLength(2);
   });
 
   it("rejects an unknown status and an empty patch", async () => {
@@ -219,10 +219,10 @@ describe("issue triage", () => {
     const me = await makeUser();
     const project = await makeProject(me.id);
     const issue = await makeIssue(project.id);
-    await getStore().issues.triage([issue.id], { status: "open" }, me.id);
-    expect(await getStore().issues.listEvents(issue.id)).toHaveLength(1);
+    await getStore().triage.apply([issue.id], { status: "open" }, me.id);
+    expect(await getStore().triage.listEvents(issue.id)).toHaveLength(1);
 
     await getStore().projects.delete(project.id);
-    expect(await getStore().issues.listEvents(issue.id)).toEqual([]);
+    expect(await getStore().triage.listEvents(issue.id)).toEqual([]);
   });
 });
