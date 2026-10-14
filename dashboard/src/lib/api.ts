@@ -29,6 +29,7 @@ import type {
   TeamInvite,
   TeamMember,
   TeamRole,
+  WorkItemUpdate,
 } from "@ganeshdole/brainbox-shared";
 
 import { API_URL } from "./authConfig";
@@ -212,6 +213,9 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(body),
     }),
+  /** Tells the host app (STATUS_WEBHOOK_URL) about a work item update again. */
+  renotifyWorkItemUpdate: (issueId: string, updateId: string) =>
+    req<WorkItemUpdate>(`/api/issues/${issueId}/work-item-updates/${updateId}/notify`, { method: "POST" }),
   /** Files a made-up report through the saved destination; returns what it made. */
   testDestination: (projectId: string, provider: IntegrationProvider) =>
     req<{ externalId: string; url: string }>(`/api/projects/${projectId}/destinations/${provider}/test`, {

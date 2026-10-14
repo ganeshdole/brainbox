@@ -8,6 +8,7 @@ import {
   deliveryLabel,
   installResult,
   parseLabels,
+  workItemSummary,
 } from "./integrations";
 
 const base: Delivery = {
@@ -46,6 +47,24 @@ describe("deliveryLabel", () => {
       text: "Sending to GitHub…",
       tone: "muted",
     });
+  });
+});
+
+describe("workItemSummary", () => {
+  it("says the state, why, and who, with the comment for the tooltip", () => {
+    const summary = workItemSummary({
+      id: "u1",
+      state: "Resolved",
+      reason: "Fixed",
+      changedBy: "Jamal Hartnett",
+      changedAt: "2026-10-14T09:00:00.000Z",
+      comment: "<div>Fixed in <b>2.3</b></div>",
+    });
+    expect(summary.text).toBe("Resolved (Fixed) by Jamal Hartnett");
+    expect(summary.detail).toContain("“Fixed in 2.3”");
+    expect(workItemSummary({ id: "u2", state: "Active", reason: "Active", changedAt: "2026-10-14T09:00:00.000Z" }).text).toBe(
+      "Active",
+    );
   });
 });
 

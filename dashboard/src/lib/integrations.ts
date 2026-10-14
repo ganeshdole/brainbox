@@ -4,6 +4,7 @@ import type {
   AzureDevopsWorkItemType,
   Delivery,
   IntegrationProvider,
+  WorkItemUpdate,
 } from "@ganeshdole/brainbox-shared";
 
 export type DeliveryTone = "ok" | "error" | "muted";
@@ -29,6 +30,21 @@ export function deliveryLabel(d: Delivery): DeliveryLabel {
     case "pending":
       return { text: `Sending to ${name}…`, tone: "muted" };
   }
+}
+
+/** The work item's latest state beside its link ("Resolved (Fixed) by Jamal"),
+ *  and the rest of the change for a tooltip. */
+export function workItemSummary(w: WorkItemUpdate): { text: string; detail: string } {
+  const state = w.reason && w.reason !== w.state ? `${w.state} (${w.reason})` : w.state;
+  const text = w.changedBy ? `${state} by ${w.changedBy}` : state;
+  const comment = w.comment
+    ?.replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const detail = [`${text}, ${new Date(w.changedAt).toLocaleString()}`, comment && `“${comment}”`]
+    .filter(Boolean)
+    .join("\n");
+  return { text, detail };
 }
 
 /** Outcome of the GitHub install round-trip, from the `?github=` the backend redirects with. */

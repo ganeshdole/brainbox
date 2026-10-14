@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
 import { ExternalLink, RotateCw } from "lucide-react";
-import type { Delivery } from "@ganeshdole/brainbox-shared";
+import type { Delivery, IntegrationProvider } from "@ganeshdole/brainbox-shared";
 
 import { api, isAuthRedirect } from "../lib/api";
-import type { IntegrationProvider } from "@ganeshdole/brainbox-shared";
-
-import { deliveryLabel, PROVIDER_NAME } from "../lib/integrations";
+import { deliveryLabel, PROVIDER_NAME, workItemSummary } from "../lib/integrations";
 import { ProviderMark } from "./ProviderMark";
 import { Button } from "./ui/button";
 
@@ -51,6 +49,19 @@ export function IssueDeliveries({
     }
   }
 
+  async function renotify(delivery: Delivery, updateId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const workItem = await api.renotifyWorkItemUpdate(issueId, updateId);
+      onChange(deliveries.map((d) => (d.id === delivery.id ? { ...d, workItem } : d)));
+    } catch (e) {
+      if (!isAuthRedirect(e)) setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (deliveries.length === 0 && providers.length === 0) return null;
 
   return (
@@ -76,6 +87,27 @@ export function IssueDeliveries({
               <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void send()}>
                 <RotateCw /> Retry
               </Button>
+            )}
+            {d.workItem && (
+              <span className="truncate text-muted" title={workItemSummary(d.workItem).detail}>
+                · {workItemSummary(d.workItem).text}
+              </span>
+            )}
+            {d.workItem?.notification?.status === "failed" && (
+              <>
+                <span className="text-error">
+                  · Couldn't tell your app: {d.workItem.notification.error ?? "failed"}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => d.workItem && void renotify(d, d.workItem.id)}
+                >
+                  <RotateCw /> Retry
+                </Button>
+              </>
             )}
           </span>
         );
