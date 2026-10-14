@@ -47,6 +47,9 @@ export const feedbackSchema = z.object({
   projectKey: z.custom<`pk_${string}`>(
     (v) => typeof v === "string" && v.startsWith("pk_"),
   ),
+  // Absent from clients older than feature requests; absent means "bug".
+  kind: z.enum(["bug", "feature"]).optional(),
+  importance: z.enum(["nice", "important", "critical"]).optional(),
   // Only present when the end-user drew marks (on a screenshot, or still in
   // view when a recording stopped).
   region: regionSchema.optional(),

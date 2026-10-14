@@ -1,6 +1,13 @@
-import { jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
-import type { CapturedMetadata, Region, TranscriptStatus } from "@ganeshdole/brainbox-shared";
+import { index, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import type {
+  CapturedMetadata,
+  Importance,
+  IssueKind,
+  Region,
+  TranscriptStatus,
+} from "@ganeshdole/brainbox-shared";
 
+import { features } from "./features.ts";
 import { projects } from "./projects.ts";
 
 // jsonb columns are typed straight from the @ganeshdole/brainbox-shared contract - this is
@@ -11,7 +18,9 @@ import { projects } from "./projects.ts";
 //   - flat `screenshotKey`/`audioKey`/`audioMime` compose into the shared
 //     `Issue.screenshot` / `Issue.audio` objects (+ presigned `url` once R2 lands).
 //   - `region` / `metadata` jsonb pass through 1:1.
-export const issues = pgTable("issues", {
+export const issues = pgTable(
+  "issues",
+  {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -21,6 +30,13 @@ export const issues = pgTable("issues", {
   createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
     .notNull()
     .defaultNow(),
+  // A bug report or a feature request; rows from before feature requests are bugs.
+  kind: text("kind").$type<IssueKind>().notNull().default("bug"),
+  // How much a feature request matters to whoever asked; null on bugs.
+  importance: text("importance").$type<Importance>(),
+  // The Feature a feature request is attached to; null while it waits to be
+  // sorted. Deleting the Feature sends its requests back to waiting.
+  featureId: text("feature_id").references(() => features.id, { onDelete: "set null" }),
   text: text("text"),
   // A submission is a screenshot OR a screen recording - so screenshot_key,
   // crop_key and region are all nullable (a recording has a last-frame
@@ -45,4 +61,6 @@ export const issues = pgTable("issues", {
   audioTranscriptStatus: text("audio_transcript_status").$type<TranscriptStatus>(),
   region: jsonb("region").$type<Region>(),
   metadata: jsonb("metadata").$type<CapturedMetadata>().notNull(),
-});
+  },
+  (t) => [index("issues_feature_id_idx").on(t.featureId)],
+);

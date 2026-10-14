@@ -117,9 +117,35 @@ describe("parseIngest", () => {
     expect((await parse(upload(payload, { screenshot: png(3) }), small)).ok).toBe(true);
   });
 
+  it("accepts a feature request with only text, and keeps its kind and importance", async () => {
+    const feature = { ...payload, region: undefined, kind: "feature", importance: "important" };
+    const result = await parse(upload(feature, {}));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.kind).toBe("feature");
+    expect(result.payload.importance).toBe("important");
+    expect(result.files.screenshot).toBeUndefined();
+  });
+
+  it("accepts a feature request told only by voice", async () => {
+    const audio = new File([new Uint8Array([9])], "a.webm", { type: "audio/webm" });
+    const result = await parse(upload({ ...payload, text: undefined, kind: "feature" }, { audio }));
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects a feature request with no words, even with a screenshot", async () => {
+    expect(
+      await parse(upload({ ...payload, text: "  ", kind: "feature" }, { screenshot: png() })),
+    ).toMatchObject({ status: 400, body: { error: "Missing text or audio" } });
+  });
+
   it("rejects an upload with nothing to store", async () => {
     expect(await parse(upload(payload, {}))).toMatchObject({
       status: 400,
+      body: { error: "Missing screenshot, video or session" },
+    });
+    // the bug rule applies when kind is left out, as older clients do
+    expect(await parse(upload({ ...payload, kind: "bug" }, {}))).toMatchObject({
       body: { error: "Missing screenshot, video or session" },
     });
   });

@@ -4,12 +4,18 @@ import type { IntegrationProvider } from "@ganeshdole/brainbox-shared";
 import { env } from "../env.ts";
 import type { ConnectionRecord, DestinationRecord } from "../store/index.ts";
 
+/** What a feature request is labelled when its destination doesn't say:
+ *  the label GitHub creates in every new repository for one. */
+export const DEFAULT_FEATURE_LABELS = ["enhancement"];
+
 const FACTORIES: Record<IntegrationProvider, (dest: DestinationRecord, conn: ConnectionRecord) => Destination> = {
   github: (dest, conn) =>
     githubIssues({
       owner: dest.config.owner,
       repo: dest.config.repo,
       labels: dest.config.labels,
+      // Destinations saved before feature requests have no featureLabels.
+      featureLabels: dest.config.featureLabels ?? DEFAULT_FEATURE_LABELS,
       token: () => getGithubApp().installationToken(conn.externalId),
     }),
 };

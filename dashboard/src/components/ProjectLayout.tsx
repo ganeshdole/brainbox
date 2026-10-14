@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useParams } from "react-router-dom";
-import { LayoutGrid, LogOut, Settings } from "lucide-react";
+import { LayoutGrid, Lightbulb, LogOut, Settings } from "lucide-react";
 import type { Project } from "@ganeshdole/brainbox-shared";
 
 import { api, isAuthRedirect } from "../lib/api";
@@ -130,9 +130,10 @@ export function ProjectLayout() {
 
   const base = `/projects/${project?.id ?? ALL_PROJECTS}`;
   const isSettings = location.pathname.endsWith("/settings");
-  const reportCount = project
-    ? project.issueCount
-    : projects.reduce((n, p) => n + (p.issueCount ?? 0), 0);
+  const isFeatures = location.pathname.startsWith(`${base}/features`);
+  // Feature requests count under Features, not Reports.
+  const bugCount = (p: Project) => (p.issueCount ?? 0) - (p.featureRequestCount ?? 0);
+  const reportCount = project ? bugCount(project) : projects.reduce((n, p) => n + bugCount(p), 0);
   const context: ProjectOutletContext = {
     project: project ?? null,
     projects,
@@ -154,11 +155,20 @@ export function ProjectLayout() {
         <nav className="mt-4 flex flex-col gap-0.5 px-3">
           <NavItem
             to={base}
-            active={!isSettings}
+            active={!isSettings && !isFeatures}
             icon={<LayoutGrid />}
             label="Reports"
             count={reportCount}
           />
+          {project && (
+            <NavItem
+              to={`${base}/features`}
+              active={isFeatures}
+              icon={<Lightbulb />}
+              label="Features"
+              count={project.featureRequestCount}
+            />
+          )}
           {project && (
             <NavItem to={`${base}/settings`} active={isSettings} icon={<Settings />} label="Settings" />
           )}
@@ -175,7 +185,10 @@ export function ProjectLayout() {
               <ProjectSwitcher current={project ?? null} projects={projects} onCreated={onCreated} />
             </div>
             <nav className="flex shrink-0 gap-1">
-              <MobileTab to={base} active={!isSettings} label="Reports" />
+              <MobileTab to={base} active={!isSettings && !isFeatures} label="Reports" />
+              {project && (
+                <MobileTab to={`${base}/features`} active={isFeatures} label="Features" />
+              )}
               {project && (
                 <MobileTab to={`${base}/settings`} active={isSettings} label="Settings" />
               )}

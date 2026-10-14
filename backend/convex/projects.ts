@@ -100,6 +100,12 @@ export const remove = serverMutation({
       await ctx.db.delete(issue._id);
     }
 
+    const features = await ctx.db
+      .query("features")
+      .withIndex("by_project", (q) => q.eq("projectId", id))
+      .collect();
+    for (const feature of features) await ctx.db.delete(feature._id);
+
     const destinations = await ctx.db
       .query("destinations")
       .withIndex("by_project_provider", (q) => q.eq("projectId", id))

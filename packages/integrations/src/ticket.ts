@@ -1,9 +1,18 @@
-import type { CapturedMetadata, Identity, Region } from "@ganeshdole/brainbox-shared";
+import type {
+  CapturedMetadata,
+  Identity,
+  Importance,
+  IssueKind,
+  Region,
+} from "@ganeshdole/brainbox-shared";
 
 /** A report as a destination needs it. `links` must work without a session. */
 export interface Ticket {
   id: string;
   createdAt: string;
+  /** Absent means a bug. */
+  kind?: IssueKind;
+  importance?: Importance;
   text?: string;
   transcript?: string;
   metadata: CapturedMetadata;
@@ -16,6 +25,9 @@ export interface TicketLinks {
   screenshot?: string;
   crop?: string;
   replay?: string;
+  /** The voice note. Without a transcript it is the only place a spoken
+   *  report's words are, so the ticket links it. */
+  audio?: string;
 }
 
 export interface RenderedTicket {
@@ -24,6 +36,12 @@ export interface RenderedTicket {
 }
 
 const TITLE_MAX = 72;
+
+const IMPORTANCE_LABEL: Record<Importance, string> = {
+  nice: "Nice to have",
+  important: "Important",
+  critical: "Blocking them",
+};
 const CONSOLE_ERRORS_MAX = 20;
 
 /** Title and Markdown body, shared by every ticket-shaped destination. */
@@ -35,7 +53,8 @@ function titleFor(t: Ticket): string {
   const spoken = firstLine(t.text) ?? firstLine(t.transcript);
   if (spoken) return truncate(spoken, TITLE_MAX);
   const page = t.metadata.title.trim() || t.metadata.url;
-  return truncate(`Feedback on ${page}`, TITLE_MAX);
+  const lead = t.kind === "feature" ? "Feature request from" : "Feedback on";
+  return truncate(`${lead} ${page}`, TITLE_MAX);
 }
 
 function bodyFor(t: Ticket): string {
@@ -51,6 +70,7 @@ function bodyFor(t: Ticket): string {
 
   const transcript = t.transcript?.trim();
   if (transcript) parts.push(`**Voice note**\n\n${quote(transcript)}`);
+  else if (t.links.audio) parts.push(`**Voice note**\n\n[Listen to the voice note](${t.links.audio})`);
 
   parts.push(detailsTable(t));
 
@@ -66,13 +86,18 @@ function detailsTable(t: Ticket): string {
   const m = t.metadata;
   const user = reporter(m.identity);
   const selector = t.region?.selector ?? m.selector;
-  const rows: Array<[string, string]> = [
+  const rows: Array<[string, string]> = [];
+  if (t.kind === "feature") {
+    rows.push(["Type", "Feature request"]);
+    if (t.importance) rows.push(["Importance", IMPORTANCE_LABEL[t.importance]]);
+  }
+  rows.push(
     ["Page", `[${cell(m.title.trim() || m.url)}](${m.url})`],
     ["Viewport", `${m.viewport.width} × ${m.viewport.height} @${m.devicePixelRatio}x`],
     ["Browser", cell(m.userAgent)],
     ["Locale", cell(`${m.language}, ${m.timezone}`)],
     ["User", cell(user)],
-  ];
+  );
   const phone = m.identity?.phone?.trim();
   if (phone) rows.push(["Phone", cell(phone)]);
   if (selector) rows.push(["Element", `\`${cell(selector)}\``]);
@@ -118,6 +143,7 @@ function footer(t: Ticket): string {
   const links = [`[Open in Brainbox](${t.links.dashboard})`];
   if (t.links.replay) links.push(`[Session replay](${t.links.replay})`);
   if (t.links.screenshot && t.links.crop) links.push(`[Full screenshot](${t.links.screenshot})`);
+  if (t.links.audio && t.transcript?.trim()) links.push(`[Voice note](${t.links.audio})`);
   return links.join(" · ");
 }
 

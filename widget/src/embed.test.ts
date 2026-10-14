@@ -41,5 +41,16 @@ describe("widget.js", () => {
 
     act(() => window.Brainbox.open());
     expect(labels()).toContain("Close");
+    act(() => window.Brainbox.close());
+
+    // A data-brainbox button the page adds after the widget booted, with a
+    // child the click lands on, goes straight to the feature-request form.
+    const idea = document.createElement("button");
+    idea.dataset.brainbox = "feature";
+    idea.innerHTML = "<span>Request a feature</span>";
+    document.body.appendChild(idea);
+    act(() => idea.querySelector("span")?.click());
+    expect(shadow()?.querySelector("textarea")?.getAttribute("aria-label")).toBe("Your idea");
+    expect(labels().some((l) => l.startsWith("Screenshot"))).toBe(false);
   });
 });

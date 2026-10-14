@@ -5,6 +5,7 @@ import type { DB } from "../db/client.ts";
 import {
   accounts,
   deliveries,
+  features,
   integrationConnections,
   issues,
   projectDestinations,
@@ -51,13 +52,21 @@ export function createPostgresStore(db: DB): Store {
     projects: {
       async listForOwner(ownerId) {
         const rows = await db
-          .select({ project: projects, issueCount: count(issues.id) })
+          .select({
+            project: projects,
+            issueCount: count(issues.id),
+            featureRequestCount: sql<number>`count(*) filter (where ${issues.kind} = 'feature')`.mapWith(Number),
+          })
           .from(projects)
           .leftJoin(issues, eq(issues.projectId, projects.id))
           .where(eq(projects.ownerId, ownerId))
           .groupBy(projects.id)
           .orderBy(desc(projects.createdAt));
-        return rows.map((r) => ({ ...r.project, issueCount: r.issueCount }));
+        return rows.map((r) => ({
+          ...r.project,
+          issueCount: r.issueCount,
+          featureRequestCount: r.featureRequestCount,
+        }));
       },
       async create(input) {
         const [row] = await db.insert(projects).values(input).returning();
@@ -113,6 +122,50 @@ export function createPostgresStore(db: DB): Store {
               : { videoTranscriptStatus: outcome.status, ...(text !== undefined && { videoTranscript: text }) },
           )
           .where(eq(issues.id, id));
+      },
+      async setFeature(id, featureId) {
+        await db.update(issues).set({ featureId }).where(eq(issues.id, id));
+      },
+    },
+
+    features: {
+      async listForProject(projectId) {
+        const rows = await db
+          .select({ feature: features, requestCount: count(issues.id) })
+          .from(features)
+          .leftJoin(issues, eq(issues.featureId, features.id))
+          .where(eq(features.projectId, projectId))
+          .groupBy(features.id)
+          .orderBy(desc(features.createdAt));
+        return rows.map((r) => ({ ...r.feature, requestCount: r.requestCount }));
+      },
+      async get(id) {
+        const [row] = await db.select().from(features).where(eq(features.id, id)).limit(1);
+        return row ?? null;
+      },
+      async create(input) {
+        const [row] = await db.insert(features).values(input).returning();
+        if (!row) throw new Error("feature insert returned no row");
+        return row;
+      },
+      async update(id, patch) {
+        const [row] = await db
+          .update(features)
+          .set({ ...patch, updatedAt: new Date() })
+          .where(eq(features.id, id))
+          .returning();
+        return row ?? null;
+      },
+      async delete(id) {
+        // The foreign key sends its requests back to waiting.
+        await db.delete(features).where(eq(features.id, id));
+      },
+      async merge(fromId, intoId) {
+        await db.transaction(async (tx) => {
+          await tx.update(issues).set({ featureId: intoId }).where(eq(issues.featureId, fromId));
+          await tx.delete(features).where(eq(features.id, fromId));
+          await tx.update(features).set({ updatedAt: new Date() }).where(eq(features.id, intoId));
+        });
       },
     },
 
