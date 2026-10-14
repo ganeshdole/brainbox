@@ -3,6 +3,8 @@ import { v } from "convex/values";
 
 import {
   billingPeriod,
+  connectionAuth,
+  connectionStatus,
   deliveryStatus,
   destinationConfig,
   inviteRole,
@@ -142,6 +144,11 @@ export default defineSchema({
     provider,
     externalId: v.string(),
     label: v.string(),
+    // Optional: connections from before Azure DevOps lack them, and read as
+    // an active GitHub App install with no credentials (src/store/convex.ts).
+    auth: v.optional(connectionAuth),
+    status: v.optional(connectionStatus),
+    credentials: v.optional(nullable(v.string())),
     createdAt: v.number(),
   })
     .index("with_id", ["id"])

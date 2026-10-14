@@ -83,4 +83,7 @@ export const testEnv: Record<string, string> = {
   GITHUB_APP_CLIENT_ID: "Iv1.test",
   GITHUB_APP_CLIENT_SECRET: "gh-client-secret-test",
   GITHUB_WEBHOOK_SECRET: "gh-webhook-test-secret",
+
+  // Seals Azure DevOps tokens. Fixed, so a test can open what a route sealed.
+  INTEGRATIONS_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
 };

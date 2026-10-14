@@ -77,14 +77,41 @@ export const featureStatus = v.union(
   v.literal("declined"),
 );
 export const transcriptStatus = v.union(v.literal("pending"), v.literal("done"), v.literal("failed"));
-export const provider = v.literal("github");
+export const provider = v.union(v.literal("github"), v.literal("azure-devops"));
+export const connectionAuth = v.union(v.literal("app"), v.literal("pat"));
+export const connectionStatus = v.union(v.literal("active"), v.literal("needs_reauth"));
 export const deliveryStatus = v.union(v.literal("pending"), v.literal("sent"), v.literal("failed"));
-export const destinationConfig = v.object({
+
+const githubConfig = v.object({
   owner: v.string(),
   repo: v.string(),
   labels: v.array(v.string()),
   featureLabels: v.optional(v.array(v.string())),
 });
+const named = v.object({ id: v.string(), name: v.string() });
+const azureDevopsWorkItem = v.object({
+  type: v.string(),
+  iteration: v.union(
+    v.object({ kind: v.literal("backlog"), path: v.string() }),
+    v.object({ kind: v.literal("current") }),
+    v.object({ kind: v.literal("fixed"), path: v.string() }),
+  ),
+  tags: v.array(v.string()),
+  priority: v.optional(v.number()),
+  fields: v.array(v.object({ referenceName: v.string(), value: v.string() })),
+  bodyField: v.string(),
+  systemInfoField: v.optional(v.string()),
+});
+const azureDevopsConfig = v.object({
+  organization: v.string(),
+  project: named,
+  team: named,
+  areaPath: v.string(),
+  assignedTo: v.optional(v.string()),
+  bug: azureDevopsWorkItem,
+  feature: azureDevopsWorkItem,
+});
+export const destinationConfig = v.union(githubConfig, azureDevopsConfig);
 
 export const planId = v.union(v.literal("pro"), v.literal("business"));
 export const billingPeriod = v.union(v.literal("monthly"), v.literal("annual"));

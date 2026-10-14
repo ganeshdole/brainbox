@@ -25,9 +25,18 @@ import {
 import { planTriageWrite } from "./issue-triage.ts";
 import { planSubscriptionWrite } from "./subscription-write.ts";
 import { leavesNoOwner } from "./team-rules.ts";
-import type { InviteAcceptance, MembershipChange, Store } from "./types.ts";
+import type { DestinationRecord, InviteAcceptance, MembershipChange, Store } from "./types.ts";
 
 type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
+
+/** A destination row as the record it is. The columns can't tie `config` to
+ *  `provider`; `saveDestination`, the only writer, is typed so they match. */
+function toDestination(row: typeof projectDestinations.$inferSelect): DestinationRecord {
+  return row as DestinationRecord;
+}
+
+/** Record converters, also used by the test harness to read whole tables. */
+export const fromPostgres = { destination: toDestination };
 
 /** The Postgres store: Drizzle over postgres.js. Foreign keys do the cascades
  *  the `Store` contract describes. */
@@ -369,27 +378,34 @@ export function createPostgresStore(db: DB): Store {
         return row ?? null;
       },
       async saveConnection(input) {
-        await db
+        const [row] = await db
           .insert(integrationConnections)
-          .values(input)
+          .values({ ...input, status: "active" })
           .onConflictDoUpdate({
             target: [
               integrationConnections.teamId,
               integrationConnections.provider,
               integrationConnections.externalId,
             ],
-            set: { label: input.label },
-          });
+            set: { label: input.label, auth: input.auth, credentials: input.credentials, status: "active" },
+          })
+          .returning();
+        if (!row) throw new Error("connection upsert returned no row");
+        return row;
+      },
+      async setConnectionStatus(id, status) {
+        await db.update(integrationConnections).set({ status }).where(eq(integrationConnections.id, id));
       },
       async deleteConnection(id) {
         await db.delete(integrationConnections).where(eq(integrationConnections.id, id));
       },
 
       async listDestinations(projectId) {
-        return db
+        const rows = await db
           .select()
           .from(projectDestinations)
           .where(eq(projectDestinations.projectId, projectId));
+        return rows.map(toDestination);
       },
       async saveDestination(input) {
         const values = {
@@ -407,7 +423,7 @@ export function createPostgresStore(db: DB): Store {
           })
           .returning();
         if (!row) throw new Error("destination upsert returned no row");
-        return row;
+        return toDestination(row);
       },
       async deleteDestination(projectId, provider) {
         await db
@@ -429,7 +445,7 @@ export function createPostgresStore(db: DB): Store {
               ? eq(projectDestinations.projectId, projectId)
               : and(eq(projectDestinations.projectId, projectId), eq(projectDestinations.enabled, true)),
           );
-        return rows;
+        return rows.map(({ destination, connection }) => ({ destination: toDestination(destination), connection }));
       },
 
       async listDeliveries(issueId) {

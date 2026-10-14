@@ -8,13 +8,22 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
-import type { DeliveryStatus, DestinationConfig, IntegrationProvider } from "@ganeshdole/brainbox-shared";
+import type {
+  ConnectionAuth,
+  ConnectionStatus,
+  DeliveryStatus,
+  DestinationConfig,
+  IntegrationProvider,
+} from "@ganeshdole/brainbox-shared";
+
+import type { SealedCredentials } from "../../store/credentials.ts";
 
 import { issues } from "./issues.ts";
 import { projects } from "./projects.ts";
 import { teams } from "./teams.ts";
 
-// Team-level: one row per GitHub App install per Team, shared by its projects.
+// Team-level: one row per GitHub App install or Azure DevOps organization per
+// Team, shared by its projects. `credentials` is sealed (store/credentials.ts).
 export const integrationConnections = pgTable(
   "integration_connections",
   {
@@ -27,6 +36,9 @@ export const integrationConnections = pgTable(
     provider: text("provider").$type<IntegrationProvider>().notNull(),
     externalId: text("external_id").notNull(),
     label: text("label").notNull(),
+    auth: text("auth").$type<ConnectionAuth>().notNull().default("app"),
+    status: text("status").$type<ConnectionStatus>().notNull().default("active"),
+    credentials: text("credentials").$type<SealedCredentials>(),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
       .notNull()
       .defaultNow(),

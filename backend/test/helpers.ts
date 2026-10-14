@@ -2,7 +2,10 @@ import { encode } from "@auth/core/jwt";
 import type { BillingPeriod, PlanId, SubscriptionStatus, TeamRole } from "@ganeshdole/brainbox-shared";
 
 import { generateProjectKey } from "../src/lib/projectKey.ts";
-import { getStore, type DestinationRecord, type NewIssue } from "../src/store/index.ts";
+import type { AzureDevopsDestinationConfig, GithubDestinationConfig } from "@ganeshdole/brainbox-shared";
+
+import { patExternalId, sealToken } from "../src/integrations/azure-devops.ts";
+import { getStore, type NewIssue } from "../src/store/index.ts";
 import { testEnv } from "./env.ts";
 
 // Seed data through the Store, so the same tests run against every store.
@@ -138,25 +141,85 @@ export async function makeIssue(projectId: string, over: Partial<NewIssue> = {})
   return (await getStore().issues.get(id))!;
 }
 
-/** A connection for the Team `userId` owns (see teamOf). */
+/** A GitHub App connection for the Team `userId` owns (see teamOf). */
 export async function makeConnection(userId: string, externalId = "4242", label = "acme") {
-  const store = getStore();
   const teamId = await teamOf(userId);
-  await store.integrations.saveConnection({ teamId, provider: "github", externalId, label });
-  const connections = await store.integrations.listConnections(teamId);
-  return connections.find((c) => c.provider === "github" && c.externalId === externalId)!;
+  return getStore().integrations.saveConnection({
+    teamId,
+    provider: "github",
+    externalId,
+    label,
+    auth: "app",
+    credentials: null,
+  });
+}
+
+/** An Azure DevOps token connection for the Team `userId` owns, sealed as the route seals it. */
+export async function makeAzureDevopsConnection(userId: string, token = "fake-pat", organization = "acme") {
+  const identity = {
+    teamId: await teamOf(userId),
+    provider: "azure-devops" as const,
+    externalId: patExternalId(organization),
+  };
+  return getStore().integrations.saveConnection({
+    ...identity,
+    label: organization,
+    auth: "pat",
+    credentials: await sealToken(identity, token),
+  });
 }
 
 export async function makeDestination(
   projectId: string,
   connectionId: string,
-  over: Partial<Pick<DestinationRecord, "config" | "enabled">> = {},
+  over: { config?: GithubDestinationConfig; enabled?: boolean } = {},
 ) {
   return getStore().integrations.saveDestination({
     projectId,
     connectionId,
     provider: "github",
     config: { owner: "acme", repo: "web", labels: [] },
+    enabled: true,
+    ...over,
+  });
+}
+
+/** What the fake Azure DevOps (test/azure-devops-fake.ts) accepts: bugs to the
+ *  current sprint, feature requests to the backlog as User Stories. */
+export const ADO_CONFIG: AzureDevopsDestinationConfig = {
+  organization: "acme",
+  project: { id: "p-1", name: "Web" },
+  team: { id: "t-1", name: "Web Team" },
+  areaPath: "Web\\Checkout",
+  bug: {
+    type: "Bug",
+    iteration: { kind: "current" },
+    tags: ["brainbox"],
+    priority: 2,
+    fields: [],
+    bodyField: "Microsoft.VSTS.TCM.ReproSteps",
+    systemInfoField: "Microsoft.VSTS.TCM.SystemInfo",
+  },
+  feature: {
+    type: "User Story",
+    iteration: { kind: "backlog", path: "Web" },
+    tags: ["brainbox", "feature-request"],
+    priority: 3,
+    fields: [],
+    bodyField: "System.Description",
+  },
+};
+
+export async function makeAzureDevopsDestination(
+  projectId: string,
+  connectionId: string,
+  over: { config?: AzureDevopsDestinationConfig; enabled?: boolean } = {},
+) {
+  return getStore().integrations.saveDestination({
+    projectId,
+    connectionId,
+    provider: "azure-devops",
+    config: ADO_CONFIG,
     enabled: true,
     ...over,
   });

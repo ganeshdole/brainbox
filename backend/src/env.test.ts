@@ -13,6 +13,12 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+describe("INTEGRATIONS_ENCRYPTION_KEY", () => {
+  it("refuses to boot with a key that can't seal anything", async () => {
+    await expect(loadEnv({ INTEGRATIONS_ENCRYPTION_KEY: "too-short" })).rejects.toThrow(/32 bytes/);
+  });
+});
+
 describe("STORAGE_DRIVER=s3", () => {
   it("boots with both keys", async () => {
     const env = await loadEnv({ ...S3, S3_ACCESS_KEY_ID: "id", S3_SECRET_ACCESS_KEY: "secret" });

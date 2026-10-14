@@ -1,4 +1,4 @@
-import type { Ticket } from "@ganeshdole/brainbox-integrations";
+import type { Ticket, TicketFile } from "@ganeshdole/brainbox-integrations";
 import type {
   Delivery,
   Feature,
@@ -15,6 +15,7 @@ import type {
 } from "@ganeshdole/brainbox-shared";
 
 import type { Storage } from "../storage/index.ts";
+import { mimeForKey } from "../storage/mime.ts";
 import type {
   ConnectionRecord as ConnectionRow,
   DeliveryRecord as DeliveryRow,
@@ -167,23 +168,20 @@ export function toDelivery(row: DeliveryRow): Delivery {
 }
 
 export function toDestination(row: DestinationRow): ProjectDestination {
-  return {
-    id: row.id,
-    projectId: row.projectId,
-    connectionId: row.connectionId,
-    provider: row.provider,
-    config: row.config,
-    enabled: row.enabled,
-    createdAt: row.createdAt.toISOString(),
-  };
+  const { updatedAt, ...destination } = row;
+  void updatedAt;
+  return { ...destination, createdAt: row.createdAt.toISOString() };
 }
 
+/** Never the credentials: they stay in the backend. */
 export function toConnection(row: ConnectionRow): IntegrationConnection {
   return {
     id: row.id,
     provider: row.provider,
     externalId: row.externalId,
     label: row.label,
+    auth: row.auth,
+    status: row.status,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -191,9 +189,18 @@ export function toConnection(row: ConnectionRow): IntegrationConnection {
 export interface TicketLinkOptions {
   dashboardOrigin: string;
   fileUrl: (key: string) => string;
+  /** Reads a stored file, for trackers that keep their own copy. Without it
+   *  the ticket carries links only. */
+  loadFile?: (key: string) => Promise<Uint8Array>;
 }
 
 export function toTicket(row: IssueRow, links: TicketLinkOptions): Ticket {
+  const { loadFile } = links;
+  // Named as stored: screenshot.png, crop.png, recording.webm, audio.webm.
+  const file = (key: string | null, contentType: string | null): TicketFile | undefined =>
+    key && loadFile
+      ? { name: key.split("/").pop() ?? key, contentType: contentType ?? mimeForKey(key), load: () => loadFile(key) }
+      : undefined;
   return {
     id: row.id,
     createdAt: row.createdAt.toISOString(),
@@ -208,6 +215,13 @@ export function toTicket(row: IssueRow, links: TicketLinkOptions): Ticket {
       screenshot: row.screenshotKey ? links.fileUrl(row.screenshotKey) : undefined,
       crop: row.cropKey ? links.fileUrl(row.cropKey) : undefined,
       audio: row.audioKey ? links.fileUrl(row.audioKey) : undefined,
+      video: row.videoKey ? links.fileUrl(row.videoKey) : undefined,
+    },
+    files: {
+      screenshot: file(row.screenshotKey, "image/png"),
+      crop: file(row.cropKey, "image/png"),
+      audio: file(row.audioKey, row.audioMime),
+      video: file(row.videoKey, row.videoMime),
     },
   };
 }

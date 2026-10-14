@@ -3,6 +3,7 @@ import type { ProjectKey } from "@ganeshdole/brainbox-shared";
 import { api } from "../../convex/_generated/api.js";
 import type { ConvexCaller } from "../convex-client.ts";
 import { createConvexAuthAdapter } from "./convex-auth.ts";
+import { asSealedCredentials } from "./credentials.ts";
 import type {
   ConnectionRecord,
   DeliveryRecord,
@@ -162,7 +163,10 @@ export function createConvexStore(convex: ConvexCaller): Store {
         return maybe(await convex.query(api.integrations.getConnection, { id }), toConnection);
       },
       async saveConnection(input) {
-        await convex.mutation(api.integrations.saveConnection, input);
+        return toConnection(await convex.mutation(api.integrations.saveConnection, input));
+      },
+      async setConnectionStatus(id, status) {
+        await convex.mutation(api.integrations.setConnectionStatus, { id, status });
       },
       async deleteConnection(id) {
         await convex.mutation(api.integrations.deleteConnection, { id });
@@ -330,21 +334,38 @@ function toFeature(row: Stamped<FeatureRecord, "createdAt" | "updatedAt">): Feat
   return { ...row, createdAt: new Date(row.createdAt), updatedAt: new Date(row.updatedAt) };
 }
 
-function toConnection(
-  row: Stamped<Omit<ConnectionRecord, "teamId">, "createdAt"> & { teamId?: string; ownerId?: string },
-): ConnectionRecord {
+// Connections from before Azure DevOps have no auth, status or credentials:
+// they are GitHub App installs, active, with nothing stored.
+type ConnectionDoc = Stamped<Omit<ConnectionRecord, "teamId" | "auth" | "status" | "credentials">, "createdAt"> &
+  Partial<Pick<ConnectionRecord, "auth" | "status">> & {
+    teamId?: string;
+    ownerId?: string;
+    credentials?: string | null;
+  };
+
+function toConnection(row: ConnectionDoc): ConnectionRecord {
   return {
     id: row.id,
     teamId: teamOf(row),
     provider: row.provider,
     externalId: row.externalId,
     label: row.label,
+    auth: row.auth ?? "app",
+    status: row.status ?? "active",
+    credentials: row.credentials ? asSealedCredentials(row.credentials) : null,
     createdAt: new Date(row.createdAt),
   };
 }
 
-function toDestination(row: Stamped<DestinationRecord, "createdAt" | "updatedAt">): DestinationRecord {
-  return { ...row, createdAt: new Date(row.createdAt), updatedAt: new Date(row.updatedAt) };
+type DestinationDoc = Stamped<Omit<DestinationRecord, "provider" | "config">, "createdAt" | "updatedAt"> & {
+  provider: DestinationRecord["provider"];
+  config: DestinationRecord["config"];
+};
+
+/** The validators can't tie `config` to `provider`; `saveDestination`, the
+ *  only writer, is typed so they match. */
+function toDestination(row: DestinationDoc): DestinationRecord {
+  return { ...row, createdAt: new Date(row.createdAt), updatedAt: new Date(row.updatedAt) } as DestinationRecord;
 }
 
 function toDelivery(row: Stamped<DeliveryRecord, "createdAt" | "updatedAt">): DeliveryRecord {

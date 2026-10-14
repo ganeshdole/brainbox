@@ -19,6 +19,15 @@ export interface Storage {
   read?(key: string): Promise<Uint8Array>;
 }
 
+/** A stored file's bytes from any driver: read() where there is one, else its
+ *  presigned URL. For handing a file to a tracker that keeps its own copy. */
+export async function readStored(storage: Storage, key: string): Promise<Uint8Array> {
+  if (storage.read) return storage.read(key);
+  const res = await fetch(await storage.presignGet(key));
+  if (!res.ok) throw new Error(`reading ${key} from storage failed: ${res.status}`);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
 let instance: Storage | null = null;
 
 export function getStorage(): Storage {
