@@ -14,6 +14,13 @@ describe("widget store", () => {
     expect(store.takeStart()).toBeNull();
   });
 
+  it("hands over a feature request like any other start mode", () => {
+    const store = createWidgetStore();
+    store.start("feature");
+    expect(store.isOpen()).toBe(true);
+    expect(store.takeStart()).toBe("feature");
+  });
+
   it("tells the widget about start() while it is already open on the chooser", () => {
     const store = createWidgetStore();
     store.open();

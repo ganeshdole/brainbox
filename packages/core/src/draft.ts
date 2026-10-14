@@ -1,4 +1,4 @@
-import type { Identity, Region, ReportField } from "@ganeshdole/brainbox-shared";
+import type { Identity, Importance, IssueKind, Region, ReportField } from "@ganeshdole/brainbox-shared";
 import { createAnnotations, type Annotations } from "./annotate.ts";
 import { bakeMarks, captureViewport, pickScreenshot } from "./capture.ts";
 import { unionBounds, type Mark } from "./marks.ts";
@@ -76,11 +76,23 @@ export interface Draft {
   startRecording(options?: { onAutoStop?: () => void; maxMs?: number }): Recording;
   /** Send the report. Waits for a bake in flight rather than sending the
    *  un-marked shot. Rejects if there is nothing to send, `beforeSend` drops
-   *  it, or the transport fails. */
-  submit(input: { text?: string; audio?: Blob | null }): Promise<SubmitResult>;
+   *  it, or the transport fails. A feature request (`kind: "feature"`) needs
+   *  text or a voice note; its screenshot is optional and its console errors
+   *  are left out. */
+  submit(input: SubmitInput): Promise<SubmitResult>;
   /** Throw the report away. Late screenshots are dropped, object URLs revoked,
    *  a recording stopped and its marks removed. The draft can be used again. */
   cancel(): void;
+}
+
+/** What the user said, and what kind of report it is. */
+export interface SubmitInput {
+  text?: string;
+  audio?: Blob | null;
+  /** Default `bug`. */
+  kind?: IssueKind;
+  /** Only sent with a feature request. */
+  importance?: Importance;
 }
 
 /** What a draft borrows from its `Brainbox` instance. */
@@ -237,18 +249,26 @@ export function createDraft(ctx: DraftContext, { exclude }: DraftOptions = {}): 
       return handle;
     },
 
-    async submit({ text, audio }) {
+    async submit({ text, audio, kind = "bug", importance }) {
       const screenshot = await pickScreenshot(pending, shot);
       const body = text?.trim() || undefined;
       const voiceNote = audio ?? voice ?? undefined;
-      if (!screenshot && !session && !body && !voiceNote) {
-        throw new Error("Nothing to send - record a note or add a description");
+      const feature = kind === "feature";
+      // A bug can be shown without a word; a feature request has to be told.
+      if (feature ? !body && !voiceNote : !screenshot && !session && !body && !voiceNote) {
+        throw new Error(
+          feature
+            ? "Nothing to send - say or type what you'd like"
+            : "Nothing to send - record a note or add a description",
+        );
       }
       const report: Report = {
+        ...(feature && { kind, importance }),
         text: body,
         region: region ?? undefined,
         metadata: captureMetadata({
-          consoleErrors: ctx.consoleErrors(),
+          // Errors on the page say nothing about an idea, and would read as a bug.
+          consoleErrors: feature ? [] : ctx.consoleErrors(),
           identity: ctx.identity(),
           fields: ctx.fields(),
           selector: region?.selector,

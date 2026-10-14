@@ -7,6 +7,7 @@ import type {
   ConnectionRecord,
   DeliveryRecord,
   DestinationRecord,
+  FeatureRecord,
   IssueRecord,
   ProjectRecord,
   Store,
@@ -72,7 +73,11 @@ export function createConvexStore(convex: ConvexCaller): Store {
     projects: {
       async listForTeams(teamIds) {
         const rows = await convex.query(api.projects.listForTeams, { teamIds });
-        return rows.map((row) => ({ ...toProject(row), issueCount: row.issueCount }));
+        return rows.map((row) => ({
+          ...toProject(row),
+          issueCount: row.issueCount,
+          featureRequestCount: row.featureRequestCount ?? 0,
+        }));
       },
       async create(input) {
         return toProject(await convex.mutation(api.projects.create, input));
@@ -111,6 +116,33 @@ export function createConvexStore(convex: ConvexCaller): Store {
           status: outcome.status,
           ...(outcome.status === "done" && { text: outcome.text }),
         });
+      },
+      async setFeature(id, featureId) {
+        await convex.mutation(api.issues.setFeature, { id, featureId });
+      },
+    },
+
+    features: {
+      async listForProject(projectId) {
+        return (await convex.query(api.features.listForProject, { projectId })).map((row) => ({
+          ...toFeature(row),
+          requestCount: row.requestCount,
+        }));
+      },
+      async get(id) {
+        return maybe(await convex.query(api.features.get, { id }), toFeature);
+      },
+      async create(input) {
+        return toFeature(await convex.mutation(api.features.create, input));
+      },
+      async update(id, patch) {
+        return maybe(await convex.mutation(api.features.update, { id, ...patch }), toFeature);
+      },
+      async delete(id) {
+        await convex.mutation(api.features.remove, { id });
+      },
+      async merge(fromId, intoId) {
+        await convex.mutation(api.features.merge, { fromId, intoId });
       },
     },
 
@@ -257,8 +289,22 @@ function toProject(
   };
 }
 
-function toIssue(row: Stamped<IssueRecord, "createdAt">): IssueRecord {
-  return { ...row, createdAt: new Date(row.createdAt) };
+/** Issues stored before feature requests have no kind, importance or feature. */
+type StoredIssue = Omit<Stamped<IssueRecord, "createdAt">, "kind" | "importance" | "featureId"> &
+  Partial<Pick<IssueRecord, "kind" | "importance" | "featureId">>;
+
+function toIssue(row: StoredIssue): IssueRecord {
+  return {
+    ...row,
+    kind: row.kind ?? "bug",
+    importance: row.importance ?? null,
+    featureId: row.featureId ?? null,
+    createdAt: new Date(row.createdAt),
+  };
+}
+
+function toFeature(row: Stamped<FeatureRecord, "createdAt" | "updatedAt">): FeatureRecord {
+  return { ...row, createdAt: new Date(row.createdAt), updatedAt: new Date(row.updatedAt) };
 }
 
 function toConnection(

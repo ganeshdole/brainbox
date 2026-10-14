@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, ExternalLink, ZoomIn } from "lucide-react";
+import { ArrowLeft, ExternalLink, Lightbulb, ZoomIn } from "lucide-react";
 import type { Issue } from "@ganeshdole/brainbox-shared";
 import { SessionReplay } from "@ganeshdole/brainbox-replay";
 
 import { api } from "../lib/api";
-import { issueTitle, pageLabel } from "../lib/issue";
+import { importanceLabel, issueTitle, pageLabel } from "../lib/issue";
 import { CopyButton } from "./CopyButton";
 import { Eyebrow } from "./Eyebrow";
 import { IssueDeliveries } from "./IssueDeliveries";
+import { IssueFeature } from "./IssueFeature";
 import { ReporterCard } from "./IssueReporter";
 import { Lightbox } from "./Lightbox";
 import { Skeleton } from "./ui/skeleton";
@@ -99,12 +100,14 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
     return () => clearTimeout(t);
   }, [issue, issueId]);
 
+  // a feature request is reached from, and goes back to, Features
+  const fromFeatures = issue?.kind === "feature";
   const back = (
     <Link
-      to={`/projects/${projectId}`}
+      to={`/projects/${projectId}${fromFeatures ? "/features" : ""}`}
       className="mb-3 flex w-fit items-center gap-1 text-xs text-muted transition hover:text-emphasis"
     >
-      <ArrowLeft className="h-3.5 w-3.5" /> Reports
+      <ArrowLeft className="h-3.5 w-3.5" /> {fromFeatures ? "Features" : "Reports"}
     </Link>
   );
 
@@ -143,6 +146,13 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
           {issueTitle(issue)}
         </h2>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs text-muted">
+          {issue.kind === "feature" && (
+            <span className="flex items-center gap-1 text-emphasis">
+              <Lightbulb className="h-3.5 w-3.5" aria-hidden />
+              Feature request
+              {issue.importance && ` · ${importanceLabel(issue.importance)}`}
+            </span>
+          )}
           <span>{new Date(issue.createdAt).toLocaleString()}</span>
           <a
             href={m.url}
@@ -154,6 +164,13 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
             <ExternalLink className="h-3 w-3 shrink-0" />
           </a>
         </div>
+        {issue.kind === "feature" && (
+          <IssueFeature
+            issue={issue}
+            projectId={projectId}
+            onChange={(next) => setIssue({ ...issue, featureId: next.featureId })}
+          />
+        )}
         <IssueDeliveries
           issueId={issue.id}
           projectId={projectId}

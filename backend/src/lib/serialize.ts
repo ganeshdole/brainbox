@@ -1,6 +1,7 @@
 import type { Ticket } from "@ganeshdole/brainbox-integrations";
 import type {
   Delivery,
+  Feature,
   IntegrationConnection,
   Issue,
   Project,
@@ -17,6 +18,7 @@ import type {
   ConnectionRecord as ConnectionRow,
   DeliveryRecord as DeliveryRow,
   DestinationRecord as DestinationRow,
+  FeatureRecord as FeatureRow,
   IssueRecord as IssueRow,
   ProjectRecord as ProjectRow,
   TeamInviteRecord as TeamInviteRow,
@@ -62,6 +64,9 @@ export async function toIssue(
     id: row.id,
     projectId: row.projectId,
     createdAt: row.createdAt.toISOString(),
+    kind: row.kind,
+    importance: row.importance ?? undefined,
+    featureId: row.featureId ?? undefined,
     text: row.text ?? undefined,
     screenshot,
     crop,
@@ -71,6 +76,19 @@ export async function toIssue(
     region: row.region ?? undefined,
     metadata: row.metadata,
     ...(deliveryRows && { deliveries: deliveryRows.map(toDelivery) }),
+  };
+}
+
+export function toFeature(row: FeatureRow, requestCount: number): Feature {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    title: row.title,
+    description: row.description ?? undefined,
+    status: row.status,
+    requestCount,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 
@@ -158,6 +176,8 @@ export function toTicket(row: IssueRow, links: TicketLinkOptions): Ticket {
   return {
     id: row.id,
     createdAt: row.createdAt.toISOString(),
+    kind: row.kind,
+    importance: row.importance ?? undefined,
     text: row.text ?? undefined,
     transcript: row.audioTranscript ?? row.videoTranscript ?? undefined,
     metadata: row.metadata,
@@ -166,6 +186,7 @@ export function toTicket(row: IssueRow, links: TicketLinkOptions): Ticket {
       dashboard: `${links.dashboardOrigin}/projects/${row.projectId}/issues/${row.id}`,
       screenshot: row.screenshotKey ? links.fileUrl(row.screenshotKey) : undefined,
       crop: row.cropKey ? links.fileUrl(row.cropKey) : undefined,
+      audio: row.audioKey ? links.fileUrl(row.audioKey) : undefined,
     },
   };
 }

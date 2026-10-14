@@ -12,6 +12,7 @@ import { requireSubscription } from "./middleware/requireSubscription.ts";
 import { authError, AUTH_ERROR_PATH } from "./routes/auth-error.ts";
 import { billing } from "./routes/billing.ts";
 import { dashboardRoute } from "./routes/dashboard.ts";
+import { featuresRoute } from "./routes/features.ts";
 import { filesRoute } from "./routes/files.ts";
 import { health } from "./routes/health.ts";
 import { ingest } from "./routes/ingest.ts";
@@ -73,6 +74,8 @@ app.route("/api/invites", invitesRoute);
 app.use("/api/*", requireSubscription);
 app.route("/api/projects", projectsRoute);
 app.route("/api/issues", issuesRoute);
+// /api/projects/:projectId/features and /api/features/:id
+app.route("/api", featuresRoute);
 app.route("/api/files", filesRoute);
 app.route("/api/integrations", integrationsRoute);
 app.route("/api/teams", teamsRoute);

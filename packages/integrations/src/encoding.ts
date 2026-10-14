@@ -36,3 +36,8 @@ export function pemToDer(pem: string, label: string): Uint8Array<ArrayBuffer> {
   }
   return fromBase64((body ?? "").replace(/\s+/g, ""));
 }
+
+export function fromBase64url(s: string): Uint8Array<ArrayBuffer> {
+  const b64 = s.replace(/-/g, "+").replace(/_/g, "/");
+  return fromBase64(b64 + "=".repeat((4 - (b64.length % 4)) % 4));
+}

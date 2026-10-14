@@ -294,6 +294,31 @@ describe("Draft submit", () => {
     expect(sent[1]?.metadata).not.toHaveProperty("fields");
   });
 
+  it("sends a feature request with its importance, a screenshot only if taken, and no console errors", async () => {
+    console.error("unrelated page error");
+    await bb.draft().submit({ text: "Export to CSV", kind: "feature", importance: "important" });
+
+    expect(sent[0]).toMatchObject({ kind: "feature", importance: "important", text: "Export to CSV" });
+    expect(sent[0]?.screenshot).toBeUndefined();
+    expect(sent[0]?.metadata.consoleErrors).toEqual([]);
+  });
+
+  it("refuses a feature request with no words, even with a screenshot", async () => {
+    capture.captureViewport.mockResolvedValue(blob("shot"));
+    const draft = bb.draft();
+    draft.captureScreenshot();
+    await expect(draft.submit({ text: " ", kind: "feature" })).rejects.toThrow(
+      "say or type what you'd like",
+    );
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("leaves kind and importance off a bug report", async () => {
+    await bb.draft().submit({ text: "broken", importance: "critical" });
+    expect(sent[0]).not.toHaveProperty("kind");
+    expect(sent[0]).not.toHaveProperty("importance");
+  });
+
   it("reports a successful submit to the instance", async () => {
     const onSubmitted = vi.fn();
     const withHook = createBrainbox({ transport, onSubmitted });

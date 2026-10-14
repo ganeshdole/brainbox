@@ -109,6 +109,8 @@ export async function makeIssue(projectId: string, over: Partial<NewIssue> = {})
   const id = over.id ?? crypto.randomUUID();
   await getStore().issues.create({
     projectId,
+    kind: "bug",
+    importance: null,
     text: null,
     screenshotKey: `${projectId}/issue/screenshot.png`,
     cropKey: null,

@@ -1,7 +1,7 @@
 import { StrictMode, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Transport } from "@ganeshdole/brainbox-core";
+import type { Report, Transport } from "@ganeshdole/brainbox-core";
 import { BrainboxProvider } from "@ganeshdole/brainbox-react";
 import { BrainboxWidget } from "./widget.tsx";
 import { useBrainboxWidget } from "./use-brainbox-widget.ts";
@@ -43,6 +43,17 @@ const uiReady = () =>
     await import("./ui.tsx");
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+/** A button inside the widget, by the start of its label. */
+const findButton = (label: string) =>
+  Array.from(shadow()?.querySelectorAll("button") ?? []).find((b) =>
+    (b.getAttribute("aria-label") ?? b.textContent?.trim() ?? "").startsWith(label),
+  );
+/** Type into a React-controlled field the way the browser would. */
+function typeInto(el: HTMLTextAreaElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+  setter?.call(el, value);
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+}
 const hostSees = () => container.querySelector("output")?.textContent;
 const hostClick = (label: string) =>
   Array.from(container.querySelectorAll("button"))
@@ -133,6 +144,78 @@ describe("BrainboxWidget", () => {
     expect(buttons()).toContain("Select");
     expect(buttons()).toContain("Next");
     expect(buttons().some((b) => b.startsWith("Screenshot"))).toBe(false);
+  });
+
+  it("opens a feature request from a host's start(\"feature\") and sends it as one", async () => {
+    const sent: Report[] = [];
+    const capturing: Transport = {
+      send: async (report) => {
+        sent.push(report);
+        return { id: "f1" };
+      },
+    };
+    function HostIdea() {
+      const { start } = useBrainboxWidget();
+      return <button onClick={() => start("feature")}>Request a feature</button>;
+    }
+    act(() => {
+      root.render(
+        <BrainboxProvider transport={capturing}>
+          <HostIdea />
+          <BrainboxWidget trigger="manual" />
+        </BrainboxProvider>,
+      );
+    });
+
+    act(() => hostClick("Request a feature"));
+    await uiReady();
+    // the form, not the chooser
+    expect(buttons().some((b) => b.startsWith("Screenshot"))).toBe(false);
+    // the mic asks for an idea, not a bug
+    expect(shadow()?.textContent).toContain("Or say it out loud");
+    expect(shadow()?.textContent).not.toContain("Say what went wrong");
+    const send = () => findButton("Send idea");
+    expect(send()?.disabled).toBe(true);
+
+    act(() => typeInto(shadow()!.querySelector("textarea")!, "Export invoices to CSV"));
+    act(() => findButton("Important")?.click());
+    expect(findButton("Important")?.getAttribute("aria-pressed")).toBe("true");
+    expect(send()?.disabled).toBe(false);
+
+    await act(async () => send()?.click());
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ kind: "feature", importance: "important", text: "Export invoices to CSV" });
+    expect(sent[0]?.screenshot).toBeUndefined();
+    expect(shadow()?.textContent).toContain("Thanks! Your idea was sent.");
+  });
+
+  it("offers Suggest a feature in the chooser, unless featureRequests is off", async () => {
+    act(() => {
+      root.render(
+        <BrainboxProvider transport={transport}>
+          <HostControls />
+          <BrainboxWidget trigger="manual" />
+        </BrainboxProvider>,
+      );
+    });
+    act(() => hostClick("Report a problem"));
+    await uiReady();
+    act(() => findButton("Suggest a feature")?.click());
+    expect(shadow()?.querySelector("textarea")?.getAttribute("aria-label")).toBe("Your idea");
+
+    act(() => hostClick("Never mind"));
+    act(() => {
+      root.render(
+        <BrainboxProvider transport={transport}>
+          <HostControls />
+          <BrainboxWidget trigger="manual" featureRequests={false} />
+        </BrainboxProvider>,
+      );
+    });
+    act(() => hostClick("Report a problem"));
+    await uiReady();
+    expect(buttons().some((b) => b.startsWith("Screenshot"))).toBe(true);
+    expect(buttons().some((b) => b.startsWith("Suggest a feature"))).toBe(false);
   });
 
   it("keeps its clicks from the host page, so the host's open menus stay open", async () => {

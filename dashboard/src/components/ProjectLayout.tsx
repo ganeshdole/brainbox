@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useParams } from "react-router-dom";
-import { LayoutGrid, LogOut, Settings, Users } from "lucide-react";
+import { LayoutGrid, Lightbulb, LogOut, Settings, Users } from "lucide-react";
 import type { Project } from "@ganeshdole/brainbox-shared";
 
 import { api, isAuthRedirect } from "../lib/api";
@@ -133,10 +133,11 @@ export function ProjectLayout() {
   const base = `/projects/${project?.id ?? ALL_PROJECTS}`;
   const isSettings = location.pathname.endsWith("/settings");
   const isTeam = location.pathname.endsWith("/team");
-  const isReports = !isSettings && !isTeam;
-  const reportCount = project
-    ? project.issueCount
-    : projects.reduce((n, p) => n + (p.issueCount ?? 0), 0);
+  const isFeatures = location.pathname.startsWith(`${base}/features`);
+  const isReports = !isSettings && !isTeam && !isFeatures;
+  // Feature requests count under Features, not Reports.
+  const bugCount = (p: Project) => (p.issueCount ?? 0) - (p.featureRequestCount ?? 0);
+  const reportCount = project ? bugCount(project) : projects.reduce((n, p) => n + bugCount(p), 0);
   const context: ProjectOutletContext = {
     project: project ?? null,
     projects,
@@ -169,6 +170,15 @@ export function ProjectLayout() {
             count={reportCount}
           />
           {project && (
+            <NavItem
+              to={`${base}/features`}
+              active={isFeatures}
+              icon={<Lightbulb />}
+              label="Features"
+              count={project.featureRequestCount}
+            />
+          )}
+          {project && (
             <NavItem to={`${base}/settings`} active={isSettings} icon={<Settings />} label="Settings" />
           )}
           {project && <NavItem to={`${base}/team`} active={isTeam} icon={<Users />} label="Team" />}
@@ -186,6 +196,9 @@ export function ProjectLayout() {
             </div>
             <nav className="flex shrink-0 gap-1">
               <MobileTab to={base} active={isReports} label="Reports" />
+              {project && (
+                <MobileTab to={`${base}/features`} active={isFeatures} label="Features" />
+              )}
               {project && (
                 <MobileTab to={`${base}/settings`} active={isSettings} label="Settings" />
               )}

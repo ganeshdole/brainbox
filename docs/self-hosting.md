@@ -6,9 +6,23 @@ refuses to start if a chosen option is missing its settings.
 
 | Choice | Options | Setting |
 |---|---|---|
-| Database | `postgres` (default), `convex` | `DATABASE_DRIVER` |
-| Uploaded files | `local` (development only), `r2`, `convex` | `STORAGE_DRIVER` |
+| Database | `postgres` (default), `convex`, `custom` | `DATABASE_DRIVER` |
+| Uploaded files | `local` (development only), `s3`, `r2`, `convex`, `custom` | `STORAGE_DRIVER` |
 | Host | Node server (Docker), Azure Functions | which entry you deploy |
+
+The two drivers are independent, so any database goes with any file store.
+`postgres` is any Postgres: your own, Docker, Supabase, Neon, AWS RDS. `s3` is
+anything that speaks the S3 API: AWS S3, MinIO, Supabase Storage, Backblaze B2,
+DigitalOcean Spaces. `r2` is Cloudflare R2 with its settings filled in.
+`custom` is a database or file store you write yourself (see the last section).
+
+| You want | Set |
+|---|---|
+| Supabase for data, AWS S3 for files | `DATABASE_DRIVER=postgres` with Supabase's connection string, `STORAGE_DRIVER=s3` |
+| Everything on AWS | `postgres` on RDS, `s3` with the keys left empty so the instance's IAM role is used |
+| Everything on Convex | `DATABASE_DRIVER=convex`, `STORAGE_DRIVER=convex` |
+| Postgres with Cloudflare R2 | `DATABASE_DRIVER=postgres`, `STORAGE_DRIVER=r2` |
+| MongoDB, or anything else not listed | `DATABASE_DRIVER=custom` and your own `Store` |
 
 Why it is built this way: [ADR 0007](adr/0007-pluggable-stores-and-runtimes.md).
 
@@ -23,7 +37,9 @@ Everything else is in `backend/src/env.ts`.
 |---|---|
 | `DATABASE_DRIVER=postgres` | `DATABASE_URL`, then `pnpm -F @ganeshdole/brainbox-backend db:migrate` |
 | `DATABASE_DRIVER=convex` or `STORAGE_DRIVER=convex` | `CONVEX_URL`, `BRAINBOX_SERVER_SECRET` (also set on the Convex deployment) |
+| `STORAGE_DRIVER=s3` | `S3_BUCKET`, `S3_REGION`; `S3_ENDPOINT` for anything but AWS itself; `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` unless an IAM role supplies them; `S3_FORCE_PATH_STYLE=true` for MinIO and Supabase Storage |
 | `STORAGE_DRIVER=r2` | `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` |
+| `DATABASE_DRIVER=custom` or `STORAGE_DRIVER=custom` | an entry that calls `setStore()` or `setStorage()` (below) |
 | Sign-in with Google | `GOOGLE_ID`, `GOOGLE_SECRET` |
 | Sign-in by email | `EMAIL_DRIVER=resend`, `RESEND_API_KEY`, `EMAIL_FROM` |
 | A code instead of a link | `AUTH_EMAIL_MODE=code`, or `both` for a code and a link in one email (default `link`) |
@@ -159,8 +175,33 @@ project's key:
 brainboxTransport({ endpoint: "https://api.feedback.example.com/ingest", projectKey: "pk_..." })
 ```
 
-## Adding another database, file store or host
+## Bringing your own database, file store or email
 
-Implement the interface (`Store`, `Storage`, or a thin entry like
-`src/azure.ts`), add its option to `src/env.ts`, and make the backend suite pass
-against it. `backend/AGENTS.md` has the rules.
+Write the interface (`Store` in `src/store/types.ts`, `Storage` in
+`src/storage/index.ts`, `Emailer` in `src/email/types.ts`) and hand it to the
+backend from an entry, before it serves:
+
+```ts
+// src/my-entry.ts, next to src/index.ts
+import { serve } from "@hono/node-server";
+
+import { app } from "./app.ts";
+import { env } from "./env.ts";
+import { setStore } from "./store/index.ts";
+import { createMongoStore } from "./my-mongo-store.ts";
+
+setStore(createMongoStore(process.env.MONGODB_URL ?? ""));
+serve({ fetch: app.fetch, port: env.PORT });
+```
+
+With `DATABASE_DRIVER=custom` the backend skips the Postgres and Convex
+settings. `setStorage()` and `STORAGE_DRIVER=custom` work the same way for
+files, and `setEmailer()` for email (SES, SMTP).
+
+A file store that hands out its own URLs, as S3 does, only needs `put` and
+`presignGet`. One that serves files through the API instead also implements
+`read`, and the file routes stream from it.
+
+A store is done when the backend suite passes against it: the integration
+tests are the contract (`backend/AGENTS.md`). To ship an option in this repo
+instead, add it to `src/env.ts` and the driver switch beside the others.

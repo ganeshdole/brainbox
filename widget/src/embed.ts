@@ -4,9 +4,9 @@ import {
   type ProjectKey,
   type ReportField,
 } from "@ganeshdole/brainbox-core";
-import { readConfig } from "./lib/config.ts";
+import { readConfig, triggerAction } from "./lib/config.ts";
 import { isBrainboxEvent } from "./lib/shadow-host.ts";
-import type { CaptureMode } from "./lib/widget-store.ts";
+import type { StartMode } from "./lib/widget-store.ts";
 import { mount, type WidgetHandle } from "./mount.tsx";
 
 // The script-tag bundle (`widget.js`). The one file in this package that runs
@@ -40,8 +40,8 @@ const api = {
   open() {
     widget?.open();
   },
-  /** "screenshot" or "record": skips the chooser. */
-  start(mode: CaptureMode) {
+  /** "screenshot", "record" or "feature": skips the chooser. */
+  start(mode: StartMode) {
     widget?.start(mode);
   },
   close() {
@@ -81,6 +81,7 @@ function boot() {
     trigger: config.trigger,
     position: config.position,
     theme: config.theme,
+    featureRequests: config.featureRequests,
     identity: earlyIdentity,
     fields: earlyFields,
     onSubmitted: ({ id }) =>
@@ -91,6 +92,17 @@ function boot() {
   if (config.trigger === "manual" && config.mount) {
     document.querySelector(config.mount)?.addEventListener("click", () => api.open());
   }
+
+  // Any element marked data-brainbox is a trigger, e.g.
+  // <button data-brainbox="feature">Request a feature</button>. Delegated, so
+  // elements a single-page app renders later work too.
+  document.addEventListener("click", (event) => {
+    const el = event.target instanceof Element ? event.target.closest("[data-brainbox]") : null;
+    if (!(el instanceof HTMLElement)) return;
+    const action = triggerAction(el.dataset.brainbox);
+    if (action === "open") api.open();
+    else if (action) api.start(action);
+  });
 }
 
 if (document.readyState === "loading") {

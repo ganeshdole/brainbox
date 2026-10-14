@@ -1,4 +1,4 @@
-import type { Issue } from "@ganeshdole/brainbox-shared";
+import type { Importance, Issue } from "@ganeshdole/brainbox-shared";
 
 /** One-line label for a report: the end-user's note if they wrote one, else
  *  the page's document title. The bare host+path is a last resort - inside a
@@ -7,6 +7,11 @@ export function issueTitle(issue: Pick<Issue, "text" | "metadata">): string {
   const text = issue.text?.trim();
   if (text) return text;
   return issue.metadata.title || pageLabel(issue.metadata.url) || "Untitled report";
+}
+
+/** Reports is for what's broken; feature requests live under Features. */
+export function isBugReport(issue: Pick<Issue, "kind">): boolean {
+  return issue.kind !== "feature";
 }
 
 /** The Reports-page filter pills: what each report carries. */
@@ -18,6 +23,24 @@ export const REPORT_FILTERS = [
 ] as const;
 
 export type ReportFilterKey = (typeof REPORT_FILTERS)[number]["key"];
+
+/** The pills worth showing for a list: All, and each filter that matches
+ *  something. */
+export function shownFilters(issues: Issue[]): typeof REPORT_FILTERS[number][] {
+  return REPORT_FILTERS.filter((f) => f.key === "all" || issues.some(f.match));
+}
+
+const IMPORTANCE_LABEL: Record<Importance, string> = {
+  nice: "Nice to have",
+  important: "Important",
+  critical: "Blocking them",
+};
+
+/** "Important", or "Blocking them" for a request the end-user can't work
+ *  without. The same words as the ticket. */
+export function importanceLabel(importance: Importance): string {
+  return IMPORTANCE_LABEL[importance];
+}
 
 /** The full list pipeline: project untick (all view) → type filter → search. */
 export function visibleReports(

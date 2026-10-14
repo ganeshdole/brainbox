@@ -10,6 +10,7 @@
 
 import type * as auth from "../auth.js";
 import type * as billing from "../billing.js";
+import type * as features from "../features.js";
 import type * as files from "../files.js";
 import type * as integrations from "../integrations.js";
 import type * as issues from "../issues.js";
@@ -32,6 +33,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   billing: typeof billing;
+  features: typeof features;
   files: typeof files;
   integrations: typeof integrations;
   issues: typeof issues;

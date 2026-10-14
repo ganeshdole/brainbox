@@ -24,8 +24,16 @@ and Convex are the stores, picked by `DATABASE_DRIVER`. Root rules in
 - Every Convex function is built with `serverQuery`/`serverMutation`, which
   demand `BRAINBOX_SERVER_SECRET`: Convex functions are otherwise callable by
   anyone with the deployment URL. Never export a bare `query` or `mutation`.
-- File storage is a separate choice (`STORAGE_DRIVER`: `local`, `r2`,
-  `convex`), behind the `Storage` interface in `src/storage/`.
+- File storage is a separate choice (`STORAGE_DRIVER`: `local`, `s3`, `r2`,
+  `convex`), behind the `Storage` interface in `src/storage/`. `r2` is a preset
+  of `S3Storage`, so an S3-compatible store needs settings, not a driver. Ask
+  the interface, never the class: routes check `storage.read`, not
+  `instanceof LocalStorage`.
+- `setStore()`, `setStorage()` and `setEmailer()` let an entry pass in its own
+  implementation (`DATABASE_DRIVER=custom` / `STORAGE_DRIVER=custom`). Resolve
+  them per use through `getStore()` / `getStorage()` / `getEmailer()`, never at
+  import, or an injected one is missed. Tests use them to swap in fakes and
+  pass `null` afterwards to go back.
 - Env is read once through `src/env.ts`. Add new vars there with an explicit
   required/optional decision, not ad-hoc `process.env` reads elsewhere.
 

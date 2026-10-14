@@ -32,12 +32,28 @@ The product has three distinct surfaces - keep them separate:
 - **Mark** - one thing the end-user drew on the page: a box, an arrow, a
   freehand stroke or a text note. Held as a vector until it is baked into the
   screenshot, so it stays undoable to the last moment.
+- **Issue kind** - what a report is about. A **bug report** shows something
+  broken and carries a capture (screenshot or recording). A **feature
+  request** tells what the end-user wishes the app did: text or a voice note,
+  an optional screenshot, and how much it matters to them (importance: nice
+  to have, important, or blocking them). A report with no kind is a bug.
+- **Feature** - one thing the customer's users want built, as the customer
+  tracks it: a title, a description and a status (under review, planned, in
+  progress, shipped, declined). It collects **requests**, the feature-request
+  Issues end-users file through the widget; the number of requests is its
+  demand. A new request waits unsorted until the customer attaches it to a
+  Feature, starts a new one from it, or merges duplicates. The Feature's own
+  words are the customer's and are meant to be shown publicly one day; its
+  requests carry who asked and their app's details, and never are.
 - **Trigger** - whatever opens the widget. Two modes:
   - **Floating trigger** - the bottom-right button the widget renders itself
     (default).
   - **Manual trigger** - the customer's own element. Script tag:
     `data-mode="mount"` with `data-mount="<selector>"`, or
     `window.Brainbox.open()`. React: `useBrainboxWidget().open()`.
+  Either mode can open straight into one flow with `start(mode)`: `screenshot`,
+  `record` or `feature`. A script-tag host can also mark any element with
+  `data-brainbox="feature"` (or `screenshot`, `record`, `open`).
 - **Project key** - a project's public identifier passed to the widget
   (`data-project`), scoping captured feedback to that project.
 - **Team** - the people who share a set of projects: one company, or one
@@ -66,6 +82,8 @@ The product has three distinct surfaces - keep them separate:
 Account >──< Team ──< Project ──< Issue ──< Delivery
   (Member,     │          │                    │
    role)       └──< Connection ──< Destination ──┘
+
+Project ──< Feature ──< Issue   (feature requests only; a new one has no Feature yet)
 ```
 
 - **Account** - one person's login (Google, or an emailed link or code). In
@@ -75,6 +93,7 @@ Account >──< Team ──< Project ──< Issue ──< Delivery
   projects.
 - **Project** - one per SaaS the customer owns. Has a unique project key used in
   the widget snippet. Owns many issues.
-- **Issue** - one feedback submission: screenshot, audio, text, region coords
-  (the area the end-user's marks cover), and auto-captured metadata. Filed under
-  the project named by the project key on the widget's POST.
+- **Issue** - one feedback submission, a bug report or a feature request (its
+  kind): screenshot, audio, text, region coords (the area the end-user's marks
+  cover), and auto-captured metadata. Filed under the project named by the
+  project key on the widget's POST.

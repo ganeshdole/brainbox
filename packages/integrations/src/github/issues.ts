@@ -13,6 +13,8 @@ export interface GithubIssuesOptions {
   repo: string;
   token: TokenSource;
   labels?: string[];
+  /** Labels for feature requests, in place of `labels`. Default: `labels`. */
+  featureLabels?: string[];
   fetch?: FetchLike;
   apiUrl?: string;
 }
@@ -25,6 +27,8 @@ export function githubIssues(options: GithubIssuesOptions): Destination {
     kind: "github",
     async deliver(ticket: Ticket) {
       const { title, body } = renderTicket(ticket);
+      const labels =
+        ticket.kind === "feature" ? (options.featureLabels ?? options.labels) : options.labels;
 
       let token: string;
       try {
@@ -42,7 +46,7 @@ export function githubIssues(options: GithubIssuesOptions): Destination {
           body: {
             title,
             body,
-            ...(options.labels && options.labels.length > 0 ? { labels: options.labels } : {}),
+            ...(labels && labels.length > 0 ? { labels } : {}),
           },
           apiUrl: options.apiUrl,
           fetch: options.fetch,

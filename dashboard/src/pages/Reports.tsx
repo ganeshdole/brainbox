@@ -15,11 +15,13 @@ import { Skeleton } from "../components/ui/skeleton";
 import { api, isAuthRedirect } from "../lib/api";
 import { cleanIdentity } from "../lib/reporter";
 import {
+  isBugReport,
   issueTitle,
   newestFirst,
   pagePath,
   REPORT_FILTERS,
   type ReportFilterKey,
+  shownFilters,
   visibleReports,
 } from "../lib/issue";
 import { ALL_PROJECTS, useProject } from "../lib/useProject";
@@ -179,7 +181,8 @@ export function Reports() {
       : Promise.all(projects.map((p) => api.listIssues(p.id))).then((lists) => lists.flat());
     load
       .then((issues) => {
-        if (!cancelled) setResult({ scope, issues: newestFirst(issues) });
+        // feature requests are tracked under Features
+        if (!cancelled) setResult({ scope, issues: newestFirst(issues.filter(isBugReport)) });
       })
       .catch((e: Error) => {
         // A 401/402 is already navigating away; rendering it just flashes a
@@ -280,10 +283,9 @@ export function Reports() {
           )}
           {issues && issues.length > 0 && (
             <div className="ml-auto flex flex-wrap items-center gap-1">
-              {REPORT_FILTERS.map((f) => {
-                // presence keyed to everything fetched (stable while ticking
-                // projects); only the count reflects the ticked subset
-                if (f.key !== "all" && issues.filter(f.match).length === 0) return null;
+              {/* presence keyed to everything fetched (stable while ticking
+                  projects); only the count reflects the ticked subset */}
+              {shownFilters(issues).map((f) => {
                 const count = (scoped ?? []).filter(f.match).length;
                 return (
                   <button

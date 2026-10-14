@@ -41,6 +41,7 @@ const destinationSchema = z.object({
     owner: ghName,
     repo: ghName,
     labels: z.array(z.string().min(1).max(50)).max(10).default([]),
+    featureLabels: z.array(z.string().min(1).max(50)).max(10).optional(),
   }),
   enabled: z.boolean().default(true),
 });
@@ -61,9 +62,9 @@ export const projectsRoute = new Hono<AppEnv>()
     return c.json(
       rows.flatMap((r) => {
         const team = byId.get(r.teamId);
-        return team
-          ? [{ ...toProject(r, { id: team.id, name: team.name, role: team.role }), issueCount: r.issueCount }]
-          : [];
+        if (!team) return [];
+        const project = toProject(r, { id: team.id, name: team.name, role: team.role });
+        return [{ ...project, issueCount: r.issueCount, featureRequestCount: r.featureRequestCount }];
       }),
     );
   })
