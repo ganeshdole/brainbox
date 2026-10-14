@@ -1,5 +1,5 @@
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
-import { and, count, desc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, sql } from "drizzle-orm";
 
 import type { DB } from "../db/client.ts";
 import {
@@ -13,13 +13,17 @@ import {
   sessions,
   signInAttempts,
   subscriptions,
+  teamInvites,
+  teamMembers,
+  teams,
   users,
   verificationTokens,
   waitlistSignups,
   webhookEvents,
 } from "../db/schema/index.ts";
 import { planSubscriptionWrite } from "./subscription-write.ts";
-import type { Store } from "./types.ts";
+import { leavesNoOwner } from "./team-rules.ts";
+import type { InviteAcceptance, MembershipChange, Store } from "./types.ts";
 
 type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
 
@@ -48,9 +52,150 @@ export function createPostgresStore(db: DB): Store {
     return claimed.length > 0;
   }
 
+  // Locks the Team's row for the rest of the transaction, so changes to its
+  // members take turns, and returns the member being changed and how many
+  // Owners there are.
+  async function lockMembership(tx: Tx, teamId: string, userId: string) {
+    await tx.select({ id: teams.id }).from(teams).where(eq(teams.id, teamId)).for("update");
+    const rows = await tx.select().from(teamMembers).where(eq(teamMembers.teamId, teamId));
+    return {
+      member: rows.find((r) => r.userId === userId) ?? null,
+      owners: rows.filter((r) => r.role === "owner").length,
+    };
+  }
+
   return {
+    teams: {
+      async create({ name, ownerId }) {
+        return db.transaction(async (tx) => {
+          const [team] = await tx.insert(teams).values({ name }).returning();
+          if (!team) throw new Error("team insert returned no row");
+          await tx.insert(teamMembers).values({ teamId: team.id, userId: ownerId, role: "owner" });
+          return team;
+        });
+      },
+      async get(id) {
+        const [row] = await db.select().from(teams).where(eq(teams.id, id)).limit(1);
+        return row ?? null;
+      },
+      async rename(id, name) {
+        const [row] = await db.update(teams).set({ name }).where(eq(teams.id, id)).returning();
+        return row ?? null;
+      },
+      async listForUser(userId) {
+        const rows = await db
+          .select({ team: teams, role: teamMembers.role })
+          .from(teamMembers)
+          .innerJoin(teams, eq(teams.id, teamMembers.teamId))
+          .where(eq(teamMembers.userId, userId))
+          .orderBy(asc(teams.createdAt));
+        return rows.map((r) => ({ ...r.team, role: r.role }));
+      },
+      async membership(teamId, userId) {
+        const [row] = await db
+          .select()
+          .from(teamMembers)
+          .where(and(eq(teamMembers.teamId, teamId), eq(teamMembers.userId, userId)))
+          .limit(1);
+        return row ?? null;
+      },
+      async members(teamId) {
+        const rows = await db
+          .select({ member: teamMembers, email: users.email, name: users.name, image: users.image })
+          .from(teamMembers)
+          .innerJoin(users, eq(users.id, teamMembers.userId))
+          .where(eq(teamMembers.teamId, teamId))
+          .orderBy(asc(teamMembers.createdAt));
+        return rows.map((r) => ({ ...r.member, email: r.email, name: r.name, image: r.image }));
+      },
+      async setRole(teamId, userId, role) {
+        return db.transaction(async (tx): Promise<MembershipChange> => {
+          const { member, owners } = await lockMembership(tx, teamId, userId);
+          if (!member) return "not_found";
+          if (leavesNoOwner(owners, member.role, role)) return "last_owner";
+          await tx
+            .update(teamMembers)
+            .set({ role })
+            .where(and(eq(teamMembers.teamId, teamId), eq(teamMembers.userId, userId)));
+          return "done";
+        });
+      },
+      async removeMember(teamId, userId) {
+        return db.transaction(async (tx): Promise<MembershipChange> => {
+          const { member, owners } = await lockMembership(tx, teamId, userId);
+          if (!member) return "not_found";
+          if (leavesNoOwner(owners, member.role, null)) return "last_owner";
+          await tx
+            .delete(teamMembers)
+            .where(and(eq(teamMembers.teamId, teamId), eq(teamMembers.userId, userId)));
+          return "done";
+        });
+      },
+
+      async createInvite(input) {
+        // A fresh id on replace, so a link sent before stops working.
+        const [row] = await db
+          .insert(teamInvites)
+          .values(input)
+          .onConflictDoUpdate({
+            target: [teamInvites.teamId, teamInvites.email],
+            set: {
+              id: crypto.randomUUID(),
+              role: input.role,
+              invitedBy: input.invitedBy,
+              expiresAt: input.expiresAt,
+              createdAt: new Date(),
+            },
+          })
+          .returning();
+        if (!row) throw new Error("invite upsert returned no row");
+        return row;
+      },
+      async getInvite(id) {
+        const [row] = await db.select().from(teamInvites).where(eq(teamInvites.id, id)).limit(1);
+        return row ?? null;
+      },
+      async listInvites(teamId) {
+        return db
+          .select()
+          .from(teamInvites)
+          .where(eq(teamInvites.teamId, teamId))
+          .orderBy(desc(teamInvites.createdAt));
+      },
+      async invitesForEmail(email) {
+        return db
+          .select()
+          .from(teamInvites)
+          .where(eq(teamInvites.email, email))
+          .orderBy(desc(teamInvites.createdAt));
+      },
+      async revokeInvite(teamId, id) {
+        await db.delete(teamInvites).where(and(eq(teamInvites.teamId, teamId), eq(teamInvites.id, id)));
+      },
+      async acceptInvite(id, userId, now) {
+        return db.transaction(async (tx): Promise<InviteAcceptance> => {
+          // Of two accepts at once, the second waits here and then finds the
+          // invite gone.
+          const [invite] = await tx
+            .select()
+            .from(teamInvites)
+            .where(eq(teamInvites.id, id))
+            .for("update");
+          if (!invite) return { status: "not_found" };
+          if (invite.expiresAt <= now) return { status: "expired" };
+          await tx.delete(teamInvites).where(eq(teamInvites.id, id));
+          await tx
+            .insert(teamMembers)
+            .values({ teamId: invite.teamId, userId, role: invite.role })
+            .onConflictDoNothing();
+          return { status: "accepted", teamId: invite.teamId };
+        });
+      },
+    },
+
     projects: {
-      async listForOwner(ownerId) {
+      async listForTeams(teamIds) {
+        if (teamIds.length === 0) return [];
         const rows = await db
           .select({
             project: projects,
@@ -59,7 +204,7 @@ export function createPostgresStore(db: DB): Store {
           })
           .from(projects)
           .leftJoin(issues, eq(issues.projectId, projects.id))
-          .where(eq(projects.ownerId, ownerId))
+          .where(inArray(projects.teamId, teamIds))
           .groupBy(projects.id)
           .orderBy(desc(projects.createdAt));
         return rows.map((r) => ({
@@ -170,11 +315,11 @@ export function createPostgresStore(db: DB): Store {
     },
 
     integrations: {
-      async listConnections(ownerId) {
+      async listConnections(teamId) {
         return db
           .select()
           .from(integrationConnections)
-          .where(eq(integrationConnections.ownerId, ownerId))
+          .where(eq(integrationConnections.teamId, teamId))
           .orderBy(desc(integrationConnections.createdAt));
       },
       async getConnection(id) {
@@ -191,7 +336,7 @@ export function createPostgresStore(db: DB): Store {
           .values(input)
           .onConflictDoUpdate({
             target: [
-              integrationConnections.ownerId,
+              integrationConnections.teamId,
               integrationConnections.provider,
               integrationConnections.externalId,
             ],

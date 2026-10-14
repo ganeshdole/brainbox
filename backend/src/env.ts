@@ -82,6 +82,14 @@ export const env = {
   // filters cannot use it up), "both" sends both in one email.
   AUTH_EMAIL_MODE: oneOf("AUTH_EMAIL_MODE", ["link", "code", "both"], "link"),
 
+  // Who may sign in, for a deployment that is one company's own. Unset:
+  // anyone. Set (comma-separated, e.g. "acme.com,acme.io"): addresses on these
+  // domains, plus anyone a Team invites from elsewhere (auth/allowed.ts).
+  AUTH_ALLOWED_EMAIL_DOMAINS: (process.env.AUTH_ALLOWED_EMAIL_DOMAINS ?? "")
+    .split(",")
+    .map((d) => d.trim().toLowerCase().replace(/^@/, ""))
+    .filter(Boolean),
+
   // Transactional email. "console" logs the message (dev/test, no network);
   // "resend" sends via the Resend API. RESEND_API_KEY is only needed for the
   // resend driver. EMAIL_FROM must be an address on a Resend-verified domain.

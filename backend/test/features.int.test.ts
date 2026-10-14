@@ -3,7 +3,7 @@ import type { Feature, FeatureDetail, Issue } from "@ganeshdole/brainbox-shared"
 
 import { app } from "../src/app.ts";
 import { getStore } from "../src/store/index.ts";
-import { authCookie, makeIssue, makeProject, makeUser } from "./helpers.ts";
+import { addMember, authCookie, makeIssue, makeProject, makeUser } from "./helpers.ts";
 
 async function setup() {
   const me = await makeUser();
@@ -157,6 +157,23 @@ describe("features", () => {
     await create(call, project.id, { title: "Another", requestIds: [ask.id] });
     await getStore().projects.delete(project.id);
     expect(await getStore().features.listForProject(project.id)).toEqual([]);
+  });
+
+  it("lets any member of the project's Team work on its features", async () => {
+    const { project, call } = await setup();
+    const feature = await create(call, project.id, { title: "Shared" });
+    const teammate = await makeUser();
+    await addMember(project.teamId, teammate.id);
+    const cookie = await authCookie(teammate.id);
+
+    const list = await app.request(`/api/projects/${project.id}/features`, { headers: { cookie } });
+    expect(((await list.json()) as Feature[]).map((f) => f.id)).toEqual([feature.id]);
+    const patched = await app.request(`/api/features/${feature.id}`, {
+      method: "PATCH",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ status: "planned" }),
+    });
+    expect(((await patched.json()) as Feature).status).toBe("planned");
   });
 
   it("404s another account's project and features", async () => {

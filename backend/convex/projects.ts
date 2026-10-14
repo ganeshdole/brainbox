@@ -4,20 +4,25 @@ import { newestFirst, removeDestination, serverMutation, serverQuery, strip } fr
 
 // Store.projects. See src/store/types.ts for the contract.
 
-export const listForOwner = serverQuery({
-  args: { ownerId: v.string() },
-  handler: async (ctx, { ownerId }) => {
-    const rows = await ctx.db
-      .query("projects")
-      .withIndex("by_owner", (q) => q.eq("ownerId", ownerId))
-      .collect();
+export const listForTeams = serverQuery({
+  args: { teamIds: v.array(v.string()) },
+  handler: async (ctx, { teamIds }) => {
+    const rows = [];
+    for (const teamId of teamIds) {
+      rows.push(
+        ...(await ctx.db
+          .query("projects")
+          .withIndex("by_team", (q) => q.eq("teamId", teamId))
+          .collect()),
+      );
+    }
     return newestFirst(rows).map(strip);
   },
 });
 
 export const create = serverMutation({
   args: {
-    ownerId: v.string(),
+    teamId: v.string(),
     name: v.string(),
     key: v.string(),
     allowedOrigins: v.array(v.string()),

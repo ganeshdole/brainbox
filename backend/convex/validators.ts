@@ -117,3 +117,6 @@ export const featureFields = {
 
 export const issueDoc = v.object(issueFields);
 export type IssueDoc = Infer<typeof issueDoc>;
+
+export const teamRole = v.union(v.literal("owner"), v.literal("admin"), v.literal("member"));
+export const inviteRole = v.union(v.literal("admin"), v.literal("member"));

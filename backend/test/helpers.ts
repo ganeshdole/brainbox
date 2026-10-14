@@ -1,5 +1,5 @@
 import { encode } from "@auth/core/jwt";
-import type { BillingPeriod, PlanId, SubscriptionStatus } from "@ganeshdole/brainbox-shared";
+import type { BillingPeriod, PlanId, SubscriptionStatus, TeamRole } from "@ganeshdole/brainbox-shared";
 
 import { generateProjectKey } from "../src/lib/projectKey.ts";
 import { getStore, type DestinationRecord, type NewIssue } from "../src/store/index.ts";
@@ -69,8 +69,40 @@ export async function subscribeUser(
   });
 }
 
-export async function makeProject(ownerId: string, allowedOrigins: string[] = []) {
-  return getStore().projects.create({ ownerId, name: "Test Project", key: generateProjectKey(), allowedOrigins });
+/** A Team with `ownerId` as its Owner. */
+export async function makeTeam(ownerId: string, name = "Test Team") {
+  return getStore().teams.create({ name, ownerId });
+}
+
+/** The Team `userId` owns, made on first use: what a user's first project
+ *  creates through the API. */
+export async function teamOf(userId: string): Promise<string> {
+  const owned = (await getStore().teams.listForUser(userId)).find((t) => t.role === "owner");
+  return owned?.id ?? (await makeTeam(userId)).id;
+}
+
+/** Puts `userId` in the Team with `role`. */
+export async function addMember(teamId: string, userId: string, role: TeamRole = "member") {
+  const store = getStore();
+  const user = (await store.authAdapter().getUser!(userId))!;
+  const invite = await store.teams.createInvite({
+    teamId,
+    email: user.email,
+    role: role === "owner" ? "admin" : role,
+    invitedBy: null,
+    expiresAt: new Date(Date.now() + 60_000),
+  });
+  await store.teams.acceptInvite(invite.id, userId, new Date());
+  if (role === "owner") await store.teams.setRole(teamId, userId, "owner");
+}
+
+/** A project in the Team `userId` owns (see teamOf). */
+export async function makeProject(userId: string, allowedOrigins: string[] = []) {
+  return makeTeamProject(await teamOf(userId), allowedOrigins);
+}
+
+export async function makeTeamProject(teamId: string, allowedOrigins: string[] = []) {
+  return getStore().projects.create({ teamId, name: "Test Project", key: generateProjectKey(), allowedOrigins });
 }
 
 export async function makeIssue(projectId: string, over: Partial<NewIssue> = {}) {
@@ -106,10 +138,12 @@ export async function makeIssue(projectId: string, over: Partial<NewIssue> = {})
   return (await getStore().issues.get(id))!;
 }
 
-export async function makeConnection(ownerId: string, externalId = "4242", label = "acme") {
+/** A connection for the Team `userId` owns (see teamOf). */
+export async function makeConnection(userId: string, externalId = "4242", label = "acme") {
   const store = getStore();
-  await store.integrations.saveConnection({ ownerId, provider: "github", externalId, label });
-  const connections = await store.integrations.listConnections(ownerId);
+  const teamId = await teamOf(userId);
+  await store.integrations.saveConnection({ teamId, provider: "github", externalId, label });
+  const connections = await store.integrations.listConnections(teamId);
   return connections.find((c) => c.provider === "github" && c.externalId === externalId)!;
 }
 

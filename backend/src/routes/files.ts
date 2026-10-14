@@ -1,22 +1,20 @@
 import { Hono } from "hono";
 
+import { projectAccess } from "../lib/access.ts";
 import { getStorage } from "../storage/index.ts";
 import { mimeForKey } from "../storage/mime.ts";
 import type { AppEnv } from "../types.ts";
 
 // Serves stored screenshot/audio bytes for a driver that reads them through
 // this API (local). Elsewhere the presigned URL points straight at the store.
-// Cookie-gated + ownership-checked.
+// Cookie-gated, and only for members of the project's Team.
 export const filesRoute = new Hono<AppEnv>().get("/*", async (c) => {
-  const uid = c.get("authUser").token?.sub;
-  if (!uid) return c.json({ error: "Unauthorized" }, 401);
-
   const key = c.req.path.replace(/^\/api\/files\//, "");
   const projectId = key.split("/")[0];
   if (!projectId) return c.json({ error: "Not found" }, 404);
 
-  const proj = await c.get("store").projects.get(projectId);
-  if (!proj || proj.ownerId !== uid) return c.json({ error: "Not found" }, 404);
+  const access = await projectAccess(c, projectId, "member");
+  if (access instanceof Response) return access;
 
   const storage = getStorage();
   if (!storage.read) return c.json({ error: "Not found" }, 404);

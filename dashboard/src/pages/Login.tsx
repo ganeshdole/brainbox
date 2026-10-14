@@ -27,7 +27,7 @@ type Status = "idle" | "sending" | "sent" | "error";
  */
 const ERROR_MESSAGES: Record<string, string> = {
   Configuration: "Sign-in is misconfigured on our side. We've been notified - please try again shortly.",
-  AccessDenied: "That account isn't allowed to sign in.",
+  AccessDenied: "That address can't sign in here. Ask a team admin to invite you.",
   Verification: "That sign-in link or code has expired or was already used. Request a new one below.",
   OAuthAccountNotLinked:
     "That email is already registered with a different sign-in method. Use the one you signed up with.",
@@ -74,6 +74,9 @@ export function Login() {
   const [email, setEmail] = useState(retry?.email ?? "");
   const [status, setStatus] = useState<Status>(retry ? "sent" : "idle");
   const [mode, setMode] = useState<EmailSignInMode>(retry ? "code" : "link");
+  // Why the API refused to send, e.g. AccessDenied for an address outside
+  // AUTH_ALLOWED_EMAIL_DOMAINS. Null when the send itself failed.
+  const [refusal, setRefusal] = useState<string | null>(null);
 
   useEffect(() => {
     void fetchEmailSignInMode().then(setMode);
@@ -108,9 +111,17 @@ export function Login() {
     try {
       // redirect:false keeps the user here so we can say "check your inbox"
       // rather than bouncing them to the Auth.js default verify-request page.
-      await signIn("magic-link", { email: address, redirect: false, callbackUrl });
+      // A refusal resolves rather than throws, with the reason in `error`.
+      // Taking it for success told refused addresses a code was on its way.
+      const result = await signIn("magic-link", { email: address, redirect: false, callbackUrl });
+      if (result?.error) {
+        setRefusal(result.error);
+        setStatus("error");
+        return;
+      }
       setStatus("sent");
     } catch {
+      setRefusal(null);
       setStatus("error");
     }
   }
@@ -221,7 +232,9 @@ export function Login() {
               </Button>
               {status === "error" && (
                 <p role="alert" className="mt-3 text-sm text-error">
-                  Couldn&rsquo;t send the email. Try again, or use Google.
+                  {refusal
+                    ? (ERROR_MESSAGES[refusal] ?? "Something went wrong signing in. Try again.")
+                    : "Couldn’t send the email. Try again, or use Google."}
                 </p>
               )}
             </form>

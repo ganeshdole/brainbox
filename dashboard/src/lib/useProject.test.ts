@@ -4,7 +4,14 @@ import type { Project } from "@ganeshdole/brainbox-shared";
 import { homeTarget } from "./useProject.ts";
 
 function project(id: string): Project {
-  return { id, name: id, key: `pk_${id}`, allowedOrigins: [], createdAt: "2026-07-01T00:00:00Z" };
+  return {
+    id,
+    name: id,
+    key: `pk_${id}`,
+    allowedOrigins: [],
+    team: { id: "t1", name: "Team", role: "owner" },
+    createdAt: "2026-07-01T00:00:00Z",
+  };
 }
 
 describe("homeTarget", () => {

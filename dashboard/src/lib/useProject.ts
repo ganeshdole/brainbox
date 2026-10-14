@@ -17,6 +17,8 @@ export interface ProjectOutletContext {
   setProject: (next: Project) => void;
   /** Drop a project from the layout's cache after deleting it. */
   removeProject: (id: string) => void;
+  /** Rename a Team on every project of it in the layout's cache. */
+  setTeamName: (teamId: string, name: string) => void;
 }
 
 export function useProject(): ProjectOutletContext {

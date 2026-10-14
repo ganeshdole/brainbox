@@ -64,3 +64,17 @@ export async function billingStateFor(
     hasAccess: subscription.hasAccess || exempt,
   };
 }
+
+/**
+ * Whether a Team may use the product: when one of its Owners may. The plan
+ * stays with the person who pays for it, and covers every Team they own and
+ * everyone in those Teams.
+ */
+export async function teamHasAccess(store: Store, teamId: string): Promise<boolean> {
+  if (env.BILLING_DISABLED) return true;
+  const owners = (await store.teams.members(teamId)).filter((m) => m.role === "owner");
+  for (const owner of owners) {
+    if ((await billingStateFor(store, owner.userId, owner.email)).hasAccess) return true;
+  }
+  return false;
+}

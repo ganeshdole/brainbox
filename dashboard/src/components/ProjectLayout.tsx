@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useParams } from "react-router-dom";
-import { LayoutGrid, Lightbulb, LogOut, Settings } from "lucide-react";
+import { LayoutGrid, Lightbulb, LogOut, Settings, Users } from "lucide-react";
 import type { Project } from "@ganeshdole/brainbox-shared";
 
 import { api, isAuthRedirect } from "../lib/api";
@@ -116,7 +116,9 @@ export function ProjectLayout() {
     return (
       <div className="grid min-h-dvh place-items-center bg-background px-6">
         <div className="text-center">
-          <p className="text-sm text-default">This project doesn't exist or isn't yours.</p>
+          <p className="text-sm text-default">
+            This project doesn't exist, or isn't in a team you belong to.
+          </p>
           <Link to="/" className="mt-2 inline-block text-sm text-link hover:underline">
             Go to your projects
           </Link>
@@ -130,7 +132,9 @@ export function ProjectLayout() {
 
   const base = `/projects/${project?.id ?? ALL_PROJECTS}`;
   const isSettings = location.pathname.endsWith("/settings");
+  const isTeam = location.pathname.endsWith("/team");
   const isFeatures = location.pathname.startsWith(`${base}/features`);
+  const isReports = !isSettings && !isTeam && !isFeatures;
   // Feature requests count under Features, not Reports.
   const bugCount = (p: Project) => (p.issueCount ?? 0) - (p.featureRequestCount ?? 0);
   const reportCount = project ? bugCount(project) : projects.reduce((n, p) => n + bugCount(p), 0);
@@ -141,6 +145,11 @@ export function ProjectLayout() {
       setProjects((prev) => prev?.map((p) => (p.id === next.id ? next : p)) ?? prev),
     removeProject: (id) =>
       setProjects((prev) => prev?.filter((p) => p.id !== id) ?? prev),
+    setTeamName: (teamId, name) =>
+      setProjects(
+        (prev) =>
+          prev?.map((p) => (p.team.id === teamId ? { ...p, team: { ...p.team, name } } : p)) ?? prev,
+      ),
   };
 
   return (
@@ -155,7 +164,7 @@ export function ProjectLayout() {
         <nav className="mt-4 flex flex-col gap-0.5 px-3">
           <NavItem
             to={base}
-            active={!isSettings && !isFeatures}
+            active={isReports}
             icon={<LayoutGrid />}
             label="Reports"
             count={reportCount}
@@ -172,6 +181,7 @@ export function ProjectLayout() {
           {project && (
             <NavItem to={`${base}/settings`} active={isSettings} icon={<Settings />} label="Settings" />
           )}
+          {project && <NavItem to={`${base}/team`} active={isTeam} icon={<Users />} label="Team" />}
         </nav>
         <div className="mt-auto border-t border-default p-2">
           <UserMenu />
@@ -185,13 +195,14 @@ export function ProjectLayout() {
               <ProjectSwitcher current={project ?? null} projects={projects} onCreated={onCreated} />
             </div>
             <nav className="flex shrink-0 gap-1">
-              <MobileTab to={base} active={!isSettings && !isFeatures} label="Reports" />
+              <MobileTab to={base} active={isReports} label="Reports" />
               {project && (
                 <MobileTab to={`${base}/features`} active={isFeatures} label="Features" />
               )}
               {project && (
                 <MobileTab to={`${base}/settings`} active={isSettings} label="Settings" />
               )}
+              {project && <MobileTab to={`${base}/team`} active={isTeam} label="Team" />}
             </nav>
             <button
               type="button"

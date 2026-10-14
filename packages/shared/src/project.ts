@@ -1,3 +1,5 @@
+import type { ProjectTeam } from "./team.ts";
+
 /** A project's public key, embedded in the widget snippet (`data-project`). */
 export type ProjectKey = `pk_${string}`;
 
@@ -15,6 +17,8 @@ export interface Project {
   name: string;
   key: ProjectKey;
   allowedOrigins: string[];
+  /** The Team that owns it, and what the caller may do there. */
+  team: ProjectTeam;
   createdAt: string; // ISO 8601
   issueCount?: number; // present on the list endpoint, bugs and feature requests
   /** How many of `issueCount` are feature requests; on the list endpoint. */

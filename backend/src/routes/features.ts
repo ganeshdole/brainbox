@@ -1,10 +1,12 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { z } from "zod";
 import type { Feature, FeatureDetail } from "@ganeshdole/brainbox-shared";
 
+import { projectAccess } from "../lib/access.ts";
 import { toFeature, toIssue } from "../lib/serialize.ts";
 import { getStorage } from "../storage/index.ts";
-import type { FeatureRecord, ProjectRecord, Store } from "../store/index.ts";
+import type { FeatureRecord, Store } from "../store/index.ts";
 import type { AppEnv } from "../types.ts";
 
 // A project's features: the things its users want built, each collecting the
@@ -36,17 +38,13 @@ const updateSchema = z
 
 const mergeSchema = z.object({ into: z.string().min(1) });
 
-/** The project, if it is the signed-in Account's. */
-async function ownedProject(store: Store, uid: string, projectId: string): Promise<ProjectRecord | null> {
-  const project = await store.projects.get(projectId);
-  return project && project.ownerId === uid ? project : null;
-}
-
-/** The feature, if its project is the signed-in Account's. */
-async function ownedFeature(store: Store, uid: string, id: string): Promise<FeatureRecord | null> {
-  const feature = await store.features.get(id);
-  if (!feature) return null;
-  return (await ownedProject(store, uid, feature.projectId)) ? feature : null;
+/** The feature, if the caller is a member of its project's Team. Otherwise
+ *  the response to send, as `projectAccess` decides it. */
+async function featureAccess(c: Context<AppEnv>, id: string): Promise<FeatureRecord | Response> {
+  const feature = await c.get("store").features.get(id);
+  if (!feature) return c.json({ error: "Not found" }, 404);
+  const access = await projectAccess(c, feature.projectId, "member");
+  return access instanceof Response ? access : feature;
 }
 
 /** The feature as the API shows it, with its current request count. */
@@ -57,22 +55,18 @@ async function present(store: Store, feature: FeatureRecord): Promise<Feature> {
 
 export const featuresRoute = new Hono<AppEnv>()
   .get("/projects/:projectId/features", async (c) => {
-    const uid = c.get("authUser").token?.sub;
-    if (!uid) return c.json({ error: "Unauthorized" }, 401);
-    const store = c.get("store");
-    const project = await ownedProject(store, uid, c.req.param("projectId"));
-    if (!project) return c.json({ error: "Not found" }, 404);
-    const rows = await store.features.listForProject(project.id);
+    const access = await projectAccess(c, c.req.param("projectId"), "member");
+    if (access instanceof Response) return access;
+    const rows = await c.get("store").features.listForProject(access.project.id);
     return c.json(rows.map((r) => toFeature(r, r.requestCount)));
   })
   .post("/projects/:projectId/features", async (c) => {
-    const uid = c.get("authUser").token?.sub;
-    if (!uid) return c.json({ error: "Unauthorized" }, 401);
     const parsed = createSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "Invalid body", issues: parsed.error.issues }, 400);
+    const access = await projectAccess(c, c.req.param("projectId"), "member");
+    if (access instanceof Response) return access;
+    const { project } = access;
     const store = c.get("store");
-    const project = await ownedProject(store, uid, c.req.param("projectId"));
-    if (!project) return c.json({ error: "Not found" }, 404);
 
     // Check every request before creating anything, so a bad id leaves no
     // half-made feature behind.
@@ -94,11 +88,9 @@ export const featuresRoute = new Hono<AppEnv>()
     return c.json(toFeature(feature, requestIds.length), 201);
   })
   .get("/features/:id", async (c) => {
-    const uid = c.get("authUser").token?.sub;
-    if (!uid) return c.json({ error: "Unauthorized" }, 401);
     const store = c.get("store");
-    const feature = await ownedFeature(store, uid, c.req.param("id"));
-    if (!feature) return c.json({ error: "Not found" }, 404);
+    const feature = await featureAccess(c, c.req.param("id"));
+    if (feature instanceof Response) return feature;
     const rows = (await store.issues.listForProject(feature.projectId)).filter(
       (r) => r.featureId === feature.id,
     );
@@ -110,35 +102,30 @@ export const featuresRoute = new Hono<AppEnv>()
     return c.json(detail);
   })
   .patch("/features/:id", async (c) => {
-    const uid = c.get("authUser").token?.sub;
-    if (!uid) return c.json({ error: "Unauthorized" }, 401);
     const parsed = updateSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "Invalid body", issues: parsed.error.issues }, 400);
     const store = c.get("store");
-    const feature = await ownedFeature(store, uid, c.req.param("id"));
-    if (!feature) return c.json({ error: "Not found" }, 404);
+    const feature = await featureAccess(c, c.req.param("id"));
+    if (feature instanceof Response) return feature;
     const updated = await store.features.update(feature.id, parsed.data);
     if (!updated) return c.json({ error: "Not found" }, 404);
     return c.json(await present(store, updated));
   })
   .delete("/features/:id", async (c) => {
-    const uid = c.get("authUser").token?.sub;
-    if (!uid) return c.json({ error: "Unauthorized" }, 401);
     const store = c.get("store");
-    const feature = await ownedFeature(store, uid, c.req.param("id"));
-    if (!feature) return c.json({ error: "Not found" }, 404);
+    const feature = await featureAccess(c, c.req.param("id"));
+    if (feature instanceof Response) return feature;
     await store.features.delete(feature.id);
     return c.json({ ok: true });
   })
   .post("/features/:id/merge", async (c) => {
-    const uid = c.get("authUser").token?.sub;
-    if (!uid) return c.json({ error: "Unauthorized" }, 401);
     const parsed = mergeSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "Invalid body", issues: parsed.error.issues }, 400);
     const store = c.get("store");
-    const from = await ownedFeature(store, uid, c.req.param("id"));
-    const into = await ownedFeature(store, uid, parsed.data.into);
-    if (!from || !into) return c.json({ error: "Not found" }, 404);
+    const from = await featureAccess(c, c.req.param("id"));
+    if (from instanceof Response) return from;
+    const into = await featureAccess(c, parsed.data.into);
+    if (into instanceof Response) return into;
     if (from.id === into.id || from.projectId !== into.projectId) {
       return c.json({ error: "Can only merge two features of the same project" }, 400);
     }

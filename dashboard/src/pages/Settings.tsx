@@ -11,6 +11,7 @@ import { FEATURE_BUTTON_SNIPPET } from "../lib/snippet";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { api } from "../lib/api";
+import { canAdmin } from "../lib/team";
 import { LAST_PROJECT_KEY, useProject } from "../lib/useProject";
 
 function Section({
@@ -127,6 +128,7 @@ export function Settings() {
 
   // Settings are per-project; there's nothing to configure in the all view.
   if (!project) return <Navigate to="/projects/all" replace />;
+  const admin = canAdmin(project.team.role);
 
   return (
     <div className="min-h-0 flex-1 lg:overflow-y-auto">
@@ -175,23 +177,40 @@ export function Settings() {
             </div>
           </Section>
 
-          <Section label="Domains" hint="Only these sites can send feedback.">
-            <div className="rounded-xl border border-default bg-elevated px-4 py-3.5">
-              <DomainsEditor
-                projectId={project.id}
-                origins={project.allowedOrigins}
-                onChange={(allowedOrigins) => setProject({ ...project, allowedOrigins })}
-              />
-            </div>
-          </Section>
+          {admin ? (
+            <>
+              <Section label="Domains" hint="Only these sites can send feedback.">
+                <div className="rounded-xl border border-default bg-elevated px-4 py-3.5">
+                  <DomainsEditor
+                    projectId={project.id}
+                    origins={project.allowedOrigins}
+                    onChange={(allowedOrigins) => setProject({ ...project, allowedOrigins })}
+                  />
+                </div>
+              </Section>
 
-          <Section label="GitHub" hint="Open an issue in a repository for each new report.">
-            <GithubDestination projectId={project.id} />
-          </Section>
+              <Section label="GitHub" hint="Open an issue in a repository for each new report.">
+                <GithubDestination projectId={project.id} teamId={project.team.id} />
+              </Section>
 
-          <Section label="Danger zone" hint="This can't be undone.">
-            <DangerZone project={project} projects={projects} onDeleted={removeProject} />
-          </Section>
+              <Section label="Danger zone" hint="This can't be undone.">
+                <DangerZone project={project} projects={projects} onDeleted={removeProject} />
+              </Section>
+            </>
+          ) : (
+            <Section label="Domains" hint="Only these sites can send feedback.">
+              <div className="rounded-xl border border-default bg-elevated px-4 py-3.5 text-sm text-default">
+                {project.allowedOrigins.length > 0 ? (
+                  <span className="font-mono text-xs">{project.allowedOrigins.join(", ")}</span>
+                ) : (
+                  "Any site."
+                )}
+                <p className="mt-2 text-xs text-muted">
+                  Team admins change domains and integrations.
+                </p>
+              </div>
+            </Section>
+          )}
         </div>
       </div>
     </div>

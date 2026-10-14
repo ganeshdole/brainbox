@@ -65,7 +65,7 @@ describe("setStore()", () => {
       ...real,
       projects: {
         ...real.projects,
-        listForOwner: async () => [],
+        listForTeams: async () => [],
       },
     });
     await makeProject(me.id);

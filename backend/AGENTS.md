@@ -80,6 +80,11 @@ is the widget's public endpoint - it authenticates by project key + origin
 allowlist, never a session. Put new authenticated endpoints after the
 `verifyAuth()` line; keep public ones before it.
 
+Past the session, access is by Team (ADR 0008). A route that touches a Team,
+or a project or connection it owns, asks `teamAccess`/`projectAccess` in
+`lib/access.ts` for a minimum role and returns its response when refused.
+Never compare ids by hand.
+
 ## Drizzle gotcha
 
 `.returning()` and `.select()` return arrays typed as possibly-empty under

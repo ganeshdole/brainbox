@@ -56,9 +56,21 @@ The product has three distinct surfaces - keep them separate:
   `data-brainbox="feature"` (or `screenshot`, `record`, `open`).
 - **Project key** - a project's public identifier passed to the widget
   (`data-project`), scoping captured feedback to that project.
-- **Connection** - an Account's link to an external tool: for GitHub, one
+- **Team** - the people who share a set of projects: one company, or one
+  person working alone. A Team owns projects and connections; nobody owns
+  them personally, so a project outlives whoever created it. A person can be
+  in several Teams. An Account's first project creates a Team for it.
+- **Member** - a person (an Account) in a Team, with one **role**:
+  - **Owner** - everything, including making and removing other Owners. A
+    Team always keeps at least one. An Owner's plan pays for the Team.
+  - **Admin** - projects, domains, integrations and people, but not Owners.
+  - **Member** - reads every project's reports and resends them.
+- **Invite** - an offer to join a Team with a role, sent to one email
+  address and accepted only by an Account signed in as that address. Valid
+  for 7 days, single-use; inviting the address again replaces it.
+- **Connection** - a Team's link to an external tool: for GitHub, one
   installation of the Brainbox GitHub App on an org or user. Shared by all of
-  the Account's projects.
+  the Team's projects.
 - **Destination** - where one project's issues go: a Connection plus settings
   (for GitHub, the repo and labels). Can be paused.
 - **Delivery** - one issue sent to one destination: pending, sent (with the
@@ -67,14 +79,18 @@ The product has three distinct surfaces - keep them separate:
 ## Data hierarchy
 
 ```
-Account ──< Project ──< Issue ──< Delivery
-   │            │                    │
-   └──< Connection ──< Destination ──┘
+Account >──< Team ──< Project ──< Issue ──< Delivery
+  (Member,     │          │                    │
+   role)       └──< Connection ──< Destination ──┘
 
 Project ──< Feature ──< Issue   (feature requests only; a new one has no Feature yet)
 ```
 
-- **Account** - a customer's login (email/password). Owns many projects.
+- **Account** - one person's login (Google, or an emailed link or code). In
+  any number of Teams, as a Member with a role in each. Holds the
+  subscription, which covers every Team the Account owns.
+- **Team** - owns many projects and connections. Its members see all of its
+  projects.
 - **Project** - one per SaaS the customer owns. Has a unique project key used in
   the widget snippet. Owns many issues.
 - **Issue** - one feedback submission, a bug report or a feature request (its

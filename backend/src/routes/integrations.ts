@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { env } from "../env.ts";
 import { getGithubApp, integrationsConfigured } from "../integrations/registry.ts";
+import { projectAccess, teamAccess } from "../lib/access.ts";
 import { toConnection } from "../lib/serialize.ts";
 import { sign, verify } from "../lib/signed.ts";
 import type { AppEnv } from "../types.ts";
@@ -15,6 +16,7 @@ const installSchema = z.object({ projectId: z.string().min(1) });
 
 const stateSchema = z.object({
   uid: z.string(),
+  teamId: z.string(),
   projectId: z.string(),
   exp: z.number(),
 });
@@ -31,18 +33,19 @@ function readState(token: string | undefined): z.infer<typeof stateSchema> | nul
 }
 
 export const integrationsRoute = new Hono<AppEnv>()
+  // A Team's connections: ?teamId= names the Team.
   .get("/", async (c) => {
-    const uid = c.get("authUser").token?.sub;
-    if (!uid) return c.json({ error: "Unauthorized" }, 401);
-    const rows = await c.get("store").integrations.listConnections(uid);
+    const teamId = c.req.query("teamId");
+    if (!teamId) return c.json({ error: "teamId is required" }, 400);
+    const access = await teamAccess(c, teamId, "member");
+    if (access instanceof Response) return access;
+    const rows = await c.get("store").integrations.listConnections(access.team.id);
     return c.json({
       github: { available: integrationsConfigured("github") },
       connections: rows.map(toConnection),
     });
   })
   .post("/github/install", async (c) => {
-    const uid = c.get("authUser").token?.sub;
-    if (!uid) return c.json({ error: "Unauthorized" }, 401);
     if (!integrationsConfigured("github")) {
       return c.json({ error: "GitHub is not configured on this deployment" }, 503);
     }
@@ -50,9 +53,16 @@ export const integrationsRoute = new Hono<AppEnv>()
     if (!parsed.success) {
       return c.json({ error: "Invalid body", issues: parsed.error.issues }, 400);
     }
-    const proj = await c.get("store").projects.get(parsed.data.projectId);
-    if (!proj || proj.ownerId !== uid) return c.json({ error: "Not found" }, 404);
-    const state = sign(JSON.stringify({ uid, projectId: proj.id, exp: Date.now() + STATE_TTL_MS }));
+    const access = await projectAccess(c, parsed.data.projectId, "admin");
+    if (access instanceof Response) return access;
+    const state = sign(
+      JSON.stringify({
+        uid: access.uid,
+        teamId: access.project.teamId,
+        projectId: access.project.id,
+        exp: Date.now() + STATE_TTL_MS,
+      }),
+    );
     const url = new URL(`https://github.com/apps/${env.GITHUB_APP_SLUG}/installations/new`);
     url.searchParams.set("state", state);
     return c.json({ url: url.toString() });
@@ -71,6 +81,8 @@ export const integrationsRoute = new Hono<AppEnv>()
     const installationId = c.req.query("installation_id") ?? "";
     const code = c.req.query("code");
     if (!/^\d+$/.test(installationId) || !code) return back("error");
+    // Still an admin of the Team: a role can change while GitHub is open.
+    if ((await teamAccess(c, state.teamId, "admin")) instanceof Response) return back("error");
 
     try {
       const github = getGithubApp();
@@ -80,7 +92,7 @@ export const integrationsRoute = new Hono<AppEnv>()
       );
       if (!mine) return back("error");
       await c.get("store").integrations.saveConnection({
-        ownerId: uid,
+        teamId: state.teamId,
         provider: "github",
         externalId: installationId,
         label: mine.account.login,
@@ -92,10 +104,10 @@ export const integrationsRoute = new Hono<AppEnv>()
     return back("connected");
   })
   .get("/connections/:id/repos", async (c) => {
-    const uid = c.get("authUser").token?.sub;
-    if (!uid) return c.json({ error: "Unauthorized" }, 401);
     const conn = await c.get("store").integrations.getConnection(c.req.param("id"));
-    if (!conn || conn.ownerId !== uid) return c.json({ error: "Not found" }, 404);
+    if (!conn) return c.json({ error: "Not found" }, 404);
+    const access = await teamAccess(c, conn.teamId, "admin");
+    if (access instanceof Response) return access;
     if (!integrationsConfigured(conn.provider)) {
       return c.json({ error: "GitHub is not configured on this deployment" }, 503);
     }
@@ -113,11 +125,11 @@ export const integrationsRoute = new Hono<AppEnv>()
     }
   })
   .delete("/connections/:id", async (c) => {
-    const uid = c.get("authUser").token?.sub;
-    if (!uid) return c.json({ error: "Unauthorized" }, 401);
     const store = c.get("store");
     const conn = await store.integrations.getConnection(c.req.param("id"));
-    if (!conn || conn.ownerId !== uid) return c.json({ error: "Not found" }, 404);
+    if (!conn) return c.json({ error: "Not found" }, 404);
+    const access = await teamAccess(c, conn.teamId, "admin");
+    if (access instanceof Response) return access;
     await store.integrations.deleteConnection(conn.id);
     return c.json({ ok: true });
   });

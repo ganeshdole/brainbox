@@ -1,4 +1,5 @@
 export type * from "./project.ts";
+export type * from "./team.ts";
 export type * from "./region.ts";
 export type * from "./metadata.ts";
 export type * from "./feedback.ts";

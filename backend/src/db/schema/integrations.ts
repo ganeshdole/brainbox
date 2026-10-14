@@ -10,20 +10,20 @@ import {
 } from "drizzle-orm/pg-core";
 import type { DeliveryStatus, DestinationConfig, IntegrationProvider } from "@ganeshdole/brainbox-shared";
 
-import { users } from "./auth-schema.ts";
 import { issues } from "./issues.ts";
 import { projects } from "./projects.ts";
+import { teams } from "./teams.ts";
 
-// Account-level: one row per GitHub App install per Account, shared by its projects.
+// Team-level: one row per GitHub App install per Team, shared by its projects.
 export const integrationConnections = pgTable(
   "integration_connections",
   {
     id: text("id")
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    ownerId: text("owner_id")
+    teamId: text("team_id")
       .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+      .references(() => teams.id, { onDelete: "cascade" }),
     provider: text("provider").$type<IntegrationProvider>().notNull(),
     externalId: text("external_id").notNull(),
     label: text("label").notNull(),
@@ -32,8 +32,8 @@ export const integrationConnections = pgTable(
       .defaultNow(),
   },
   (t) => [
-    uniqueIndex("integration_connections_owner_provider_external_id_key").on(
-      t.ownerId,
+    uniqueIndex("integration_connections_team_provider_external_id_key").on(
+      t.teamId,
       t.provider,
       t.externalId,
     ),

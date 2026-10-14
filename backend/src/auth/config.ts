@@ -8,6 +8,7 @@ import { signInCodeEmail } from "../email/templates/sign-in-code.ts";
 import { env } from "../env.ts";
 import { AUTH_ERROR_PATH } from "../routes/auth-error.ts";
 import { getStore } from "../store/index.ts";
+import { signInAllowed } from "./allowed.ts";
 import { CODE_LIFETIME_MS, withCodeAttemptLimit } from "./code-attempts.ts";
 
 /** A 6-digit sign-in code, zero-padded: every one of the million is equally likely. */
@@ -136,6 +137,13 @@ export function getAuthConfig() {
     ],
 
     callbacks: {
+      // AUTH_ALLOWED_EMAIL_DOMAINS. For email sign-in this runs before the
+      // email is sent, so a refused address gets no mail. A refusal lands on
+      // the login page as ?error=AccessDenied.
+      async signIn({ user }: { user: { email?: string | null } }) {
+        return signInAllowed(getStore(), user.email, env.AUTH_ALLOWED_EMAIL_DOMAINS);
+      },
+
       // Auth.js's default drops any callbackUrl whose origin differs from the
       // API's, falling back to the API root. In production the dashboard and
       // the API share app.brainbox.sh so it never showed; locally (5173 vs

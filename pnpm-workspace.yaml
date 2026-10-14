@@ -4,6 +4,7 @@ packages:
   - "dashboard"
   - "backend"
   - "packages/*"
+  - "e2e"
 
 # Shared versions so internal packages can't drift.
 catalog:
