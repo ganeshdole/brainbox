@@ -1,8 +1,18 @@
 {
   "name": "@ganeshdole/brainbox-replay",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.3.0",
+  "description": "Play back a Brainbox session recording in React: the widget's rrweb log with its voice note lined up, themeable with plain CSS.",
+  "license": "SEE LICENSE IN LICENSE",
+  "homepage": "https://www.brainbox.sh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ganeshdole/brainbox.git",
+    "directory": "packages/replay"
+  },
   "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
   "exports": {
     ".": {
       "types": "./src/index.ts",
@@ -17,6 +27,7 @@
     "README.md"
   ],
   "publishConfig": {
+    "access": "public",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "exports": {

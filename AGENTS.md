@@ -66,10 +66,10 @@ chromium`); `SLOW_MO=500` slows it down enough to follow the video.
 
 Packages publish as `@ganeshdole/brainbox-*`: `brainbox` on npm is someone else's user
 account. `pnpm release` runs `verify`, then publishes every package that is not
-`private: true` to npm: `@ganeshdole/brainbox-shared`, `core`, `react` and `widget`, in
-lockstep (`workspace:*` becomes the exact version). The `private` flag is the
-fence; the backend, dashboard, marketing, server, replay and integrations
-packages keep it.
+`private: true` to npm: `@ganeshdole/brainbox-shared`, `core`, `react`, `widget`,
+`server`, `integrations` and `replay`, in lockstep (one version, bumped in every
+one of them together; `workspace:*` becomes the exact version). The `private`
+flag is the fence; the backend, dashboard, marketing and e2e packages keep it.
 
 ## Two strict-mode facts the linter won't tell you up front
 

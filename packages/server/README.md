@@ -28,11 +28,43 @@ request's `Origin` is allowed, where the files go.
 
 ## Install
 
-Inside this monorepo the package is consumed from source (`workspace:*`).
-Outside the monorepo, `pnpm build` emits `dist/` (JS plus `.d.ts`) and
-`pnpm pack` produces a tarball whose `exports` point at it (`publishConfig`),
-so another app can `npm install` the `.tgz` files. Every `@ganeshdole/brainbox-*`
-dependency of a package needs its own tarball installed alongside.
+Inside this monorepo the package is consumed from source:
+
+```json
+{ "dependencies": { "@ganeshdole/brainbox-server": "workspace:*" } }
+```
+
+Outside it, from npm:
+
+```sh
+npm install @ganeshdole/brainbox-server
+```
+
+`pnpm build` emits `dist/` (JS plus `.d.ts`); the published package's
+`exports` point at it (`publishConfig`).
+
+## On its own
+
+No Brainbox backend, no database: a whole receiver in one file. It runs as is
+on Bun (`bun server.ts`), Deno (`deno serve server.ts`) and Cloudflare Workers.
+Point the widget's `data-endpoint` (or `brainboxTransport()` in
+`@ganeshdole/brainbox-core`) at it, and answer the preflight (see [CORS](#cors)).
+
+```ts
+import { parseIngest, DEFAULT_INGEST_LIMITS } from "@ganeshdole/brainbox-server";
+
+export default {
+  async fetch(request: Request): Promise<Response> {
+    const parsed = await parseIngest(request, DEFAULT_INGEST_LIMITS);
+    if (!parsed.ok) return Response.json(parsed.body, { status: parsed.status });
+    console.log(parsed.payload.metadata.url, parsed.payload.text, parsed.files.screenshot?.size);
+    return Response.json({ id: crypto.randomUUID() }, { status: 201 });
+  },
+};
+```
+
+To send what arrives on to GitHub or Azure DevOps, add
+`@ganeshdole/brainbox-integrations`; its README has the two together.
 
 ## The wire format
 
