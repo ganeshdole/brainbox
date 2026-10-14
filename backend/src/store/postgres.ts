@@ -1,5 +1,5 @@
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
-import { and, asc, count, desc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, ne, sql } from "drizzle-orm";
 
 import type { DB } from "../db/connect.ts";
 import {
@@ -463,6 +463,7 @@ export function createPostgresStore(db: DB): FullStore {
               .onConflictDoUpdate({
                 target: [deliveries.issueId, deliveries.destinationId],
                 set: { status: "pending", error: null, updatedAt: new Date() },
+                setWhere: ne(deliveries.status, "sent"),
               })
               .returning()
           : await claim.onConflictDoNothing().returning();

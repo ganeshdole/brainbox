@@ -13,7 +13,7 @@ import type {
 } from "@ganeshdole/brainbox-shared";
 
 import { api, isAuthRedirect } from "../lib/api";
-import { bugVisibilityWarning, defaultBugType, defaultFeatureType, parseLabels } from "../lib/integrations";
+import { bugVisibilityWarning, defaultBugType, defaultFeatureType, iterationInput, parseLabels } from "../lib/integrations";
 import { AzureDevopsMark } from "./ProviderMark";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -304,7 +304,10 @@ function WorkItemSettings({
   );
 
   const loadError = projects.error ?? teams.error ?? types.error ?? settings.error ?? bugInfo.error ?? featureInfo.error;
-  const ready = !!(project && team && board && bugInfo.data && featureInfo.data && area);
+  // "Fixed" isn't saved until it has an iteration: it never quietly becomes the backlog.
+  const bugIterationInput = board ? iterationInput(bugIteration, bug.fixedPath, board.backlogIteration) : null;
+  const featureIterationInput = board ? iterationInput(featureIteration, feature.fixedPath, board.backlogIteration) : null;
+  const ready = !!(project && team && bugInfo.data && featureInfo.data && area && bugIterationInput && featureIterationInput);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -320,14 +323,14 @@ function WorkItemSettings({
   }
 
   function save() {
-    if (!project || !team || !board || !bugInfo.data || !featureInfo.data) return;
+    if (!project || !team || !bugInfo.data || !featureInfo.data || !bugIterationInput || !featureIterationInput) return;
     const config: DestinationInputs["azure-devops"] = {
       project,
       team,
       areaPath: area,
       ...(assignedTo.trim() && { assignedTo: assignedTo.trim() }),
-      bug: kindInput(bug, bugType, bugIteration, bugInfo.data, board),
-      feature: kindInput(feature, featureType, featureIteration, featureInfo.data, board),
+      bug: kindInput(bug, bugType, bugIterationInput, bugInfo.data),
+      feature: kindInput(feature, featureType, featureIterationInput, featureInfo.data),
     };
     void run(async () => {
       // Every new report is sent once saved: there's no paused state here.
@@ -505,18 +508,12 @@ function WorkItemSettings({
 function kindInput(
   draft: KindDraft,
   type: string,
-  iteration: AzureDevopsIterationConfig["kind"],
+  iteration: AzureDevopsIterationConfig,
   info: AzureDevopsWorkItemTypeInfo,
-  board: AzureDevopsTeamSettings,
 ): DestinationInputs["azure-devops"]["bug"] {
   return {
     type,
-    iteration:
-      iteration === "current"
-        ? { kind: "current" }
-        : iteration === "fixed" && draft.fixedPath
-          ? { kind: "fixed", path: draft.fixedPath }
-          : { kind: "backlog", path: board.backlogIteration },
+    iteration,
     tags: parseLabels(draft.tags),
     ...(info.hasPriority && { priority: draft.priority }),
     fields: info.required.flatMap((f) => {

@@ -421,7 +421,8 @@ export interface IntegrationStore {
   /**
    * Start one delivery as `pending`. Returns null when this (issue,
    * destination) already has one, which is the idempotency guard; with
-   * `retry` the existing row is reset to pending instead.
+   * `retry` the existing row is reset to pending instead, unless it was
+   * sent: a retry never files the same report twice.
    */
   claimDelivery(input: {
     issueId: string;

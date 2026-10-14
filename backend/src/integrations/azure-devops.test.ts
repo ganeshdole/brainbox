@@ -17,5 +17,6 @@ describe("parseOrganization", () => {
     expect(parseOrganization("https://github.com/acme")).toBeNull();
     expect(parseOrganization("acme corp")).toBeNull();
     expect(parseOrganization("https://dev.azure.com/acme%2Fcorp")).toBeNull();
+    expect(parseOrganization("https://dev.azure.com/%ZZ")).toBeNull();
   });
 });

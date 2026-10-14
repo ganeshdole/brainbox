@@ -140,7 +140,12 @@ export const api = {
   deleteProject: (id: string) => req<{ ok: boolean }>(`/api/projects/${id}`, { method: "DELETE" }),
   listIssues: (id: string) => req<Issue[]>(`/api/projects/${id}/issues`),
   getIssue: (id: string) => req<Issue>(`/api/issues/${id}`),
-  sendIssue: (id: string) => req<Delivery[]>(`/api/issues/${id}/deliveries`, { method: "POST" }),
+  /** Every delivery of the issue after sending; `provider` retries that one only. */
+  sendIssue: (id: string, provider?: IntegrationProvider) =>
+    req<Delivery[]>(`/api/issues/${id}/deliveries`, {
+      method: "POST",
+      ...(provider && { body: JSON.stringify({ provider }) }),
+    }),
   triageIssue: (id: string, patch: IssueTriagePatch) =>
     req<Issue>(`/api/issues/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
   /** One patch for up to 100 issues; all or nothing. */

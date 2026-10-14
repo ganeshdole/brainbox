@@ -195,5 +195,9 @@ describe("integration requests", () => {
     const [url, init] = fetch.mock.calls[0]!;
     expect(url).toMatch(/\/api\/issues\/i1\/deliveries$/);
     expect(init?.method).toBe("POST");
+    expect(init?.body).toBeUndefined();
+
+    await api.sendIssue("i1", "azure-devops");
+    expect(fetch.mock.calls[1]![1]?.body).toBe(JSON.stringify({ provider: "azure-devops" }));
   });
 });

@@ -1,4 +1,5 @@
 import type { DeliveryResult, Ticket } from "@ganeshdole/brainbox-integrations";
+import type { IntegrationProvider } from "@ganeshdole/brainbox-shared";
 
 import type { Deps } from "../deps.ts";
 import { publicFileUrl } from "../lib/public-files.ts";
@@ -10,12 +11,13 @@ import { PROVIDER_NAME } from "./registry.ts";
 /**
  * Send one issue to its project's destinations and record each outcome. Never
  * throws. Sends nothing when the store has no integrations module. Idempotent per (issue, destination) unless `force` (retry / manual
- * send, which also reaches paused destinations).
+ * send, which also reaches paused destinations); even then a destination the
+ * issue was already sent to is skipped. `provider` limits it to that one.
  */
 export async function deliverIssue(
   deps: Deps,
   issueId: string,
-  opts: { force?: boolean } = {},
+  opts: { force?: boolean; provider?: IntegrationProvider } = {},
 ): Promise<DeliveryRecord[]> {
   const { store, storage, options } = deps;
   const { integrations } = store;
@@ -35,6 +37,7 @@ export async function deliverIssue(
   const out: DeliveryRecord[] = [];
 
   for (const { destination: dest, connection: conn } of targets) {
+    if (opts.provider && dest.provider !== opts.provider) continue;
     const row = await integrations.claimDelivery({
       issueId,
       destinationId: dest.id,

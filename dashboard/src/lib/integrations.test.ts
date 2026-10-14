@@ -7,6 +7,7 @@ import {
   defaultFeatureType,
   deliveryLabel,
   installResult,
+  iterationInput,
   parseLabels,
 } from "./integrations";
 
@@ -93,5 +94,17 @@ describe("parseLabels", () => {
   it("splits, trims, drops empties and duplicates", () => {
     expect(parseLabels(" bug, feedback ,, bug ")).toEqual(["bug", "feedback"]);
     expect(parseLabels("")).toEqual([]);
+  });
+});
+
+describe("iterationInput", () => {
+  it("saves the picked iteration", () => {
+    expect(iterationInput("backlog", "", "Web")).toEqual({ kind: "backlog", path: "Web" });
+    expect(iterationInput("current", "Web\\Sprint 1", "Web")).toEqual({ kind: "current" });
+    expect(iterationInput("fixed", "Web\\Sprint 1", "Web")).toEqual({ kind: "fixed", path: "Web\\Sprint 1" });
+  });
+
+  it("has nothing to save for Fixed until an iteration is chosen", () => {
+    expect(iterationInput("fixed", "", "Web")).toBeNull();
   });
 });

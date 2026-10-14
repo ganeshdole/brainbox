@@ -39,11 +39,11 @@ export function IssueDeliveries({
     };
   }, [projectId]);
 
-  async function send() {
+  async function send(provider?: IntegrationProvider) {
     setBusy(true);
     setError(null);
     try {
-      onChange(await api.sendIssue(issueId));
+      onChange(await api.sendIssue(issueId, provider));
     } catch (e) {
       if (!isAuthRedirect(e)) setError((e as Error).message);
     } finally {
@@ -73,7 +73,7 @@ export function IssueDeliveries({
               <span className="truncate">{label.text}</span>
             )}
             {d.status === "failed" && (
-              <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void send()}>
+              <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void send(d.provider)}>
                 <RotateCw /> Retry
               </Button>
             )}
