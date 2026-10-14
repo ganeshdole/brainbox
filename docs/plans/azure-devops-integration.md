@@ -1,30 +1,21 @@
 # Plan: Azure DevOps destination
 
-Status: proposal, 2026-10-13. A plan is intent, not canon (see `AGENTS.md`).
-Once built, the decisions move into ADR 0008 and the facts into the package
-README, `CONTEXT.md` and `docs/self-hosting.md`.
+Status: Phase 1 with personal access tokens built, 2026-10-14. A plan is
+intent, not canon (see `AGENTS.md`). The decisions made are in ADR 0009; the
+facts are in the package README, `CONTEXT.md` and `docs/self-hosting.md`.
 
-## Build status (2026-10-13)
+## Build status (2026-10-14)
 
-Done, on `t3/azure-devops-integration-plan` (rebased on origin/main):
+Built: PAT connect, sealed credentials on both stores, the destination with a
+separate shape for feature requests (importance → Priority), validate-on-save
+(422), "Send a test report", `needs_reauth` on a rejected token, screenshot,
+recording and voice note uploaded as attachments, the dashboard's
+Destinations section, docs, and `e2e/tests/azure-devops.spec.ts` against the
+fake.
 
-- `packages/integrations/src/azure-devops/`: `azureDevopsWorkItems()`,
-  `validateWorkItem()`, the `azureDevops()` catalog, `entraApp()` +
-  `pkcePair()`, with `fakeFetch` tests and a README section.
-- `renderTicketHtml()` beside `renderTicket()`, both over one content model;
-  `Ticket.files` for uploading images.
-- `backend/src/store/credentials.ts`: sealing for credentials at rest, tested.
-- `backend/scripts/fake-azure-devops.ts` (`pnpm -F @ganeshdole/brainbox-backend
-  fake:ado`): an in-memory Azure DevOps stand-in with a board and work item
-  pages, for the end-to-end run and video (no real org is used). The package
-  has been run against it: catalog, validation, delivery with an uploaded
-  image.
-
-Waiting on Teams to land (it rewrites connections, `store/*`, Convex
-integrations, routes and `GithubDestination`): shared types, schema and
-migration, store methods, routes, registry (with `AZURE_DEVOPS_URL` so it can
-point at the fake), dashboard, docs, then the end-to-end run and video against
-the fake.
+Not built yet: Entra "Sign in with Microsoft" (section 2's main path; the
+`auth` field and `authFor()` are the seam), reconnect emails, "retry N failed
+reports", Phase 2 and 3, and the marketing page.
 
 ## 1. The problem
 

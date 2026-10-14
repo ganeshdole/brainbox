@@ -69,12 +69,20 @@ The product has three distinct surfaces - keep them separate:
   address and accepted only by an Account signed in as that address. Valid
   for 7 days, single-use; inviting the address again replaces it.
 - **Connection** - a Team's link to an external tool: for GitHub, one
-  installation of the Brainbox GitHub App on an org or user. Shared by all of
-  the Team's projects.
-- **Destination** - where one project's issues go: a Connection plus settings
-  (for GitHub, the repo and labels). Can be paused.
+  installation of the Brainbox GitHub App on an org or user; for Azure DevOps,
+  one organization and the personal access token that reaches it (stored
+  sealed, never shown again). Shared by all of the Team's projects. A
+  connection whose token the tool rejects **needs a new token**: nothing is
+  sent through it until someone connects again.
+- **Destination** - where one project's issues go: a Connection plus settings.
+  For GitHub, the repo and labels. For Azure DevOps, the project, team and
+  area (which board), and for bugs and feature requests each a work item type,
+  iteration (team backlog, current sprint or a fixed one), tags and priority.
+  Once saved, every new issue is sent automatically. GitHub destinations can
+  be paused.
 - **Delivery** - one issue sent to one destination: pending, sent (with the
-  GitHub issue number and link) or failed (with the reason, and a retry).
+  GitHub issue number or work item id, and link) or failed (with the reason,
+  and a retry).
 
 ## Data hierarchy
 

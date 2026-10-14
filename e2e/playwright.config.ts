@@ -1,6 +1,9 @@
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
+
 import { defineConfig, devices } from "@playwright/test";
 
-import { API_URL, BACKEND_LOG, DASHBOARD_PORT, DASHBOARD_URL, backendEnv } from "./env.ts";
+import { API_URL, BACKEND_LOG, DASHBOARD_PORT, DASHBOARD_URL, FAKE_ADO_PORT, FAKE_ADO_URL, backendEnv } from "./env.ts";
 
 // The real backend and dashboard over Postgres. The backend's database is
 // recreated on every run (backend/scripts/reset-e2e-db.ts), which also proves
@@ -9,6 +12,9 @@ import { API_URL, BACKEND_LOG, DASHBOARD_PORT, DASHBOARD_URL, backendEnv } from 
 // person can follow.
 
 const slowMo = Number(process.env.SLOW_MO ?? 0);
+
+// Made here rather than in the command, which also has to run under cmd.exe.
+mkdirSync(dirname(BACKEND_LOG), { recursive: true });
 
 export default defineConfig({
   testDir: "./tests",
@@ -29,10 +35,18 @@ export default defineConfig({
   webServer: [
     {
       // Logged to a file: the tests read sign-in codes from it.
-      command: `mkdir -p "$(dirname ${BACKEND_LOG})" && pnpm exec tsx scripts/reset-e2e-db.ts && pnpm exec tsx src/index.ts > ${BACKEND_LOG} 2>&1`,
+      command: `pnpm exec tsx scripts/reset-e2e-db.ts && pnpm exec tsx src/index.ts > "${BACKEND_LOG}" 2>&1`,
       cwd: "../backend",
       url: `${API_URL}/health`,
       env: backendEnv,
+      reuseExistingServer: false,
+      timeout: 60_000,
+    },
+    {
+      command: "pnpm exec tsx scripts/fake-azure-devops.ts",
+      cwd: "../backend",
+      url: FAKE_ADO_URL,
+      env: { FAKE_ADO_PORT: String(FAKE_ADO_PORT) },
       reuseExistingServer: false,
       timeout: 60_000,
     },

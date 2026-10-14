@@ -44,6 +44,8 @@ Everything else is in `backend/src/env.ts`.
 | Sign-in by email | `EMAIL_DRIVER=resend`, `RESEND_API_KEY`, `EMAIL_FROM` |
 | A code instead of a link | `AUTH_EMAIL_MODE=code`, or `both` for a code and a link in one email (default `link`) |
 | Only your company signs in | `AUTH_ALLOWED_EMAIL_DOMAINS=acme.com` (comma-separated; unset lets anyone in) |
+| GitHub destinations | `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_WEBHOOK_SECRET` |
+| Azure DevOps destinations | `INTEGRATIONS_ENCRYPTION_KEY` (below) |
 
 A code suits people who read email on a different device from the one they
 sign in on, or whose mail scanner opens links before they do. Only the newest
@@ -53,6 +55,33 @@ the code, and no code is accepted until earlier attempts are 15 minutes old.
 That also means anyone who knows an address can hold its email sign-in off
 for 15 minutes at a time; Google sign-in is unaffected. Link-only sign-in has
 no such limit, since its token cannot be guessed.
+
+## Azure DevOps
+
+A Team connects an Azure DevOps organization with a personal access token
+(Settings → Destinations), and each project then files every new report as a
+work item on the board it picks. The token is stored, so it is sealed
+(AES-256-GCM) with `INTEGRATIONS_ENCRYPTION_KEY`, a 32-byte key in base64:
+
+```
+openssl rand -base64 32
+```
+
+Without it, Azure DevOps answers 503 and the dashboard says it isn't set up.
+An unusable key stops the backend from starting. Keep it with your other
+secrets: changing or losing it makes every stored token unreadable, and each
+Team has to paste its token again.
+
+`AZURE_DEVOPS_URL` points the backend at another Azure DevOps (default
+`https://dev.azure.com`). Development uses it for the local fake:
+`pnpm -F @ganeshdole/brainbox-backend fake:ado`, then
+`AZURE_DEVOPS_URL=http://localhost:8790`, organization `acme`, token
+`fake-pat`.
+
+The token needs **Work Items (Read & write)** and **Project and Team
+(Read)**. Work items are created as the token's owner, so a service account's
+token keeps working when people leave. When Azure DevOps rejects the token
+(expired or revoked), deliveries stop and the dashboard asks for a new one.
 
 ## Teams, invites and who can sign in
 
