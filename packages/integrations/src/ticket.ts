@@ -1,9 +1,18 @@
-import type { CapturedMetadata, Identity, Region } from "@ganeshdole/brainbox-shared";
+import type {
+  CapturedMetadata,
+  Identity,
+  Importance,
+  IssueKind,
+  Region,
+} from "@ganeshdole/brainbox-shared";
 
 /** A report as a destination needs it. `links` must work without a session. */
 export interface Ticket {
   id: string;
   createdAt: string;
+  /** Absent means a bug. */
+  kind?: IssueKind;
+  importance?: Importance;
   text?: string;
   transcript?: string;
   metadata: CapturedMetadata;
@@ -19,6 +28,9 @@ export interface TicketLinks {
   screenshot?: string;
   crop?: string;
   replay?: string;
+  /** The voice note. Without a transcript it is the only place a spoken
+   *  report's words are, so the ticket links it. */
+  audio?: string;
 }
 
 export interface TicketFiles {
@@ -54,6 +66,12 @@ export interface HtmlRenderOptions {
 }
 
 const TITLE_MAX = 72;
+
+const IMPORTANCE_LABEL: Record<Importance, string> = {
+  nice: "Nice to have",
+  important: "Important",
+  critical: "Blocking them",
+};
 const CONSOLE_ERRORS_MAX = 20;
 
 /** Title and Markdown body, shared by every ticket-shaped destination. */
@@ -91,6 +109,8 @@ interface Content {
   image?: { url: string; alt: string };
   text?: string;
   transcript?: string;
+  /** The voice note, linked where its words would go when there's no transcript. */
+  audio?: string;
   details: Row[];
   consoleErrors: { shown: string[]; total: number };
   links: Array<{ label: string; url: string }>;
@@ -102,15 +122,18 @@ function titleFor(t: Ticket): string {
   const spoken = firstLine(t.text) ?? firstLine(t.transcript);
   if (spoken) return truncate(spoken, TITLE_MAX);
   const page = t.metadata.title.trim() || t.metadata.url;
-  return truncate(`Feedback on ${page}`, TITLE_MAX);
+  const lead = t.kind === "feature" ? "Feature request from" : "Feedback on";
+  return truncate(`${lead} ${page}`, TITLE_MAX);
 }
 
 function contentOf(t: Ticket): Content {
+  const transcript = t.transcript?.trim() || undefined;
   const imageUrl = t.links.crop ?? t.links.screenshot;
   return {
     image: imageUrl ? { url: imageUrl, alt: t.links.crop ? "Highlighted region" : "Screenshot" } : undefined,
     text: t.text?.trim() || undefined,
-    transcript: t.transcript?.trim() || undefined,
+    transcript,
+    audio: transcript ? undefined : t.links.audio,
     details: detailRows(t),
     consoleErrors: {
       shown: t.metadata.consoleErrors.slice(0, CONSOLE_ERRORS_MAX),
@@ -123,13 +146,18 @@ function contentOf(t: Ticket): Content {
 function detailRows(t: Ticket): Row[] {
   const m = t.metadata;
   const selector = t.region?.selector ?? m.selector;
-  const rows: Row[] = [
+  const rows: Row[] = [];
+  if (t.kind === "feature") {
+    rows.push(["Type", { text: "Feature request" }]);
+    if (t.importance) rows.push(["Importance", { text: IMPORTANCE_LABEL[t.importance] }]);
+  }
+  rows.push(
     ["Page", { text: m.title.trim() || m.url, href: m.url }],
     ["Viewport", { text: `${m.viewport.width} × ${m.viewport.height} @${m.devicePixelRatio}x` }],
     ["Browser", { text: m.userAgent }],
     ["Locale", { text: `${m.language}, ${m.timezone}` }],
     ["User", { text: reporter(m.identity) }],
-  ];
+  );
   const phone = m.identity?.phone?.trim();
   if (phone) rows.push(["Phone", { text: phone }]);
   if (selector) rows.push(["Element", { text: selector, code: true }]);
@@ -145,6 +173,7 @@ function footerLinks(t: Ticket): Content["links"] {
   const links = [{ label: "Open in Brainbox", url: t.links.dashboard }];
   if (t.links.replay) links.push({ label: "Session replay", url: t.links.replay });
   if (t.links.screenshot && t.links.crop) links.push({ label: "Full screenshot", url: t.links.screenshot });
+  if (t.links.audio && t.transcript?.trim()) links.push({ label: "Voice note", url: t.links.audio });
   return links;
 }
 
@@ -172,6 +201,7 @@ function markdownBody(c: Content): string {
   if (c.image) parts.push(`![${c.image.alt}](${c.image.url})`);
   if (c.text) parts.push(c.text);
   if (c.transcript) parts.push(`**Voice note**\n\n${quote(c.transcript)}`);
+  else if (c.audio) parts.push(`**Voice note**\n\n[Listen to the voice note](${c.audio})`);
   parts.push(
     ["| | |", "|---|---|", ...c.details.map(([k, v]) => `| ${cell(k)} | ${markdownCell(v)} |`)].join("\n"),
   );
@@ -223,6 +253,8 @@ function htmlBody(c: Content): string {
   if (c.text) parts.push(paragraphs(c.text));
   if (c.transcript) {
     parts.push(`<p><strong>Voice note</strong></p>\n<blockquote>${lines(c.transcript)}</blockquote>`);
+  } else if (c.audio) {
+    parts.push(`<p><strong>Voice note</strong></p>\n<p>${link(c.audio, "Listen to the voice note")}</p>`);
   }
   parts.push(htmlTable(c.details));
   if (c.consoleErrors.total > 0) {

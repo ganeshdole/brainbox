@@ -44,16 +44,24 @@ This is what `brainboxTransport()` in `@ganeshdole/brainbox-core` sends and what
 | Part | Type | Required | Notes |
 |---|---|---|---|
 | `json` | text | yes | A JSON string, shape below |
-| `screenshot` | file, `image/*` | one of these three | PNG, the viewport with the user's marks baked in |
+| `screenshot` | file, `image/*` | one of these three (bug); optional (feature request) | PNG, the viewport with the user's marks baked in |
 | `session` | file, `application/gzip` or `application/json` | | rrweb event log `{ v: 1, events, audioOffsetMs? }`, gzipped when the browser can |
 | `video` | file, `video/*` | | a screen recording (older clients) |
-| `audio` | file, `audio/*` | no | voice note, or the mic track of a recording |
+| `audio` | file, `audio/*` | no; a feature request needs this or `text` | voice note, or the mic track of a recording |
+
+A report is a bug unless the `json` part says `"kind": "feature"`. A bug is
+shown, so it needs a capture: a screenshot, a session or a video. A feature
+request is told, so it needs words: non-blank `text`, or `audio`. Its
+screenshot is optional.
 
 The `json` part:
 
 ```jsonc
 {
   "projectKey": "pk_...",            // required, must start with "pk_"
+  "kind": "feature",                 // optional, "bug" or "feature"; absent means "bug"
+  "importance": "important",         // optional, "nice", "important" or "critical";
+                                     // only kept on a feature request
   "text": "the button does nothing", // optional, up to 10000 chars
   "region": {                        // optional, only when marks were drawn: on the
                                      // screenshot, or in view when a recording stopped
@@ -89,8 +97,8 @@ one of `text`, `email`, `phone`, `url` or `id`, and only changes how the
 dashboard shows the value. `highlight: true` also shows the value under the
 reporter's name. Brainbox stores them as sent.
 
-Types live in `@ganeshdole/brainbox-shared` (`FeedbackPayload`, `CapturedMetadata`,
-`Region`). The zod schemas in `schema.ts` validate against them and fail to
+Types live in `@ganeshdole/brainbox-shared` (`FeedbackPayload`, `IssueKind`,
+`Importance`, `CapturedMetadata`, `Region`). The zod schemas in `schema.ts` validate against them and fail to
 compile if the two drift.
 
 ### Responses
@@ -102,7 +110,8 @@ compile if the two drift.
 | `400` | `{ "error": "Invalid json" }` | `json` is not JSON |
 | `400` | `{ "error": "Invalid payload", "issues": [...] }` | `json` fails the schema; `issues` are zod issues |
 | `400` | `{ "error": "<part> must be an image" }` etc. | wrong file type |
-| `400` | `{ "error": "Missing screenshot, video or session" }` | nothing to store |
+| `400` | `{ "error": "Missing screenshot, video or session" }` | a bug with no capture |
+| `400` | `{ "error": "Missing text or audio" }` | a feature request with nothing said |
 | `413` | `{ "error": "<part> too large" }` | over the limit |
 
 The Brainbox backend adds `401 { "error": "Unknown project key" }` and

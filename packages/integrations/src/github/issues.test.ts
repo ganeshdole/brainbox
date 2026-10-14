@@ -42,6 +42,31 @@ describe("githubIssues", () => {
     expect((call.body as { body: string }).body).toContain("[Open in Brainbox]");
   });
 
+  it("labels a feature request with featureLabels, falling back to labels", async () => {
+    const feature: Ticket = { ...ticket, kind: "feature" };
+    const fetch = fakeFetch(created, created, created, created);
+    const both = githubIssues({
+      owner: "o",
+      repo: "r",
+      token: "tok",
+      labels: ["bug"],
+      featureLabels: ["enhancement"],
+      fetch,
+    });
+    await both.deliver(feature);
+    await both.deliver(ticket);
+    expect(fetch.calls[0]!.body).toMatchObject({ labels: ["enhancement"] });
+    expect(fetch.calls[1]!.body).toMatchObject({ labels: ["bug"] });
+
+    const bugOnly = githubIssues({ owner: "o", repo: "r", token: "tok", labels: ["bug"], fetch });
+    await bugOnly.deliver(feature);
+    expect(fetch.calls[2]!.body).toMatchObject({ labels: ["bug"] });
+
+    const none = githubIssues({ owner: "o", repo: "r", token: "tok", labels: ["bug"], featureLabels: [], fetch });
+    await none.deliver(feature);
+    expect(fetch.calls[3]!.body).not.toHaveProperty("labels");
+  });
+
   it("resolves a token function at send time and omits labels when none are set", async () => {
     const fetch = fakeFetch(created);
     let minted = 0;

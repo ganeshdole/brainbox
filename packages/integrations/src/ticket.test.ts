@@ -37,6 +37,12 @@ describe("renderTicket title", () => {
     expect(title.endsWith("…")).toBe(true);
   });
 
+  it("says a wordless feature request is one in its fallback title", () => {
+    expect(renderTicket(ticket({ kind: "feature" })).title).toBe(
+      "Feature request from Billing · Example",
+    );
+  });
+
   it("falls back to the transcript, then to the page title, then to the URL", () => {
     expect(renderTicket(ticket({ transcript: "it crashed" })).title).toBe("it crashed");
     expect(renderTicket(ticket()).title).toBe("Feedback on Billing · Example");
@@ -165,6 +171,33 @@ describe("renderTicket body", () => {
     expect(body).toContain("| Browser | UA\\|1 |");
   });
 
+  it("links a voice note with no transcript, so a spoken request still reaches the ticket", () => {
+    const body = renderTicket(
+      ticket({ kind: "feature", links: { dashboard: "d", audio: "https://x/voice" } }),
+    ).body;
+    expect(body.startsWith("**Voice note**\n\n[Listen to the voice note](https://x/voice)")).toBe(true);
+  });
+
+  it("quotes a transcribed voice note and links the recording in the footer", () => {
+    const body = renderTicket(
+      ticket({ transcript: "add CSV export", links: { dashboard: "d", audio: "https://x/voice" } }),
+    ).body;
+    expect(body).toContain("> add CSV export");
+    expect(body).not.toContain("Listen to the voice note");
+    expect(body).toContain("[Open in Brainbox](d) · [Voice note](https://x/voice)");
+  });
+
+  it("marks a feature request and its importance at the top of the details", () => {
+    const body = renderTicket(
+      ticket({ kind: "feature", importance: "critical", text: "Bulk export" }),
+    ).body;
+    expect(body).toContain(
+      ["|---|---|", "| Type | Feature request |", "| Importance | Blocking them |", "| Page |"].join("\n"),
+    );
+    expect(renderTicket(ticket({ kind: "feature" })).body).not.toContain("| Importance |");
+    expect(renderTicket(ticket()).body).not.toContain("| Type |");
+  });
+
   it("caps console errors at 20 and says how many more there were", () => {
     const errors = Array.from({ length: 23 }, (_, i) => `err ${i}`);
     const body = renderTicket(ticket({ metadata: { ...metadata, consoleErrors: errors } })).body;
@@ -220,6 +253,11 @@ describe("renderTicketHtml", () => {
     expect(body).toContain("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;");
     expect(body).toContain("UA &amp; co");
     expect(body).toContain("<th align=\"left\">&lt;i&gt;Plan&lt;/i&gt;</th><td>&#39;pro&#39;</td>");
+  });
+
+  it("links a voice note with no transcript", () => {
+    const { body } = renderTicketHtml(ticket({ links: { dashboard: "d", audio: "https://x/voice" } }));
+    expect(body).toContain('<p><strong>Voice note</strong></p>\n<p><a href="https://x/voice">Listen to the voice note</a></p>');
   });
 
   it("does not link a page URL that isn't http(s)", () => {

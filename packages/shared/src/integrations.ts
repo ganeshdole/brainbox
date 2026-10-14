@@ -13,6 +13,9 @@ export interface GithubDestinationConfig {
   owner: string;
   repo: string;
   labels: string[];
+  /** Labels for feature requests, in place of `labels`. Absent on
+   *  destinations saved before feature requests; those get `enhancement`. */
+  featureLabels?: string[];
 }
 
 export type DestinationConfig = GithubDestinationConfig;

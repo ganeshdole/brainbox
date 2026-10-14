@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { canSessionRecord, preloadCapture, type Brainbox, type Mark, type Recording } from "@ganeshdole/brainbox-core";
+import {
+  canSessionRecord,
+  preloadCapture,
+  type Brainbox,
+  type Importance,
+  type IssueKind,
+  type Mark,
+  type Recording,
+} from "@ganeshdole/brainbox-core";
 import { useDraft } from "@ganeshdole/brainbox-react";
 import type { TriggerMode } from "@ganeshdole/brainbox-shared";
 import type { Position } from "./lib/position.ts";
@@ -9,6 +17,7 @@ import { Chooser } from "./components/Chooser.tsx";
 import { MarkupOverlay } from "./components/MarkupOverlay.tsx";
 import { RecordOverlay } from "./components/RecordOverlay.tsx";
 import { Composer } from "./components/Composer.tsx";
+import { FeatureComposer } from "./components/FeatureComposer.tsx";
 import { Result } from "./components/Result.tsx";
 
 /** Which screen is showing. The report itself - screenshot, bake, recording,
@@ -20,6 +29,7 @@ type Status =
   | "marking"
   | "recording"
   | "composing"
+  | "requesting"
   | "submitting"
   | "done"
   | "error";
@@ -29,12 +39,15 @@ export function App({
   hostEl,
   trigger,
   position,
+  featureRequests,
 }: {
   brainbox: Brainbox;
   /** The shadow host: left out of screenshots. */
   hostEl: HTMLElement;
   trigger: TriggerMode;
   position: Position;
+  /** Whether the chooser offers "Suggest a feature". */
+  featureRequests: boolean;
 }) {
   // Open/closed is shared with the host (`useBrainboxWidget`, `mount().open()`),
   // so it lives outside this component and the screen follows it.
@@ -43,6 +56,9 @@ export function App({
   const [recording, setRecording] = useState<Recording | null>(null);
   const [error, setError] = useState("");
   const [issueId, setIssueId] = useState("");
+  // A feature request takes its own form, and its screenshot is a detour that
+  // comes back to it rather than going on to the bug composer.
+  const [kind, setKind] = useState<IssueKind>("bug");
 
   // One draft for the lifetime of the widget; `cancel()` resets it between runs.
   const draft = useMemo(() => brainbox.draft({ exclude: hostEl }), [brainbox, hostEl]);
@@ -54,6 +70,7 @@ export function App({
     setStatus("idle");
     setError("");
     setIssueId("");
+    setKind("bug");
     ui.close();
   }, [draft, ui]);
 
@@ -75,10 +92,22 @@ export function App({
   const onMarksDone = useCallback(
     (marks: Mark[]) => {
       draft.markUp(marks);
-      setStatus("composing");
+      setStatus(kind === "feature" ? "requesting" : "composing");
     },
-    [draft],
+    [draft, kind],
   );
+
+  const startFeature = useCallback(() => {
+    setKind("feature");
+    setStatus("requesting");
+  }, []);
+
+  // Back to the form without the screenshot. The draft holds nothing else of a
+  // feature request; its words live in the form.
+  const dropScreenshot = useCallback(() => {
+    draft.cancel();
+    setStatus("requesting");
+  }, [draft]);
 
   const finishRecording = useCallback(async (rec: Recording) => {
     setRecording(null);
@@ -111,7 +140,8 @@ export function App({
   }, [status]);
 
   // The screen follows the shared open state. `open()` lands on the chooser;
-  // a host's `start(mode)` goes straight into a screenshot or a recording.
+  // a host's `start(mode)` goes straight into a screenshot, a recording or a
+  // feature request.
   useEffect(() => {
     const sync = () => {
       if (!ui.isOpen()) return reset();
@@ -119,6 +149,7 @@ export function App({
       if (!mode) return setStatus((s) => (s === "idle" ? "choosing" : s));
       if (statusRef.current !== "idle" && statusRef.current !== "choosing") return;
       if (mode === "screenshot") startMarkup();
+      else if (mode === "feature") startFeature();
       else if (canSessionRecord()) startRecord();
       else setStatus("choosing");
     };
@@ -134,13 +165,28 @@ export function App({
       live = false;
       unsubscribe();
     };
-  }, [ui, reset, startMarkup, startRecord]);
+  }, [ui, reset, startMarkup, startRecord, startFeature]);
 
   const onSubmit = useCallback(
     async (text: string, audio: Blob | null) => {
       setStatus("submitting");
       try {
         const { id } = await draft.submit({ text, audio });
+        setIssueId(id ?? "");
+        setStatus("done");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Upload failed");
+        setStatus("error");
+      }
+    },
+    [draft],
+  );
+
+  const onSubmitFeature = useCallback(
+    async (text: string, audio: Blob | null, importance: Importance | undefined) => {
+      setStatus("submitting");
+      try {
+        const { id } = await draft.submit({ text, audio, kind: "feature", importance });
         setIssueId(id ?? "");
         setStatus("done");
       } catch (e) {
@@ -164,6 +210,7 @@ export function App({
           canRecord={canSessionRecord()}
           onScreenshot={startMarkup}
           onRecord={startRecord}
+          onFeature={featureRequests ? startFeature : undefined}
           onCancel={reset}
         />
       )}
@@ -173,7 +220,7 @@ export function App({
           pending={report.screenshotPending}
           failed={report.screenshotFailed}
           onDone={onMarksDone}
-          onCancel={reset}
+          onCancel={kind === "feature" ? dropScreenshot : reset}
         />
       )}
       {status === "recording" && recording && (
@@ -196,9 +243,31 @@ export function App({
           onSubmit={onSubmit}
         />
       )}
+      {/* Kept mounted, hidden, while its screenshot is marked up, so what the
+          user typed or said is still there when they come back. */}
+      {kind === "feature" && (status === "requesting" || status === "marking") && (
+        <div hidden={status === "marking"}>
+          <FeatureComposer
+            screenshotUrl={report.screenshotUrl ?? undefined}
+            capturePending={report.screenshotPending}
+            captureFailed={report.screenshotFailed}
+            position={position}
+            onScreenshot={startMarkup}
+            onRemoveScreenshot={dropScreenshot}
+            onCancel={reset}
+            onSubmit={(text, audio, importance) => void onSubmitFeature(text, audio, importance)}
+          />
+        </div>
+      )}
       {status === "submitting" && <Result kind="loading" position={position} />}
       {status === "done" && (
-        <Result kind="success" id={issueId} position={position} onClose={reset} />
+        <Result
+          kind="success"
+          id={issueId}
+          thanks={kind === "feature" ? "Thanks! Your idea was sent." : undefined}
+          position={position}
+          onClose={reset}
+        />
       )}
       {status === "error" && (
         <Result kind="error" message={error} position={position} onClose={reset} />

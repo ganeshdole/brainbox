@@ -1,8 +1,19 @@
-import type { CapturedMetadata, FeedbackPayload, ProjectKey, Region } from "@ganeshdole/brainbox-shared";
+import type {
+  CapturedMetadata,
+  FeedbackPayload,
+  Importance,
+  IssueKind,
+  ProjectKey,
+  Region,
+} from "@ganeshdole/brainbox-shared";
 
 /** A finished report, as handed to a `Transport`. Core does not know about
  *  project keys or endpoints; those belong to whichever transport sends it. */
 export interface Report {
+  /** A bug report or a feature request. Absent means a bug. */
+  kind?: IssueKind;
+  /** How much a feature request matters to whoever asked. */
+  importance?: Importance;
   text?: string;
   /** The area the user's marks cover - from the markup step, or the marks
    *  still in view when a recording stopped. */
@@ -58,6 +69,8 @@ export function brainboxTransport({
     async send(report) {
       const payload: FeedbackPayload = {
         projectKey,
+        kind: report.kind,
+        importance: report.importance,
         region: report.region,
         text: report.text,
         metadata: report.metadata,

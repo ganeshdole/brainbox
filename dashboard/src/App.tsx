@@ -4,6 +4,8 @@ import { ProjectLayout } from "./components/ProjectLayout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Billing } from "./pages/Billing";
 import { BillingReturn } from "./pages/BillingReturn";
+import { FeaturePage } from "./pages/Feature";
+import { Features } from "./pages/Features";
 import { Home } from "./pages/Home";
 import { LegacyIssue } from "./pages/LegacyIssue";
 import { Login } from "./pages/Login";
@@ -28,6 +30,8 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <Reports /> },
           { path: "issues/:issueId", element: <Report /> },
+          { path: "features", element: <Features /> },
+          { path: "features/:featureId", element: <FeaturePage /> },
           { path: "settings", element: <Settings /> },
         ],
       },

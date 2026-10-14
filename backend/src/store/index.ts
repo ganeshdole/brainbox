@@ -13,6 +13,24 @@ let instance: Store | null = null;
  *  it from the request context (`c.get("store")`); code outside a request
  *  calls this. */
 export function getStore(): Store {
-  instance ??= env.DATABASE_DRIVER === "convex" ? createConvexStore(getConvex()) : createPostgresStore(getDb());
+  instance ??= createStore();
   return instance;
+}
+
+/** Use `store` instead of the DATABASE_DRIVER one: how an entry plugs in a
+ *  database this repo does not ship (DATABASE_DRIVER=custom). Call it before
+ *  serving. `null` goes back to the configured driver. */
+export function setStore(store: Store | null): void {
+  instance = store;
+}
+
+function createStore(): Store {
+  switch (env.DATABASE_DRIVER) {
+    case "postgres":
+      return createPostgresStore(getDb());
+    case "convex":
+      return createConvexStore(getConvex());
+    case "custom":
+      throw new Error("DATABASE_DRIVER=custom, but no store was given to setStore()");
+  }
 }

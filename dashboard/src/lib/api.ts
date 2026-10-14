@@ -3,6 +3,9 @@ import type {
   BillingState,
   Delivery,
   DestinationConfig,
+  Feature,
+  FeatureDetail,
+  FeatureStatus,
   IntegrationProvider,
   IntegrationRepo,
   IntegrationsState,
@@ -97,6 +100,24 @@ export const api = {
   listIssues: (id: string) => req<Issue[]>(`/api/projects/${id}/issues`),
   getIssue: (id: string) => req<Issue>(`/api/issues/${id}`),
   sendIssue: (id: string) => req<Delivery[]>(`/api/issues/${id}/deliveries`, { method: "POST" }),
+  /** Attach a feature request to a feature, or send it back to waiting with null. */
+  setIssueFeature: (id: string, featureId: string | null) =>
+    req<Issue>(`/api/issues/${id}/feature`, { method: "PUT", body: JSON.stringify({ featureId }) }),
+
+  listFeatures: (projectId: string) => req<Feature[]>(`/api/projects/${projectId}/features`),
+  createFeature: (
+    projectId: string,
+    body: { title: string; description?: string; status?: FeatureStatus; requestIds?: string[] },
+  ) => req<Feature>(`/api/projects/${projectId}/features`, { method: "POST", body: JSON.stringify(body) }),
+  getFeature: (id: string) => req<FeatureDetail>(`/api/features/${id}`),
+  updateFeature: (
+    id: string,
+    body: { title?: string; description?: string | null; status?: FeatureStatus },
+  ) => req<Feature>(`/api/features/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteFeature: (id: string) => req<{ ok: boolean }>(`/api/features/${id}`, { method: "DELETE" }),
+  /** Fold a duplicate into `into`; its requests move over and it is gone. */
+  mergeFeature: (id: string, into: string) =>
+    req<Feature>(`/api/features/${id}/merge`, { method: "POST", body: JSON.stringify({ into }) }),
 
   getIntegrations: () => req<IntegrationsState>("/api/integrations"),
   /** Returns the GitHub App install url to send the browser to. */

@@ -1,4 +1,4 @@
-import { Camera, Video, X } from "./icons.tsx";
+import { Camera, Lightbulb, Video, X } from "./icons.tsx";
 import { posClass, type Position } from "../lib/position.ts";
 
 export function Chooser({
@@ -6,12 +6,15 @@ export function Chooser({
   canRecord,
   onScreenshot,
   onRecord,
+  onFeature,
   onCancel,
 }: {
   position: Position;
   canRecord: boolean;
   onScreenshot: () => void;
   onRecord: () => void;
+  /** Offers "Suggest a feature" when set. */
+  onFeature?: () => void;
   onCancel: () => void;
 }) {
   return (
@@ -39,12 +42,25 @@ export function Chooser({
       {canRecord && (
         <button
           onClick={onRecord}
-          className="flex w-full items-center gap-3 rounded-xl border border-default bg-interactive p-3 text-left hover:bg-interactive-hover"
+          className="mb-2 flex w-full items-center gap-3 rounded-xl border border-default bg-interactive p-3 text-left hover:bg-interactive-hover"
         >
           <Video className="h-5 w-5 shrink-0 text-emphasis" />
           <span>
             <span className="block text-sm font-medium text-emphasis">Record</span>
             <span className="block text-xs text-muted">Capture your actions · voice optional</span>
+          </span>
+        </button>
+      )}
+
+      {onFeature && (
+        <button
+          onClick={onFeature}
+          className="flex w-full items-center gap-3 rounded-xl border border-default bg-interactive p-3 text-left hover:bg-interactive-hover"
+        >
+          <Lightbulb className="h-5 w-5 shrink-0 text-emphasis" />
+          <span>
+            <span className="block text-sm font-medium text-emphasis">Suggest a feature</span>
+            <span className="block text-xs text-muted">Tell us what you wish it did</span>
           </span>
         </button>
       )}

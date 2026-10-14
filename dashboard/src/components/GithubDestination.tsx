@@ -198,6 +198,10 @@ function RepoSettings({
     destination ? `${destination.config.owner}/${destination.config.repo}` : "",
   );
   const [labels, setLabels] = useState(destination?.config.labels.join(", ") ?? "");
+  // Saved before feature requests means none set, and the backend uses enhancement.
+  const [featureLabels, setFeatureLabels] = useState(
+    (destination?.config.featureLabels ?? ["enhancement"]).join(", "),
+  );
   const [enabled, setEnabled] = useState(destination?.enabled ?? true);
 
   useEffect(() => {
@@ -224,7 +228,12 @@ function RepoSettings({
     void run(() =>
       api.saveDestination(projectId, "github", {
         connectionId,
-        config: { owner: picked.owner, repo: picked.name, labels: parseLabels(labels) },
+        config: {
+          owner: picked.owner,
+          repo: picked.name,
+          labels: parseLabels(labels),
+          featureLabels: parseLabels(featureLabels),
+        },
         enabled,
       }),
     );
@@ -276,6 +285,16 @@ function RepoSettings({
             value={labels}
             onChange={(e) => setLabels(e.target.value)}
             placeholder="feedback, bug"
+            disabled={busy}
+            className="mt-1"
+          />
+        </label>
+        <label className="block text-xs text-muted sm:col-start-2">
+          Feature request labels
+          <Input
+            value={featureLabels}
+            onChange={(e) => setFeatureLabels(e.target.value)}
+            placeholder="enhancement"
             disabled={busy}
             className="mt-1"
           />
