@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { CaptureLoader } from "./loader.ts";
+import type { Mark } from "./marks.ts";
 import {
+  bakeMarks,
   captureScale,
+  captureViewport,
   keepForViewport,
   overBudget,
   pickScreenshot,
@@ -160,6 +164,12 @@ describe("captureScale", () => {
   it("stays at 1x for a page too big even for that", () => {
     expect(captureScale(2, 1440 * 20000)).toBe(1);
   });
+
+  it("caps at a host's own maximum", () => {
+    expect(captureScale(2, page, 1)).toBe(1);
+    // still within the canvas limit
+    expect(captureScale(3, 1000 * 1000, 3)).toBe(3);
+  });
 });
 
 describe("overBudget", () => {
@@ -175,6 +185,11 @@ describe("overBudget", () => {
 
   it("leaves a 1x shot alone - there is no resolution left to give up", () => {
     expect(overBudget(over, 1000, 1000)).toBe(false);
+  });
+
+  it("measures against a host's own budget", () => {
+    expect(overBudget(2048, 2000, 1000, 1024)).toBe(true);
+    expect(overBudget(1024, 2000, 1000, 1024)).toBe(false);
   });
 });
 
@@ -234,5 +249,106 @@ describe("viewportFilter", () => {
     } finally {
       page.remove();
     }
+  });
+});
+
+// jsdom has no canvas. These stand in for one just far enough to follow the
+// pipeline: every 2D call is accepted and `scale()` is remembered, and a
+// canvas encodes to one byte per pixel of width, so the size budget can be
+// steered by the canvas size.
+describe("captureViewport and bakeMarks", () => {
+  const scales: number[][] = [];
+  const ctx = new Proxy(
+    {},
+    {
+      get: (_, key) =>
+        key === "scale"
+          ? (...args: number[]) => scales.push(args)
+          : () => {},
+      set: () => true,
+    },
+  );
+  const encoded: number[] = [];
+  const dpr = window.devicePixelRatio;
+
+  beforeEach(() => {
+    scales.length = 0;
+    encoded.length = 0;
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as never);
+    vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation(function (
+      this: HTMLCanvasElement,
+      done: BlobCallback,
+    ) {
+      encoded.push(this.width);
+      done(new Blob([new Uint8Array(this.width)], { type: "image/png" }));
+    });
+    vi.stubGlobal("createImageBitmap", async () => ({ width: 400, height: 200, close: () => {} }));
+    Object.defineProperty(window, "devicePixelRatio", { value: 2, configurable: true });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    Object.defineProperty(window, "devicePixelRatio", { value: dpr, configurable: true });
+  });
+
+  const fakeLoader = () => {
+    const domToCanvas = vi.fn(async () => document.createElement("canvas"));
+    const loader: CaptureLoader = {
+      recorder: () => Promise.reject(new Error("not here")),
+      rasteriser: async () => ({ domToCanvas: domToCanvas as never }),
+    };
+    return { loader, domToCanvas };
+  };
+
+  it("renders the viewport through the loader it is given, at the display's density", async () => {
+    const { loader, domToCanvas } = fakeLoader();
+    const shot = await captureViewport({ loader });
+    expect(domToCanvas).toHaveBeenCalledWith(
+      document.documentElement,
+      expect.objectContaining({ scale: 2, timeout: 6000 }),
+    );
+    expect(shot.size).toBe(window.innerWidth * 2);
+  });
+
+  it("follows a host's screenshot tuning", async () => {
+    const { loader, domToCanvas } = fakeLoader();
+    const shot = await captureViewport({ loader, maxScale: 1, assetTimeoutMs: 1500 });
+    expect(domToCanvas).toHaveBeenCalledWith(
+      document.documentElement,
+      expect.objectContaining({ scale: 1, timeout: 1500 }),
+    );
+    expect(shot.size).toBe(window.innerWidth);
+  });
+
+  it("redoes a shot over the host's budget at 1x", async () => {
+    const { loader } = fakeLoader();
+    const shot = await captureViewport({ loader, maxBytes: 100 });
+    expect(encoded).toEqual([window.innerWidth * 2, window.innerWidth]);
+    expect(shot.size).toBe(window.innerWidth);
+  });
+
+  const box: Mark = { kind: "box", id: "b", color: "#f00", x: 1, y: 2, width: 3, height: 4 };
+
+  it("hands back the image itself when there is nothing to bake", async () => {
+    const image = new Blob(["png"]);
+    expect(await bakeMarks(image, [])).toBe(image);
+  });
+
+  it("scales viewport marks up to the image by default", async () => {
+    await bakeMarks(new Blob(["png"]), [box]);
+    expect(scales).toEqual([[400 / window.innerWidth, 400 / window.innerWidth]]);
+  });
+
+  it("takes marks in the image's own pixels with scale 1", async () => {
+    const baked = await bakeMarks(new Blob(["png"]), [box], { scale: 1 });
+    expect(scales).toEqual([[1, 1]]);
+    expect(baked.size).toBe(400);
+  });
+
+  it("redoes a bake over the budget at the marks' 1x", async () => {
+    const baked = await bakeMarks(new Blob(["png"]), [box], { scale: 2, maxBytes: 100 });
+    expect(encoded).toEqual([400, 200]);
+    expect(baked.size).toBe(200);
   });
 });

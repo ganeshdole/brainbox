@@ -18,7 +18,14 @@ a host app with its own UI is another.
   `destroy()` undoes everything the instance set up. The one exception is the
   shared `console.error` hook in `metadata.ts`, which is installed when the
   first instance asks and removed when the last one goes away.
-- Importing this package does nothing. Only a call has effects.
+- Importing this package does nothing. Only a call has effects, and rrweb and
+  modern-screenshot are reached only through a `CaptureLoader` (`loader.ts`),
+  never a static import. `index.test.ts` fails if either loads on import.
+- The capture primitives (`captureViewport`, `bakeMarks`,
+  `startSessionRecording`, `createAnnotations`, `captureErrors`,
+  `captureMetadata`, `cssPath`, `elementAt`) are public API. Change their
+  signatures the way you would `createBrainbox`'s: only by adding optional
+  fields.
 - `Draft` owns the report in progress. Anything a UI would have to get right
   about timing (a late screenshot, a bake still in flight, a cancelled run)
   belongs in `draft.ts`, not in a component.

@@ -4,9 +4,12 @@ import {
   type Brainbox,
   type BeforeSend,
   type BrainboxOptions,
+  type CaptureLoader,
   type Identity,
   type PrivacyOptions,
+  type RecordingOptions,
   type ReportField,
+  type ScreenshotOptions,
   type SubmitResult,
   type Transport,
 } from "@ganeshdole/brainbox-core";
@@ -23,8 +26,17 @@ interface OwnedProps {
    *  calls `setFields()` on the live instance. */
   fields?: ReportField[];
   /** Mask text in recordings, cover it in screenshots. Read when the instance
-   *  is created; a change takes effect with the next `transport`. */
+   *  is created; a change takes effect with the next `transport`. So are the
+   *  four below. */
   privacy?: PrivacyOptions;
+  /** Collect console errors for bug reports. Default true. */
+  consoleErrors?: boolean;
+  /** Record narration with sessions (default yes), and extra rrweb options. */
+  recording?: RecordingOptions;
+  /** Screenshot pixel density, asset timeout and size budget. */
+  screenshot?: ScreenshotOptions;
+  /** How rrweb and modern-screenshot are loaded. Default `import()`. */
+  loader?: CaptureLoader;
   /** Scrub or drop each report before it is sent. May change between renders. */
   beforeSend?: BeforeSend;
   /** Called after every successful submit. May change between renders. */
@@ -41,6 +53,10 @@ interface GivenProps {
   identity?: never;
   fields?: never;
   privacy?: never;
+  consoleErrors?: never;
+  recording?: never;
+  screenshot?: never;
+  loader?: never;
   beforeSend?: never;
   onSubmitted?: never;
 }
@@ -70,6 +86,10 @@ function OwnedProvider({
   identity,
   fields,
   privacy,
+  consoleErrors,
+  recording,
+  screenshot,
+  loader,
   beforeSend,
   onSubmitted,
   children,
@@ -85,10 +105,11 @@ function OwnedProvider({
   useEffect(() => {
     beforeSendRef.current = beforeSend;
   }, [beforeSend]);
-  const privacyRef = useRef(privacy);
+  // What the instance is created with; read only when `transport` changes.
+  const setupRef = useRef({ privacy, consoleErrors, recording, screenshot, loader });
   useEffect(() => {
-    privacyRef.current = privacy;
-  }, [privacy]);
+    setupRef.current = { privacy, consoleErrors, recording, screenshot, loader };
+  }, [privacy, consoleErrors, recording, screenshot, loader]);
   const identityRef = useRef(identity);
   useEffect(() => {
     identityRef.current = identity;
@@ -103,7 +124,7 @@ function OwnedProvider({
       transport,
       identity: identityRef.current,
       fields: fieldsRef.current,
-      privacy: privacyRef.current,
+      ...setupRef.current,
       // Always installed, so a callback that arrives on a later render (a
       // privacy policy loaded async) still runs on this instance.
       beforeSend: (report) => (beforeSendRef.current ? beforeSendRef.current(report) : report),

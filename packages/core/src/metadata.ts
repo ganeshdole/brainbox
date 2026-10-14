@@ -50,8 +50,10 @@ function installHooks(): void {
   };
 }
 
-/** Start collecting console errors into a new buffer. */
-export function captureErrors(max = MAX_ERRORS): ErrorLog {
+/** Start collecting console errors and uncaught exceptions into a new buffer
+ *  of the last `max` (default 20). `console.error` is patched while any log is
+ *  listening; call `stop()` when done. */
+export function captureErrors({ max = MAX_ERRORS }: { max?: number } = {}): ErrorLog {
   const buffer: string[] = [];
   const push = (msg: string) => {
     buffer.push(msg);
@@ -68,18 +70,24 @@ export function captureErrors(max = MAX_ERRORS): ErrorLog {
   };
 }
 
-/** Snapshot of the host page at submit time. */
+/** What a report's metadata carries besides the page itself. */
+export interface MetadataInput {
+  /** Default none; `ErrorLog.snapshot()` is the usual source. */
+  consoleErrors?: string[];
+  identity?: Identity;
+  fields?: ReportField[];
+  /** CSS path of the element the report is about (`cssPath()`). */
+  selector?: string;
+}
+
+/** Snapshot of the host page (URL, title, viewport, browser) plus `input`, as
+ *  a report's `metadata`. */
 export function captureMetadata({
-  consoleErrors,
+  consoleErrors = [],
   identity,
   fields,
   selector,
-}: {
-  consoleErrors: string[];
-  identity?: Identity;
-  fields?: ReportField[];
-  selector?: string;
-}): CapturedMetadata {
+}: MetadataInput = {}): CapturedMetadata {
   return {
     url: location.href,
     title: document.title,

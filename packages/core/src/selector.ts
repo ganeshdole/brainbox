@@ -1,5 +1,5 @@
-/** The host-page element under a point. `exclude` (the UI's own host element)
- *  is hidden for the lookup so the answer is never the widget itself. */
+/** The host-page element under a viewport point. `exclude` (the UI's own host
+ *  element) is hidden for the lookup so the answer is never the widget itself. */
 export function elementAt(x: number, y: number, exclude?: HTMLElement): Element | null {
   if (!exclude) return document.elementFromPoint(x, y);
   const prev = exclude.style.visibility;

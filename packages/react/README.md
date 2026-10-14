@@ -74,6 +74,42 @@ function Panel({ draft }: { draft: Draft }) {
 }
 ```
 
+The provider takes the rest of `createBrainbox()`'s options as props, all
+optional and all off-by-default changes:
+
+```tsx
+<BrainboxProvider
+  transport={transport}
+  consoleErrors={false}                       // never patch console.error
+  recording={{ audio: false }}                // record without the mic
+  screenshot={{ maxScale: 1 }}                // 1x screenshots
+  loader={loader}                             // your own way of loading rrweb / modern-screenshot
+>
+```
+
+## Build your own
+
+You don't need a `Draft` to use the engine. The capture primitives from
+`@ganeshdole/brainbox-core` are plain functions, so a component can call them
+directly, with or without a provider:
+
+```tsx
+import { bakeMarks, captureViewport, type Mark } from "@ganeshdole/brainbox-core";
+
+function ShareScreenButton({ marks, onShot }: { marks: Mark[]; onShot: (png: Blob) => void }) {
+  const panel = useRef<HTMLButtonElement>(null);
+  const share = async () => {
+    // the page as it is, minus this button, with the marks on it
+    const shot = await captureViewport({ exclude: panel.current ?? undefined });
+    onShot(await bakeMarks(shot, marks));
+  };
+  return <button ref={panel} onClick={share}>Share my screen</button>;
+}
+```
+
+See the core README's "Build your own" for every primitive: recordings,
+annotations, console errors, metadata and element helpers.
+
 ## How the provider behaves
 
 - The instance is created in an effect and destroyed in the cleanup. That
@@ -83,7 +119,8 @@ function Panel({ draft }: { draft: Draft }) {
 - `identity` changes call `identify()`, and `fields` changes call
   `setFields()`, on the live instance. The `fields` prop owns the instance's
   fields: dropping it clears them. `onSubmitted` and `beforeSend` may change
-  freely. `privacy` (see the core README) is read when the instance is created.
+  freely. `privacy`, `consoleErrors`, `recording`, `screenshot` and `loader`
+  (see the core README) are read when the instance is created.
   Only a new `transport` rebuilds the instance.
 - `<BrainboxProvider brainbox={instance}>` provides an instance you created
   and own. Shells outside React (the script-tag bundle) use this.

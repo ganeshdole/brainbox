@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createBrainbox,
   type Brainbox,
+  type CaptureLoader,
   type Report,
   type ReportField,
   type Transport,
@@ -231,5 +232,72 @@ describe("BrainboxProvider", () => {
 
     await act(() => instances[0]!.draft().submit({ text: "Jane Doe" }));
     expect(sent[0]?.text).toBe("scrubbed");
+  });
+
+  it("leaves console.error alone with consoleErrors off", () => {
+    let bb: Brainbox | null = null;
+    act(() => {
+      root.render(
+        <BrainboxProvider transport={transport} consoleErrors={false}>
+          <Probe onInstance={(next) => (bb = next)} />
+        </BrainboxProvider>,
+      );
+    });
+    expect(bb).not.toBeNull();
+    expect(console.error).toBe(originalConsoleError);
+  });
+
+  it("creates the instance with the loader, recording and screenshot options", async () => {
+    const record = vi.fn(() => () => {});
+    const domToCanvas = vi.fn(async () => document.createElement("canvas"));
+    const loader: CaptureLoader = {
+      recorder: vi.fn(async () => ({ record: record as never })),
+      rasteriser: vi.fn(async () => ({ domToCanvas: domToCanvas as never })),
+    };
+    let bb: Brainbox | null = null;
+    act(() => {
+      root.render(
+        <BrainboxProvider
+          transport={transport}
+          loader={loader}
+          recording={{ audio: false, rrweb: { recordCanvas: true } }}
+          screenshot={{ assetTimeoutMs: 1500 }}
+        >
+          <Probe onInstance={(next) => (bb = next)} />
+        </BrainboxProvider>,
+      );
+    });
+    const instance = bb as Brainbox | null;
+    if (!instance) throw new Error("no instance");
+
+    instance.preloadCapture();
+    expect(loader.recorder).toHaveBeenCalled();
+    expect(loader.rasteriser).toHaveBeenCalled();
+
+    const getUserMedia = vi.fn();
+    Object.defineProperty(navigator, "mediaDevices", { value: { getUserMedia }, configurable: true });
+    // jsdom can't paint; the screenshot fails quietly after reaching the rasteriser
+    const getContext = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    try {
+      const draft = instance.draft();
+      draft.startRecording();
+      await vi.waitFor(() => expect(record).toHaveBeenCalled());
+      expect(record).toHaveBeenCalledWith(expect.objectContaining({ recordCanvas: true }));
+      // the mic would be asked for right after rrweb starts
+      await new Promise((r) => setTimeout(r, 0));
+      expect(getUserMedia).not.toHaveBeenCalled();
+      draft.cancel();
+
+      draft.captureScreenshot();
+      await vi.waitFor(() => expect(domToCanvas).toHaveBeenCalled());
+      expect(domToCanvas).toHaveBeenCalledWith(
+        document.documentElement,
+        expect.objectContaining({ timeout: 1500 }),
+      );
+      draft.cancel();
+    } finally {
+      getContext.mockRestore();
+      Reflect.deleteProperty(navigator, "mediaDevices");
+    }
   });
 });
