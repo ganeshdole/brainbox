@@ -24,6 +24,41 @@ export default tseslint.config(
     },
   },
   {
+    // createApp() must build everything from its deps (ADR 0005 rule 2, ADR
+    // 0010): nothing it reaches may read the environment or a process-wide
+    // singleton. Only the env side (fromEnv and the entries) may.
+    files: ["src/**/*.ts"],
+    ignores: [
+      "src/**/*.test.ts",
+      "src/env.ts",
+      "src/from-env.ts",
+      "src/app.ts",
+      "src/index.ts",
+      "src/azure.ts",
+      "src/store/index.ts",
+      "src/storage/index.ts",
+      "src/email/index.ts",
+      "src/convex-client.ts",
+      "src/db/client.ts",
+    ],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              regex:
+                "(^|/)(env|from-env|app|convex-client)\\.ts$|(^|/)(store|storage|email)/index\\.ts$|^\\.?/index\\.ts$|(^|/)db/client\\.ts$",
+              allowTypeImports: true,
+              message:
+                "This reads the environment or a process-wide singleton. Take it from the app's deps (c.get(\"deps\")) instead.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // Tests may assert a value they control is present; `!` is fine there.
     files: ["test/**", "**/*.test.ts"],
     rules: {

@@ -165,7 +165,7 @@ export async function makeAzureDevopsConnection(userId: string, token = "fake-pa
     ...identity,
     label: organization,
     auth: "pat",
-    credentials: await sealToken(identity, token),
+    credentials: await sealToken({ encryptionKey: testEnv.INTEGRATIONS_ENCRYPTION_KEY! }, identity, token),
   });
 }
 

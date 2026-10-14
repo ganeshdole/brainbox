@@ -60,7 +60,7 @@ describe("GitHub App install round-trip", () => {
     expect(res.status).toBe(200);
     const url = new URL(((await res.json()) as { url: string }).url);
     expect(url.origin + url.pathname).toBe("https://github.com/apps/brainbox-test/installations/new");
-    expect(JSON.parse(verify(url.searchParams.get("state")!)!)).toMatchObject({
+    expect(JSON.parse(verify(url.searchParams.get("state")!, testEnv.AUTH_SECRET!)!)).toMatchObject({
       uid: me.id,
       projectId: project.id,
     });

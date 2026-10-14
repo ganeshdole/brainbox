@@ -9,9 +9,9 @@ export type * from "./types.ts";
 
 let instance: FullStore | null = null;
 
-/** The deployment's store (DATABASE_DRIVER), created on first use. Routes read
- *  it from the request context (`c.get("store")`); code outside a request
- *  calls this. */
+/** The deployment's store (DATABASE_DRIVER), created on first use. Only the
+ *  env-built app (`fromEnv()`) and scripts use it; routes read the app's own
+ *  store from the request context (`c.get("store")`). */
 export function getStore(): FullStore {
   instance ??= createStore();
   return instance;
@@ -20,7 +20,9 @@ export function getStore(): FullStore {
 /** Use `store` instead of the DATABASE_DRIVER one: how an entry plugs in a
  *  database this repo does not ship (DATABASE_DRIVER=custom). Call it before
  *  serving. `null` goes back to the configured driver. It takes a store with
- *  every module, because this app serves every module's routes. */
+ *  every module, because the env-built app serves every module's routes.
+ * @deprecated Pass `store` to `createApp()` instead, which also takes a store
+ *  with only some modules and serves only their routes. */
 export function setStore(store: FullStore | null): void {
   instance = store;
 }

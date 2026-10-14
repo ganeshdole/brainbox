@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { getAuthConfig } from "../src/auth/config.ts";
 import { env } from "../src/env.ts";
 import { AUTH_ERROR_PATH } from "../src/routes/auth-error.ts";
+import { getAuthConfig } from "./harness.ts";
 
 // Auth.js's provider factories stash whatever you passed under `options` and
 // merge it into the provider during init, so that is where these live before

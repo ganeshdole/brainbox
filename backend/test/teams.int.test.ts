@@ -307,16 +307,16 @@ describe("a Team's plan", () => {
 
 describe("signInAllowed (AUTH_ALLOWED_EMAIL_DOMAINS)", () => {
   it("lets everyone in when no domains are listed", async () => {
-    expect(await signInAllowed(getStore(), "anyone@anywhere.dev", [])).toBe(true);
+    expect(await signInAllowed(getStore().auth, getStore().teams, "anyone@anywhere.dev", [])).toBe(true);
   });
 
   it("lets in the listed domains, the invited, and members, and no one else", async () => {
     const store = getStore();
     const domains = ["acme.com"];
-    expect(await signInAllowed(store, "Dana@ACME.com", domains)).toBe(true);
-    expect(await signInAllowed(store, "dana@sub.acme.com", domains)).toBe(false);
-    expect(await signInAllowed(store, "stranger@gmail.com", domains)).toBe(false);
-    expect(await signInAllowed(store, null, domains)).toBe(false);
+    expect(await signInAllowed(store.auth, store.teams, "Dana@ACME.com", domains)).toBe(true);
+    expect(await signInAllowed(store.auth, store.teams, "dana@sub.acme.com", domains)).toBe(false);
+    expect(await signInAllowed(store.auth, store.teams, "stranger@gmail.com", domains)).toBe(false);
+    expect(await signInAllowed(store.auth, store.teams, null, domains)).toBe(false);
 
     const owner = await makeUser("owner@acme.com");
     const teamId = await teamOf(owner.id);
@@ -327,14 +327,14 @@ describe("signInAllowed (AUTH_ALLOWED_EMAIL_DOMAINS)", () => {
       invitedBy: owner.id,
       expiresAt: new Date(Date.now() + 60_000),
     });
-    expect(await signInAllowed(store, "contractor@gmail.com", domains)).toBe(true);
+    expect(await signInAllowed(store.auth, store.teams, "contractor@gmail.com", domains)).toBe(true);
 
     const contractor = await makeUser("contractor@gmail.com");
     await store.teams.acceptInvite(invite.id, contractor.id, new Date());
-    expect(await signInAllowed(store, "contractor@gmail.com", domains)).toBe(true);
+    expect(await signInAllowed(store.auth, store.teams, "contractor@gmail.com", domains)).toBe(true);
 
     await store.teams.removeMember(teamId, contractor.id);
-    expect(await signInAllowed(store, "contractor@gmail.com", domains)).toBe(false);
+    expect(await signInAllowed(store.auth, store.teams, "contractor@gmail.com", domains)).toBe(false);
   });
 });
 

@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "../src/app.ts";
-import { stored } from "./harness.ts";
+import { createApp } from "../src/create-app.ts";
+import { fromEnv } from "../src/from-env.ts";
+import { stored, testDeps } from "./harness.ts";
 import { deliverIssue } from "../src/integrations/dispatch.ts";
-import { getStore } from "../src/store/index.ts";
 import { publicFileUrl } from "../src/lib/public-files.ts";
 import { getStorage } from "../src/storage/index.ts";
 import { fakeGithub } from "./github-fake.ts";
@@ -17,21 +18,14 @@ import {
   makeUser,
 } from "./helpers.ts";
 
-const { transcribeAudioMock, transcriptionEnabledMock } = vi.hoisted(() => ({
-  transcribeAudioMock: vi.fn<(audio: Uint8Array) => Promise<string>>(),
-  transcriptionEnabledMock: vi.fn(() => false),
-}));
-vi.mock("../src/lib/transcription.ts", () => ({
-  transcribeAudio: transcribeAudioMock,
-  transcriptionEnabled: transcriptionEnabledMock,
-}));
+const transcribeMock = vi.fn<(media: Uint8Array) => Promise<string>>();
+// The env-built app has no transcriber in tests; this one has a fake.
+const transcribing = createApp({ ...fromEnv(), transcriber: { transcribe: (media) => transcribeMock(media) } });
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
 
 beforeEach(() => {
-  transcribeAudioMock.mockReset();
-  transcriptionEnabledMock.mockReset();
-  transcriptionEnabledMock.mockReturnValue(false);
+  transcribeMock.mockReset();
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -122,7 +116,7 @@ describe("delivery after ingest", () => {
       screenshotKey: null,
       region: null,
     });
-    await deliverIssue(getStore(), feature.id);
+    await deliverIssue(testDeps, feature.id);
     const sent = gh.issueCalls()[0]?.body as { title: string; body: string; labels: string[] };
     expect(sent.title).toBe("Dark mode");
     expect(sent.labels).toEqual(["enhancement"]);
@@ -133,7 +127,7 @@ describe("delivery after ingest", () => {
       config: { owner: "acme", repo: "web", labels: ["feedback"], featureLabels: ["idea"] },
     });
     const next = await makeIssue(project.id, { kind: "feature", text: "SSO" });
-    await deliverIssue(getStore(), next.id);
+    await deliverIssue(testDeps, next.id);
     expect((gh.issueCalls()[1]?.body as { labels: string[] }).labels).toEqual(["idea"]);
   });
 
@@ -176,14 +170,13 @@ describe("delivery after ingest", () => {
 
   it("waits for transcription so the ticket carries the transcript", async () => {
     const gh = fakeGithub();
-    transcriptionEnabledMock.mockReturnValue(true);
-    transcribeAudioMock.mockImplementation(
+    transcribeMock.mockImplementation(
       () => new Promise((r) => setTimeout(() => r("checkout crashes on submit"), 50)),
     );
     const { project, conn } = await setup();
     await makeDestination(project.id, conn.id);
 
-    const res = await app.request("/ingest", {
+    const res = await transcribing.request("/ingest", {
       method: "POST",
       body: ingestForm(project.key, (fd) =>
         fd.append("audio", new File([new Uint8Array([1, 2])], "a.webm", { type: "audio/webm" })),
@@ -228,7 +221,7 @@ describe("deliverIssue", () => {
     await makeDestination(project.id, conn.id);
     const issue = await makeIssue(project.id);
 
-    const [failed] = await deliverIssue(getStore(), issue.id);
+    const [failed] = await deliverIssue(testDeps, issue.id);
     expect(failed).toMatchObject({
       status: "failed",
       error: "Issues are disabled for this repo",
@@ -236,7 +229,7 @@ describe("deliverIssue", () => {
     });
 
     fail = false;
-    const [sent] = await deliverIssue(getStore(), issue.id, { force: true });
+    const [sent] = await deliverIssue(testDeps, issue.id, { force: true });
     expect(sent).toMatchObject({
       status: "sent",
       externalId: "7",
@@ -252,8 +245,8 @@ describe("deliverIssue", () => {
     await makeDestination(project.id, conn.id);
     const issue = await makeIssue(project.id);
 
-    await deliverIssue(getStore(), issue.id);
-    expect(await deliverIssue(getStore(), issue.id)).toEqual([]);
+    await deliverIssue(testDeps, issue.id);
+    expect(await deliverIssue(testDeps, issue.id)).toEqual([]);
     expect(gh.issueCalls()).toHaveLength(1);
   });
 });
@@ -381,7 +374,7 @@ describe("GET /f/:token", () => {
     const { project } = await setup();
     const key = `${project.id}/issue/crop.png`;
     await getStorage().put(key, PNG, "image/png");
-    const url = new URL(publicFileUrl(key));
+    const url = new URL(publicFileUrl(testDeps.options, key));
 
     const res = await app.request(url.pathname);
     expect(res.status).toBe(200);
