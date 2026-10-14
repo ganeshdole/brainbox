@@ -45,6 +45,16 @@ const REPRO_STEPS = "Microsoft.VSTS.TCM.ReproSteps";
 const SYSTEM_INFO = "Microsoft.VSTS.TCM.SystemInfo";
 const PRIORITY = "Microsoft.VSTS.Common.Priority";
 const FILLED = new Set([PRIORITY, REPRO_STEPS, SYSTEM_INFO]);
+/** Categories whose types a report never becomes: the hidden ones (Code
+ *  Review, Feedback...) and the test ones, which have their own category. */
+const NOT_FOR_REPORTS = new Set([
+  "Microsoft.HiddenCategory",
+  "Microsoft.TestCaseCategory",
+  "Microsoft.TestPlanCategory",
+  "Microsoft.TestSuiteCategory",
+  "Microsoft.SharedStepCategory",
+  "Microsoft.SharedParameterCategory",
+]);
 const PAGE_SIZE = 500;
 /** A guard against a server that never stops paging: 10,000 rows is past any picker. */
 const MAX_PAGES = 20;
@@ -133,7 +143,7 @@ export function azureDevops(options: AzureDevopsCatalogOptions): AzureDevopsCata
       ]);
       const hidden = new Set(
         listOf(categories)
-          .filter((c) => c.referenceName === "Microsoft.HiddenCategory")
+          .filter((c) => typeof c.referenceName === "string" && NOT_FOR_REPORTS.has(c.referenceName))
           .flatMap((c) => listOf({ value: c.workItemTypes }).map((t) => str(t.name))),
       );
       return listOf(types)
