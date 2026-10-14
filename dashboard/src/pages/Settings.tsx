@@ -5,6 +5,7 @@ import type { Project } from "@ganeshdole/brainbox-shared";
 import { CopyButton } from "../components/CopyButton";
 import { DomainsEditor } from "../components/DomainsEditor";
 import { Eyebrow } from "../components/Eyebrow";
+import { AzureDevopsDestination } from "../components/AzureDevopsDestination";
 import { GithubDestination } from "../components/GithubDestination";
 import { InstallSnippet } from "../components/InstallSnippet";
 import { FEATURE_BUTTON_SNIPPET } from "../lib/snippet";
@@ -189,8 +190,11 @@ export function Settings() {
                 </div>
               </Section>
 
-              <Section label="GitHub" hint="Open an issue in a repository for each new report.">
-                <GithubDestination projectId={project.id} teamId={project.team.id} />
+              <Section label="Destinations" hint="Where every new report is filed, as soon as it arrives.">
+                <div className="space-y-2.5">
+                  <GithubDestination projectId={project.id} teamId={project.team.id} />
+                  <AzureDevopsDestination projectId={project.id} teamId={project.team.id} />
+                </div>
               </Section>
 
               <Section label="Danger zone" hint="This can't be undone.">

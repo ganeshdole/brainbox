@@ -17,9 +17,12 @@ import { Skeleton } from "./ui/skeleton";
 const selectClass =
   "h-10 w-full min-w-0 rounded-lg border border-interactive bg-interactive px-3 text-sm text-emphasis outline-none transition focus-visible:ring-[3px] focus-visible:ring-focus disabled:opacity-50";
 
+type GithubDestinationRecord = Extract<ProjectDestination, { provider: "github" }>;
+
 interface Loaded {
+  /** Its connections are GitHub's only. */
   state: IntegrationsState;
-  destination: ProjectDestination | null;
+  destination: GithubDestinationRecord | null;
 }
 
 export function GithubDestination({ projectId, teamId }: { projectId: string; teamId: string }) {
@@ -41,7 +44,10 @@ export function GithubDestination({ projectId, teamId }: { projectId: string; te
     Promise.all([api.getIntegrations(teamId), api.listDestinations(projectId)])
       .then(([state, list]) => {
         if (cancelled) return;
-        setLoaded({ state, destination: list.find((d) => d.provider === "github") ?? null });
+        setLoaded({
+          state: { ...state, connections: state.connections.filter((c) => c.provider === "github") },
+          destination: list.find((d): d is GithubDestinationRecord => d.provider === "github") ?? null,
+        });
         setError(null);
       })
       .catch((e: Error) => {
@@ -77,7 +83,9 @@ export function GithubDestination({ projectId, teamId }: { projectId: string; te
         <p className="text-sm text-muted">GitHub isn't set up on this deployment.</p>
       ) : loaded.state.connections.length === 0 ? (
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-default">Open a GitHub issue for every report.</p>
+          <p className="flex items-center gap-2 text-sm text-default">
+            <GithubMark className="size-4 shrink-0" /> GitHub: open an issue for every report.
+          </p>
           <Button type="button" variant="outline" size="sm" onClick={() => void connect()}>
             <GithubMark className="size-4" /> Connect GitHub
           </Button>
@@ -105,7 +113,7 @@ function DestinationForm({
 }: {
   projectId: string;
   connections: IntegrationConnection[];
-  destination: ProjectDestination | null;
+  destination: GithubDestinationRecord | null;
   onConnect: () => void;
   onChanged: () => void;
 }) {
@@ -188,7 +196,7 @@ function RepoSettings({
 }: {
   projectId: string;
   connectionId: string;
-  destination: ProjectDestination | null;
+  destination: GithubDestinationRecord | null;
   busy: boolean;
   run: (action: () => Promise<unknown>) => Promise<void>;
 }) {

@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { Delivery } from "@ganeshdole/brainbox-shared";
 
-import { deliveryLabel, installResult, parseLabels } from "./integrations";
+import {
+  bugVisibilityWarning,
+  defaultBugType,
+  defaultFeatureType,
+  deliveryLabel,
+  installResult,
+  parseLabels,
+} from "./integrations";
 
 const base: Delivery = {
   id: "d1",
@@ -28,6 +35,12 @@ describe("deliveryLabel", () => {
     expect(deliveryLabel({ ...base, status: "failed" }).text).toBe("GitHub: delivery failed");
   });
 
+  it("names Azure DevOps work items by id", () => {
+    expect(
+      deliveryLabel({ ...base, provider: "azure-devops", externalId: "4821", url: "https://dev.azure.com/a/p/_workitems/edit/4821" }),
+    ).toEqual({ text: "Azure DevOps #4821", tone: "ok", href: "https://dev.azure.com/a/p/_workitems/edit/4821" });
+  });
+
   it("marks a pending delivery as in progress", () => {
     expect(deliveryLabel({ ...base, status: "pending" })).toEqual({
       text: "Sending to GitHub…",
@@ -42,6 +55,37 @@ describe("installResult", () => {
     expect(installResult(new URLSearchParams("github=error"))).toBe("error");
     expect(installResult(new URLSearchParams("github=other"))).toBeNull();
     expect(installResult(new URLSearchParams(""))).toBeNull();
+  });
+});
+
+describe("Azure DevOps defaults", () => {
+  const types = (...names: string[]) => names.map((name) => ({ name }));
+
+  it("files bugs as Bug, else Issue, else the first type", () => {
+    expect(defaultBugType(types("Epic", "Bug", "Issue"))).toBe("Bug");
+    expect(defaultBugType(types("Epic", "Issue", "Task"))).toBe("Issue");
+    expect(defaultBugType(types("Epic"))).toBe("Epic");
+    expect(defaultBugType([])).toBe("");
+  });
+
+  it("files feature requests as the process's backlog item", () => {
+    expect(defaultFeatureType(types("Bug", "User Story"))).toBe("User Story");
+    expect(defaultFeatureType(types("Bug", "Product Backlog Item"))).toBe("Product Backlog Item");
+    expect(defaultFeatureType(types("Bug", "Requirement"))).toBe("Requirement");
+    expect(defaultFeatureType(types("Task", "Bug"))).toBe("Bug");
+  });
+});
+
+describe("bugVisibilityWarning", () => {
+  it("warns when a Bug would land on no board", () => {
+    expect(bugVisibilityWarning("Bug", "asTasks", "backlog")).toMatch(/taskboard only/);
+    expect(bugVisibilityWarning("Bug", "off", "current")).toMatch(/doesn't show Bugs/);
+  });
+
+  it("stays quiet when the Bug will show, or for other types", () => {
+    expect(bugVisibilityWarning("Bug", "asTasks", "current")).toBeNull();
+    expect(bugVisibilityWarning("Bug", "asRequirements", "backlog")).toBeNull();
+    expect(bugVisibilityWarning("User Story", "off", "backlog")).toBeNull();
   });
 });
 
