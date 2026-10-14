@@ -278,10 +278,12 @@ stylesheet (about 40 KB, 10 KB gzipped) is left out of your bundle.
 
 Colours are CSS variables, the same design tokens the dashboard uses. The
 container inside every Brainbox shadow root is the part `root`, so your page
-can set the tokens from outside, in either theme:
+can set the tokens from outside, in either theme. Every Brainbox host element
+carries `data-brainbox-host`, while only the widget's own has the id
+`#brainbox-widget`, so this themes all of them:
 
 ```css
-#brainbox-widget::part(root) {
+[data-brainbox-host]::part(root) {
   --bg-brand: #6d28d9;        /* primary buttons, the launcher, the active tool */
   --bg-brand-hover: #5b21b6;
   --text-on-brand: #ffffff;

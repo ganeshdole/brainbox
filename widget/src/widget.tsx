@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import type { TriggerMode, WidgetTheme } from "@ganeshdole/brainbox-shared";
 import { useBrainbox } from "@ganeshdole/brainbox-react";
 import type { Position } from "./lib/position.ts";
+import { BRAINBOX_HOST_ID } from "./lib/shadow-host.ts";
 import { useShadowHost } from "./lib/use-shadow-host.ts";
 import type { WidgetComponents } from "./slots.ts";
 import { useBrainboxWidget } from "./use-brainbox-widget.ts";
@@ -43,7 +44,7 @@ export function BrainboxWidget({
   components,
 }: BrainboxWidgetProps) {
   const brainbox = useBrainbox();
-  const host = useShadowHost(theme);
+  const host = useShadowHost(theme, { id: BRAINBOX_HOST_ID });
   // Our launcher has to show, so `floating` loads the UI straight away;
   // `manual` waits until the host first opens or starts a capture, and keeps
   // it from then on (the UI's own state, e.g. a draft, outlives a close).

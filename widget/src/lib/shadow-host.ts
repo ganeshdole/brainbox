@@ -6,16 +6,24 @@ export interface ShadowHost {
   /** Where to render. Carries `.bb-root`, plus the `.dark` class the
    *  stylesheet keys colours off when the theme is dark (lib/theme.ts). It is
    *  the shadow part `root`, so the host page can set the design tokens on it:
-   *  `#brainbox-widget::part(root) { --bg-brand: #6d28d9 }`. */
+   *  `[data-brainbox-host]::part(root) { --bg-brand: #6d28d9 }`. */
   container: HTMLElement;
 }
 
 /** The `id` of the widget's element on the host page. Exported so a host can
- *  exempt it (see `isBrainboxEvent`) without hard-coding the string. */
+ *  exempt it (see `isBrainboxEvent`) without hard-coding the string. Only
+ *  the widget's own host has it; a page can hold one widget but any number
+ *  of `<BrainboxShadow>`s, and ids must be unique. */
 export const BRAINBOX_HOST_ID = "brainbox-widget";
 
+/** On every Brainbox shadow host, the widget's and each standalone one: what
+ *  `isBrainboxEvent` and page theming (`[data-brainbox-host]::part(root)`)
+ *  match. */
+const HOST_ATTRIBUTE = "data-brainbox-host";
+
 /**
- * Whether an event came from inside the widget. Its UI lives in a shadow root,
+ * Whether an event came from inside the widget, or any other Brainbox shadow
+ * root (`<BrainboxShadow>`). Its UI lives in a shadow root,
  * so outside it `event.target` is our host element, never the textarea or
  * button underneath: to a focus trap on `document` the widget looks like page
  * background. A trap that cancels keys aimed outside its modal can call this
@@ -24,7 +32,7 @@ export const BRAINBOX_HOST_ID = "brainbox-widget";
 export function isBrainboxEvent(event: Event): boolean {
   const path = event.composedPath();
   const nodes = path.length > 0 ? path : [event.target];
-  return nodes.some((n) => n instanceof Element && n.id === BRAINBOX_HOST_ID);
+  return nodes.some((n) => n instanceof Element && n.hasAttribute(HOST_ATTRIBUTE));
 }
 
 /** Pointer events a host commonly treats as "clicked outside". */
@@ -45,10 +53,12 @@ function stopAtHost(event: Event): void {
 /** Build the shadow host (ADR 0001: host CSS cannot reach in, ours cannot leak
  *  out). The stylesheet arrives with the UI chunk (`widget-ui.tsx`), which renders it
  *  into `container`. Detached: the caller appends `element` to `<body>` when
- *  it is ready to show it. */
-export function createShadowHost(): ShadowHost {
+ *  it is ready to show it. `id` is for the widget's own host
+ *  (`BRAINBOX_HOST_ID`); others go without one. */
+export function createShadowHost({ id }: { id?: string } = {}): ShadowHost {
   const element = document.createElement("div");
-  element.id = BRAINBOX_HOST_ID;
+  if (id) element.id = id;
+  element.setAttribute(HOST_ATTRIBUTE, "");
   // keep the widget's own UI out of rrweb session recordings (core's blockClass)
   element.classList.add("rr-block");
   element.style.position = "relative";

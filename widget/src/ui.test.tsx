@@ -14,6 +14,8 @@ import {
   useMultibandVolume,
   widgetCss,
 } from "./ui.ts";
+import { BRAINBOX_HOST_ID, BrainboxWidget, isBrainboxEvent } from "./index.ts";
+import { BrainboxProvider } from "@ganeshdole/brainbox-react";
 
 // The screens through the public `./ui` entry, each rendered on its own with
 // nothing but its props: no widget, no store, no Brainbox instance.
@@ -49,7 +51,7 @@ const pointer = (type: string, target: Element, x: number, y: number) =>
   });
 
 describe("BrainboxShadow", () => {
-  const host = () => document.getElementById("brainbox-widget");
+  const host = () => document.querySelector<HTMLElement>("[data-brainbox-host]");
 
   it("renders a screen into a styled, themed shadow root on <body>, and takes it away again", () => {
     render(
@@ -71,6 +73,36 @@ describe("BrainboxShadow", () => {
 
     render(null);
     expect(host()).toBeNull();
+  });
+
+  it("sits beside the widget without taking its id, and its events still count as Brainbox's", async () => {
+    render(
+      <BrainboxProvider transport={{ send: async () => ({ id: "r1" }) }}>
+        <BrainboxWidget />
+        <BrainboxShadow>
+          <Launcher position="top-left" onClick={() => {}} />
+        </BrainboxShadow>
+      </BrainboxProvider>,
+    );
+    const hosts = Array.from(document.querySelectorAll<HTMLElement>("[data-brainbox-host]"));
+    expect(hosts).toHaveLength(2);
+    // One element with the widget's id: getElementById(BRAINBOX_HOST_ID) is the widget.
+    expect(document.querySelectorAll(`#${BRAINBOX_HOST_ID}`)).toHaveLength(1);
+    const standalone = hosts.find((h) => h.id !== BRAINBOX_HOST_ID);
+    expect(standalone?.id).toBe("");
+
+    // A host's focus trap lets keys typed in the standalone surface through.
+    const button = standalone?.shadowRoot?.querySelector("button");
+    let seen: boolean | null = null;
+    const onKey = (e: KeyboardEvent) => {
+      seen = isBrainboxEvent(e);
+    };
+    document.addEventListener("keydown", onKey);
+    button?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, composed: true }));
+    document.removeEventListener("keydown", onKey);
+    expect(seen).toBe(true);
+    // let the widget's lazy UI land before the next test unmounts it
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
   });
 
   it("uses the host it is given, so a draft can exclude it before anything renders", () => {

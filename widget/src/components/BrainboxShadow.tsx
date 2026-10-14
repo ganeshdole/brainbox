@@ -23,7 +23,7 @@ export interface BrainboxShadowProps {
  * `@ganeshdole/brainbox-widget/ui` or `/markup` in one to get it styled.
  */
 export function BrainboxShadow({ children, theme = "dark", host }: BrainboxShadowProps) {
-  const shadow = useShadowHost(theme, host);
+  const shadow = useShadowHost(theme, { given: host });
   if (!shadow) return null;
   return createPortal(
     <>
