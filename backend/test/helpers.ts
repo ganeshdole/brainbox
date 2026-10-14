@@ -40,7 +40,7 @@ export async function makeUser(
   email = `u-${Math.random().toString(36).slice(2)}@test.local`,
   opts: { subscribed?: boolean } = {},
 ) {
-  const adapter = getStore().authAdapter();
+  const adapter = getStore().auth.adapter();
   const user = await adapter.createUser!({ id: crypto.randomUUID(), email, emailVerified: null, name: "Test" });
   if (opts.subscribed !== false) await subscribeUser(user.id);
   return user;
@@ -53,7 +53,7 @@ export async function subscribeUser(
   status: SubscriptionStatus = "active",
   over: { plan?: PlanId; period?: BillingPeriod } = {},
 ) {
-  await getStore().webhooks.applySubscriptionEvent({
+  await getStore().billing.applySubscriptionEvent({
     eventId: `seed_${crypto.randomUUID()}`,
     eventType: "test.seed",
     change: {
@@ -87,7 +87,7 @@ export async function teamOf(userId: string): Promise<string> {
 /** Puts `userId` in the Team with `role`. */
 export async function addMember(teamId: string, userId: string, role: TeamRole = "member") {
   const store = getStore();
-  const user = (await store.authAdapter().getUser!(userId))!;
+  const user = (await store.auth.adapter().getUser!(userId))!;
   const invite = await store.teams.createInvite({
     teamId,
     email: user.email,

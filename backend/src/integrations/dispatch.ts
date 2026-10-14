@@ -4,7 +4,7 @@ import { env } from "../env.ts";
 import { publicFileUrl } from "../lib/public-files.ts";
 import { toTicket } from "../lib/serialize.ts";
 import { getStorage, readStored } from "../storage/index.ts";
-import type { ConnectionRecord, DeliveryRecord, DestinationRecord, Store } from "../store/index.ts";
+import type { ConnectionRecord, DeliveryRecord, DestinationRecord, FullStore } from "../store/index.ts";
 import { destinationFor, PROVIDER_NAME } from "./registry.ts";
 
 /**
@@ -13,7 +13,7 @@ import { destinationFor, PROVIDER_NAME } from "./registry.ts";
  * send, which also reaches paused destinations).
  */
 export async function deliverIssue(
-  store: Store,
+  store: FullStore,
   issueId: string,
   opts: { force?: boolean } = {},
 ): Promise<DeliveryRecord[]> {
@@ -61,7 +61,7 @@ export async function deliverIssue(
  * tokens, so a 401 there is ours to fix, not the Customer's.
  */
 export async function sendTicket(
-  store: Store,
+  store: FullStore,
   dest: DestinationRecord,
   conn: ConnectionRecord,
   ticket: Ticket,

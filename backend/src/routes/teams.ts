@@ -97,7 +97,7 @@ export const teamsRoute = new Hono<AppEnv>()
     const store = c.get("store");
     const email = normalizeEmail(parsed.data.email);
 
-    const existing = await store.authAdapter().getUserByEmail?.(email);
+    const existing = await store.auth.adapter().getUserByEmail?.(email);
     if (existing && (await store.teams.membership(access.team.id, existing.id))) {
       return c.json({ error: `${email} is already in this team` }, 409);
     }

@@ -138,12 +138,12 @@ describe("signing in with a code", () => {
 describe("withCodeAttemptLimit", () => {
   it("leaves link sign-in alone: a 64-character token needs no cap, and a cap would let anyone cancel a link", () => {
     const adapter: Adapter = { useVerificationToken: async () => null };
-    expect(withCodeAttemptLimit(adapter, getStore().signIn, "link")).toBe(adapter);
+    expect(withCodeAttemptLimit(adapter, getStore().auth, "link")).toBe(adapter);
   });
 
   it("checks at most the allowed number of codes when guesses arrive together", async () => {
     const checked = vi.fn(async () => null);
-    const adapter = withCodeAttemptLimit({ useVerificationToken: checked }, getStore().signIn, "code");
+    const adapter = withCodeAttemptLimit({ useVerificationToken: checked }, getStore().auth, "code");
     await issueCode(EMAIL, "042137");
 
     await Promise.all(

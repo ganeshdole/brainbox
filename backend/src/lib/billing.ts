@@ -1,7 +1,7 @@
 import type { BillingState, PlanId, Subscription, SubscriptionStatus } from "@ganeshdole/brainbox-shared";
 
 import { env } from "../env.ts";
-import type { Store } from "../store/index.ts";
+import type { FullStore } from "../store/index.ts";
 
 // Tickets included per billing cycle, before overage. Mirrors the marketing
 // page's `lib/pricing.ts`; both ultimately mirror the free_threshold on the
@@ -35,7 +35,7 @@ export function isExempt(email: string | null | undefined): boolean {
  * re-deriving the rule, so there is one place to change if the policy changes.
  */
 export async function billingStateFor(
-  store: Store,
+  store: FullStore,
   userId: string,
   email: string | null | undefined,
 ): Promise<BillingState> {
@@ -70,7 +70,7 @@ export async function billingStateFor(
  * stays with the person who pays for it, and covers every Team they own and
  * everyone in those Teams.
  */
-export async function teamHasAccess(store: Store, teamId: string): Promise<boolean> {
+export async function teamHasAccess(store: FullStore, teamId: string): Promise<boolean> {
   if (env.BILLING_DISABLED) return true;
   const owners = (await store.teams.members(teamId)).filter((m) => m.role === "owner");
   for (const owner of owners) {

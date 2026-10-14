@@ -14,7 +14,7 @@ async function seed() {
     throw new Error("seed-e2e-azure-devops seeds only an e2e database");
   }
   const store = getStore();
-  const adapter = store.authAdapter();
+  const adapter = store.auth.adapter();
   if (!adapter.createUser) throw new Error("auth adapter cannot create users");
   const user = await adapter.createUser({
     id: crypto.randomUUID(),

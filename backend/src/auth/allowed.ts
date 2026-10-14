@@ -1,5 +1,5 @@
 import { normalizeEmail } from "../lib/teams.ts";
-import type { Store } from "../store/index.ts";
+import type { FullStore } from "../store/index.ts";
 
 /**
  * Whether this address may sign in, under AUTH_ALLOWED_EMAIL_DOMAINS. With no
@@ -9,7 +9,7 @@ import type { Store } from "../store/index.ts";
  * Team stops their next sign-in.
  */
 export async function signInAllowed(
-  store: Store,
+  store: FullStore,
   email: string | null | undefined,
   domains: readonly string[],
 ): Promise<boolean> {
@@ -21,6 +21,6 @@ export async function signInAllowed(
 
   const now = new Date();
   if ((await store.teams.invitesForEmail(address)).some((i) => i.expiresAt > now)) return true;
-  const user = await store.authAdapter().getUserByEmail?.(address);
+  const user = await store.auth.adapter().getUserByEmail?.(address);
   return !!user && (await store.teams.listForUser(user.id)).length > 0;
 }
