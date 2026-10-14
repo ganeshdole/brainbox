@@ -41,7 +41,7 @@ Everything else is in `backend/src/env.ts`.
 | `STORAGE_DRIVER=s3` | `S3_BUCKET`, `S3_REGION`; `S3_ENDPOINT` for anything but AWS itself; `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` unless an IAM role supplies them; `S3_FORCE_PATH_STYLE=true` for MinIO and Supabase Storage |
 | `STORAGE_DRIVER=r2` | `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` |
 | `DATABASE_DRIVER=custom` or `STORAGE_DRIVER=custom` | an entry that calls the deprecated `setStore()` or `setStorage()` (below) |
-| Sign-in with Google | `GOOGLE_ID`, `GOOGLE_SECRET` |
+| Sign-in with Google | `GOOGLE_ID`, `GOOGLE_SECRET` (without both, sign-in is by email only) |
 | Sign-in by email | `EMAIL_DRIVER=resend`, `RESEND_API_KEY`, `EMAIL_FROM` |
 | A code instead of a link | `AUTH_EMAIL_MODE=code`, or `both` for a code and a link in one email (default `link`) |
 | Only your company signs in | `AUTH_ALLOWED_EMAIL_DOMAINS=acme.com` (comma-separated; unset lets anyone in) |

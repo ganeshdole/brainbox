@@ -199,6 +199,23 @@ describe("a store without teams", () => {
   });
 });
 
+describe("sign-in", () => {
+  it("offers Google only with a client for it", async () => {
+    const { google: _google, ...withoutGoogle } = fromEnv().auth ?? {};
+    const options = async (app: ReturnType<typeof build>) => (await app.request("/api/sign-in-options")).json();
+    const providers = async (app: ReturnType<typeof build>) =>
+      Object.keys((await (await app.request("/api/auth/providers")).json()) as object);
+
+    const emailOnly = build({ auth: withoutGoogle });
+    expect(await options(emailOnly)).toEqual({ email: "both", google: false });
+    expect(await providers(emailOnly)).toEqual(["magic-link"]);
+
+    const both = build({});
+    expect(await options(both)).toEqual({ email: "both", google: true });
+    expect(await providers(both)).toEqual(["google", "magic-link"]);
+  });
+});
+
 describe("createApp", () => {
   it("refuses sign-in or billing the store has no module for", () => {
     expect(() => build({ store: storeWith("teams", "billing") })).toThrow(/auth module/);

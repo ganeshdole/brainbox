@@ -180,9 +180,9 @@ describe("signInCodeEmail", () => {
 });
 
 describe("GET /api/sign-in-options", () => {
-  it("tells the signed-out login page how email sign-in works", async () => {
+  it("tells the signed-out login page how sign-in works", async () => {
     const res = await app.request("/api/sign-in-options");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ email: env.AUTH_EMAIL_MODE });
+    expect(await res.json()).toEqual({ email: env.AUTH_EMAIL_MODE, google: true });
   });
 });

@@ -29,7 +29,7 @@ export interface AppOptions {
 
 /** Signing in to the dashboard (Auth.js). Needs a store with `auth`. */
 export interface AuthOptions {
-  /** Google sign-in. Email sign-in is always offered. */
+  /** Google sign-in; left out, it isn't offered. Email sign-in always is. */
   google?: { clientId: string; clientSecret: string };
   /** What a sign-in email carries: a link, a 6-digit code, or both. Default "link". */
   emailMode?: EmailSignInMode;

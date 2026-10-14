@@ -112,38 +112,10 @@ function authConfig(deps: Deps, auth: ResolvedAuth, basePath: string | undefined
       verifyRequest: `${dashboardOrigin}/login`,
     },
 
+    // Google only where it has a client: without one, its button would start a
+    // sign-in that cannot finish.
     providers: [
-      Google({
-        clientId: auth.google?.clientId ?? "",
-        clientSecret: auth.google?.clientSecret ?? "",
-        authorization: {
-          params: {
-            // Without this Google silently reuses whichever account is already
-            // signed in there, so signing out of Brainbox and back in returns
-            // you to the SAME account with no chooser - which reads as "log out
-            // is broken". Forces the account picker every time.
-            prompt: "select_account",
-          },
-        },
-        // Lets someone who already has a `users` row (created by a magic-link
-        // sign-in, a seed, or an import) sign in with Google on the same
-        // address. Without it Auth.js refuses with OAuthAccountNotLinked and
-        // dumps them on the error page with no way to recover.
-        //
-        // "dangerous" is about providers that do not verify addresses; Google
-        // does, and the profile below only trusts it when email_verified holds.
-        allowDangerousEmailAccountLinking: true,
-        profile(profile) {
-          return {
-            id: profile.sub,
-            name: profile.name,
-            firstName: profile.given_name ?? null,
-            lastName: profile.family_name ?? null,
-            email: profile.email,
-            image: profile.picture,
-          };
-        },
-      }),
+      ...(auth.google ? [google(auth.google)] : []),
       magicLink(deps, auth),
     ],
 
@@ -176,4 +148,38 @@ function authConfig(deps: Deps, auth: ResolvedAuth, basePath: string | undefined
 
     session: { strategy: "jwt" as const },
   };
+}
+
+function google(client: { clientId: string; clientSecret: string }) {
+  return Google({
+    clientId: client.clientId,
+    clientSecret: client.clientSecret,
+    authorization: {
+      params: {
+        // Without this Google silently reuses whichever account is already
+        // signed in there, so signing out of Brainbox and back in returns
+        // you to the SAME account with no chooser - which reads as "log out
+        // is broken". Forces the account picker every time.
+        prompt: "select_account",
+      },
+    },
+    // Lets someone who already has a `users` row (created by a magic-link
+    // sign-in, a seed, or an import) sign in with Google on the same
+    // address. Without it Auth.js refuses with OAuthAccountNotLinked and
+    // dumps them on the error page with no way to recover.
+    //
+    // "dangerous" is about providers that do not verify addresses; Google
+    // does, and the profile below only trusts it when email_verified holds.
+    allowDangerousEmailAccountLinking: true,
+    profile(profile) {
+      return {
+        id: profile.sub,
+        name: profile.name,
+        firstName: profile.given_name ?? null,
+        lastName: profile.family_name ?? null,
+        email: profile.email,
+        image: profile.picture,
+      };
+    },
+  });
 }

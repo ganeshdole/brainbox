@@ -28,7 +28,9 @@ export function fromEnv(): AppDeps {
     ...(env.TRANSCRIPTION_PROVIDER && { transcriber: transcriberFromEnv() }),
     integrations: integrationsFromEnv(),
     auth: {
-      google: { clientId: env.GOOGLE_ID, clientSecret: env.GOOGLE_SECRET },
+      // Both, or Google sign-in is left out (env.ts lets the server boot without).
+      ...(env.GOOGLE_ID &&
+        env.GOOGLE_SECRET && { google: { clientId: env.GOOGLE_ID, clientSecret: env.GOOGLE_SECRET } }),
       emailMode: env.AUTH_EMAIL_MODE,
       allowedEmailDomains: env.AUTH_ALLOWED_EMAIL_DOMAINS,
     },
