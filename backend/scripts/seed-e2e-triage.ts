@@ -51,6 +51,8 @@ async function seed() {
       id,
       projectId: project.id,
       createdAt: new Date(Date.now() - hoursAgo * HOUR),
+      kind: "bug",
+      importance: null,
       text,
       screenshotKey: null,
       cropKey: null,

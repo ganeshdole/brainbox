@@ -4,7 +4,7 @@ import { app } from "../src/app.ts";
 import { stored } from "./harness.ts";
 import { getStorage } from "../src/storage/index.ts";
 import { LocalStorage } from "../src/storage/local.ts";
-import { makeProject, makeUser } from "./helpers.ts";
+import { authCookie, makeProject, makeUser } from "./helpers.ts";
 
 const { transcribeAudioMock, transcriptionEnabledMock } = vi.hoisted(() => ({
   transcribeAudioMock: vi.fn<(audio: Uint8Array) => Promise<string>>(),
@@ -88,6 +88,41 @@ describe("POST /ingest", () => {
     const row = (await stored.issues(id))[0]!;
     expect(row.metadata.identity).toEqual(identity);
     expect(row.metadata.fields).toEqual(fields);
+  });
+
+  it("stores a feature request with no capture, its kind and its importance", async () => {
+    const user = await makeUser();
+    const project = await makeProject(user.id);
+    const { region: _region, ...rest } = payload(project.key);
+    const feature = { ...rest, text: "Export invoices to CSV", kind: "feature", importance: "important" };
+
+    const res = await post(form(feature, null));
+    expect(res.status).toBe(201);
+    const { id } = (await res.json()) as { id: string };
+
+    const row = (await stored.issues(id))[0]!;
+    expect(row).toMatchObject({ kind: "feature", importance: "important", screenshotKey: null, region: null });
+
+    const cookie = await authCookie(user.id);
+    const issue = await (await app.request(`/api/issues/${id}`, { headers: { cookie } })).json();
+    expect(issue).toMatchObject({ kind: "feature", importance: "important", text: "Export invoices to CSV" });
+  });
+
+  it("files a report with no kind as a bug, and drops importance on a bug", async () => {
+    const user = await makeUser();
+    const project = await makeProject(user.id);
+
+    const res = await post(form({ ...payload(project.key), importance: "critical" }));
+    const { id } = (await res.json()) as { id: string };
+    expect((await stored.issues(id))[0]).toMatchObject({ kind: "bug", importance: null });
+  });
+
+  it("rejects a feature request with nothing said (400)", async () => {
+    const user = await makeUser();
+    const project = await makeProject(user.id);
+    const res = await post(form({ ...payload(project.key), text: "", kind: "feature" }, null));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Missing text or audio" });
   });
 
   it("rejects an unknown project key (401)", async () => {

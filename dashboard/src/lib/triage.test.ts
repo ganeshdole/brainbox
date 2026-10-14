@@ -6,6 +6,7 @@ import { applyTriage, byPriority, defaultTab, describeEvent, TRIAGE_TABS } from 
 const issue = (over: Partial<Issue> & { id: string }): Issue => ({
   projectId: "p1",
   createdAt: "2026-10-01T10:00:00.000Z",
+  kind: "bug",
   status: "new",
   priority: "none",
   metadata: {

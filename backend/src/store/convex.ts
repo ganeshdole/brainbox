@@ -8,6 +8,7 @@ import type {
   DeliveryRecord,
   DestinationRecord,
   IssueEventRecord,
+  FeatureRecord,
   IssueRecord,
   ProjectRecord,
   Store,
@@ -73,7 +74,11 @@ export function createConvexStore(convex: ConvexCaller): Store {
     projects: {
       async listForTeams(teamIds) {
         const rows = await convex.query(api.projects.listForTeams, { teamIds });
-        return rows.map((row) => ({ ...toProject(row), issueCount: row.issueCount }));
+        return rows.map((row) => ({
+          ...toProject(row),
+          issueCount: row.issueCount,
+          featureRequestCount: row.featureRequestCount ?? 0,
+        }));
       },
       async create(input) {
         return toProject(await convex.mutation(api.projects.create, input));
@@ -118,6 +123,34 @@ export function createConvexStore(convex: ConvexCaller): Store {
       },
       async listEvents(issueId) {
         return (await convex.query(api.issues.listEvents, { issueId })).map(toIssueEvent);
+
+      },
+      async setFeature(id, featureId) {
+        await convex.mutation(api.issues.setFeature, { id, featureId });
+      },
+    },
+
+    features: {
+      async listForProject(projectId) {
+        return (await convex.query(api.features.listForProject, { projectId })).map((row) => ({
+          ...toFeature(row),
+          requestCount: row.requestCount,
+        }));
+      },
+      async get(id) {
+        return maybe(await convex.query(api.features.get, { id }), toFeature);
+      },
+      async create(input) {
+        return toFeature(await convex.mutation(api.features.create, input));
+      },
+      async update(id, patch) {
+        return maybe(await convex.mutation(api.features.update, { id, ...patch }), toFeature);
+      },
+      async delete(id) {
+        await convex.mutation(api.features.remove, { id });
+      },
+      async merge(fromId, intoId) {
+        await convex.mutation(api.features.merge, { fromId, intoId });
       },
     },
 
@@ -264,21 +297,24 @@ function toProject(
   };
 }
 
+// Issues stored before feature requests or triage lack those fields. They
+// read as bugs, and as "open": the same backfill the Postgres migrations did.
 type IssueDoc = Omit<
   Stamped<IssueRecord, "createdAt">,
-  "status" | "priority" | "closeReason" | "statusChangedAt"
+  "kind" | "importance" | "featureId" | "status" | "priority" | "closeReason" | "statusChangedAt"
 > &
-  Partial<Pick<IssueRecord, "status" | "priority">> & {
+  Partial<Pick<IssueRecord, "kind" | "importance" | "featureId" | "status" | "priority">> & {
     closeReason?: IssueRecord["closeReason"];
     statusChangedAt?: number | null;
   };
 
-// Issues stored before triage have none of its fields: they read as "open",
-// as the Postgres migration backfilled them.
 function toIssue({ status, priority, closeReason, statusChangedAt, ...row }: IssueDoc): IssueRecord {
   return {
     ...row,
     createdAt: new Date(row.createdAt),
+    kind: row.kind ?? "bug",
+    importance: row.importance ?? null,
+    featureId: row.featureId ?? null,
     status: status ?? "open",
     priority: priority ?? "none",
     closeReason: closeReason ?? null,
@@ -288,6 +324,10 @@ function toIssue({ status, priority, closeReason, statusChangedAt, ...row }: Iss
 
 function toIssueEvent(row: Stamped<IssueEventRecord, "createdAt">): IssueEventRecord {
   return { ...row, createdAt: new Date(row.createdAt) };
+}
+
+function toFeature(row: Stamped<FeatureRecord, "createdAt" | "updatedAt">): FeatureRecord {
+  return { ...row, createdAt: new Date(row.createdAt), updatedAt: new Date(row.updatedAt) };
 }
 
 function toConnection(

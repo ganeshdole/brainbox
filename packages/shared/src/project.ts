@@ -20,5 +20,7 @@ export interface Project {
   /** The Team that owns it, and what the caller may do there. */
   team: ProjectTeam;
   createdAt: string; // ISO 8601
-  issueCount?: number; // present on the list endpoint
+  issueCount?: number; // present on the list endpoint, bugs and feature requests
+  /** How many of `issueCount` are feature requests; on the list endpoint. */
+  featureRequestCount?: number;
 }

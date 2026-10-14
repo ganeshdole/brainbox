@@ -1,6 +1,7 @@
 import type { Ticket } from "@ganeshdole/brainbox-integrations";
 import type {
   Delivery,
+  Feature,
   IntegrationConnection,
   Issue,
   IssueEvent,
@@ -19,6 +20,7 @@ import type {
   DeliveryRecord as DeliveryRow,
   DestinationRecord as DestinationRow,
   IssueEventRecord as IssueEventRow,
+  FeatureRecord as FeatureRow,
   IssueRecord as IssueRow,
   ProjectRecord as ProjectRow,
   TeamInviteRecord as TeamInviteRow,
@@ -68,6 +70,9 @@ export async function toIssue(
     priority: row.priority,
     closeReason: row.closeReason ?? undefined,
     statusChangedAt: row.statusChangedAt?.toISOString(),
+    kind: row.kind,
+    importance: row.importance ?? undefined,
+    featureId: row.featureId ?? undefined,
     text: row.text ?? undefined,
     screenshot,
     crop,
@@ -92,6 +97,19 @@ export function toIssueEvent(row: IssueEventRow, names: ReadonlyMap<string, stri
     to: row.to,
     ...(row.actorId && { actor: { id: row.actorId, ...(name && { name }) } }),
     createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export function toFeature(row: FeatureRow, requestCount: number): Feature {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    title: row.title,
+    description: row.description ?? undefined,
+    status: row.status,
+    requestCount,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 
@@ -179,6 +197,8 @@ export function toTicket(row: IssueRow, links: TicketLinkOptions): Ticket {
   return {
     id: row.id,
     createdAt: row.createdAt.toISOString(),
+    kind: row.kind,
+    importance: row.importance ?? undefined,
     text: row.text ?? undefined,
     transcript: row.audioTranscript ?? row.videoTranscript ?? undefined,
     metadata: row.metadata,
@@ -187,6 +207,7 @@ export function toTicket(row: IssueRow, links: TicketLinkOptions): Ticket {
       dashboard: `${links.dashboardOrigin}/projects/${row.projectId}/issues/${row.id}`,
       screenshot: row.screenshotKey ? links.fileUrl(row.screenshotKey) : undefined,
       crop: row.cropKey ? links.fileUrl(row.cropKey) : undefined,
+      audio: row.audioKey ? links.fileUrl(row.audioKey) : undefined,
     },
   };
 }

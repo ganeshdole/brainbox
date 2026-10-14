@@ -8,21 +8,24 @@ import {
 import { BrainboxProvider } from "@ganeshdole/brainbox-react";
 import type { TriggerMode, WidgetTheme } from "@ganeshdole/brainbox-shared";
 import type { Position } from "./lib/position.ts";
-import { widgetStore, type CaptureMode } from "./lib/widget-store.ts";
+import { widgetStore, type StartMode } from "./lib/widget-store.ts";
 import { BrainboxWidget } from "./widget.tsx";
 
 export interface MountOptions extends BrainboxOptions {
   trigger?: TriggerMode;
   position?: Position;
   theme?: WidgetTheme;
+  /** Offer "Suggest a feature" in the chooser (default `true`). */
+  featureRequests?: boolean;
 }
 
 /** The mounted widget, for a host with no React tree of its own. */
 export interface WidgetHandle {
   /** Show the chooser. */
   open(): void;
-  /** Go straight into a screenshot or a recording, skipping the chooser. */
-  start(mode: CaptureMode): void;
+  /** Go straight into a screenshot, a recording or a feature request,
+   *  skipping the chooser. */
+  start(mode: StartMode): void;
   close(): void;
   identify(identity: Identity): void;
   /** Replaces your app's details sent with every report. */
@@ -33,7 +36,13 @@ export interface WidgetHandle {
 
 /** Put the widget on the page. This is what the script-tag bundle calls; a
  *  React host should render `<BrainboxWidget />` instead. */
-export function mount({ trigger, position, theme, ...options }: MountOptions): WidgetHandle {
+export function mount({
+  trigger,
+  position,
+  theme,
+  featureRequests,
+  ...options
+}: MountOptions): WidgetHandle {
   const brainbox = createBrainbox(options);
   const store = widgetStore(brainbox);
 
@@ -45,7 +54,12 @@ export function mount({ trigger, position, theme, ...options }: MountOptions): W
   const root = createRoot(anchor);
   root.render(
     <BrainboxProvider brainbox={brainbox}>
-      <BrainboxWidget trigger={trigger} position={position} theme={theme} />
+      <BrainboxWidget
+        trigger={trigger}
+        position={position}
+        theme={theme}
+        featureRequests={featureRequests}
+      />
     </BrainboxProvider>,
   );
 

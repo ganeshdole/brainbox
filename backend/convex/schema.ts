@@ -7,6 +7,7 @@ import {
   destinationConfig,
   inviteRole,
   issueEventKind,
+  featureFields,
   issueFields,
   nullable,
   planId,
@@ -106,12 +107,20 @@ export default defineSchema({
     // Kept up to date by issues.create and project deletion, so listing
     // projects never reads every issue.
     issueCount: v.number(),
+    // How many of those are feature requests, kept the same way. Absent on
+    // projects from before features: none of their issues were.
+    featureRequestCount: v.optional(v.number()),
   })
     .index("with_id", ["id"])
     .index("by_key", ["key"])
     .index("by_team", ["teamId"]),
 
   issues: defineTable(issueFields)
+    .index("with_id", ["id"])
+    .index("by_project", ["projectId"])
+    .index("by_feature", ["featureId"]),
+
+  features: defineTable(featureFields)
     .index("with_id", ["id"])
     .index("by_project", ["projectId"]),
 

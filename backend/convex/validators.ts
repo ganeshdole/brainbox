@@ -67,6 +67,15 @@ export const issueCloseReason = v.union(
 );
 export const issueEventKind = v.union(v.literal("status"), v.literal("priority"), v.literal("close_reason"));
 
+export const issueKind = v.union(v.literal("bug"), v.literal("feature"));
+export const importance = v.union(v.literal("nice"), v.literal("important"), v.literal("critical"));
+export const featureStatus = v.union(
+  v.literal("under_review"),
+  v.literal("planned"),
+  v.literal("in_progress"),
+  v.literal("shipped"),
+  v.literal("declined"),
+);
 export const transcriptStatus = v.union(v.literal("pending"), v.literal("done"), v.literal("failed"));
 export const provider = v.literal("github");
 export const deliveryStatus = v.union(v.literal("pending"), v.literal("sent"), v.literal("failed"));
@@ -74,6 +83,7 @@ export const destinationConfig = v.object({
   owner: v.string(),
   repo: v.string(),
   labels: v.array(v.string()),
+  featureLabels: v.optional(v.array(v.string())),
 });
 
 export const planId = v.union(v.literal("pro"), v.literal("business"));
@@ -102,6 +112,12 @@ export const issueFields = {
   priority: v.optional(issuePriority),
   closeReason: v.optional(nullable(issueCloseReason)),
   statusChangedAt: v.optional(nullable(v.number())),
+  // Optional because issues stored before feature requests have neither; the
+  // backend's Convex store reads a missing kind as "bug".
+  kind: v.optional(issueKind),
+  importance: v.optional(nullable(importance)),
+  // Optional for the same reason: issues stored before features have none.
+  featureId: v.optional(nullable(v.string())),
   text: nullable(v.string()),
   screenshotKey: nullable(v.string()),
   cropKey: nullable(v.string()),
@@ -116,6 +132,16 @@ export const issueFields = {
   audioTranscriptStatus: nullable(transcriptStatus),
   region: nullable(region),
   metadata: capturedMetadata,
+};
+
+export const featureFields = {
+  id: v.string(),
+  projectId: v.string(),
+  title: v.string(),
+  description: nullable(v.string()),
+  status: featureStatus,
+  createdAt: v.number(),
+  updatedAt: v.number(),
 };
 
 export const issueDoc = v.object(issueFields);

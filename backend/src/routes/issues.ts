@@ -10,6 +10,8 @@ import type { IssueRecord } from "../store/index.ts";
 import { triageError } from "../store/issue-triage.ts";
 import type { AppEnv } from "../types.ts";
 
+const featureLink = z.object({ featureId: z.string().min(1).nullable() });
+
 const triageSchema = z
   .object({
     status: z.enum(["new", "open", "in_progress", "resolved", "closed"]).optional(),
@@ -94,8 +96,28 @@ export const issuesRoute = new Hono<AppEnv>()
     }
     return c.json(events.map((e) => toIssueEvent(e, names)));
   })
-  // Any member may resend: a report that failed to reach GitHub is everyone's
-  // problem, and resending changes nothing but the delivery.
+  // Attach a feature request to one of its project's features, or send it
+  // back to waiting with { featureId: null }.
+  .put("/:id/feature", async (c) => {
+    const parsed = featureLink.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Invalid body", issues: parsed.error.issues }, 400);
+    const access = await issueAccess(c, c.req.param("id"));
+    if (access instanceof Response) return access;
+    const { issue } = access;
+    const store = c.get("store");
+    if (issue.kind !== "feature") return c.json({ error: "Only a feature request joins a feature" }, 400);
+    const { featureId } = parsed.data;
+    if (featureId !== null) {
+      const feature = await store.features.get(featureId);
+      if (!feature || feature.projectId !== issue.projectId) {
+        return c.json({ error: "Feature not found" }, 404);
+      }
+    }
+    await store.issues.setFeature(issue.id, featureId);
+    const row = await store.issues.get(issue.id);
+    if (!row) return c.json({ error: "Not found" }, 404);
+    return c.json(await toIssue(row, getStorage()));
+  })
   .post("/:id/deliveries", async (c) => {
     const access = await issueAccess(c, c.req.param("id"));
     if (access instanceof Response) return access;

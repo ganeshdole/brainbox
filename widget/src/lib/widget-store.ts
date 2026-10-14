@@ -3,6 +3,9 @@ import type { Brainbox } from "@ganeshdole/brainbox-core";
 /** What a report starts as: a marked-up screenshot, or a recording. */
 export type CaptureMode = "screenshot" | "record";
 
+/** Where `start()` lands: a capture, or the feature-request form. */
+export type StartMode = CaptureMode | "feature";
+
 /** Whether the widget UI is open, shared between `<BrainboxWidget />` and
  *  whoever wants to open it: a host button, `window.Brainbox.open()`. Core
  *  has no idea of "open"; that is a UI matter, so it lives here. */
@@ -11,18 +14,18 @@ export interface WidgetStore {
   subscribe(listener: () => void): () => void;
   /** Open on the chooser, where the user picks screenshot or recording. */
   open(): void;
-  /** Open straight into a screenshot or a recording, skipping the chooser.
-   *  For a host that offers the two choices in its own UI. */
-  start(mode: CaptureMode): void;
+  /** Open straight into a screenshot, a recording or a feature request,
+   *  skipping the chooser. For a host that offers the choices in its own UI. */
+  start(mode: StartMode): void;
   /** The mode `start()` asked for, cleared as it is read. The widget reads it
    *  when it opens; null means show the chooser. */
-  takeStart(): CaptureMode | null;
+  takeStart(): StartMode | null;
   close(): void;
 }
 
 export function createWidgetStore(): WidgetStore {
   let open = false;
-  let requested: CaptureMode | null = null;
+  let requested: StartMode | null = null;
   const listeners = new Set<() => void>();
   const notify = () => {
     for (const listener of listeners) listener();

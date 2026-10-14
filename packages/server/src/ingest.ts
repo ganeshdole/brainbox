@@ -18,8 +18,9 @@ export const DEFAULT_INGEST_LIMITS: IngestLimits = {
   audioBytes: 10 * 1024 * 1024,
 };
 
-/** The file parts of an upload. A report carries a screenshot, a session
- *  recording or a video (at least one), plus optional audio. */
+/** The file parts of an upload. A bug report carries a screenshot, a session
+ *  recording or a video (at least one), plus optional audio. A feature request
+ *  needs none of them, only text or audio. */
 export interface IngestFiles {
   screenshot?: File;
   video?: File;
@@ -75,6 +76,8 @@ export async function parseIngest(request: Request, limits: IngestLimits): Promi
     return { ok: false, status: 400, body: { error: "Invalid payload", issues: result.error.issues } };
   }
 
+  const feedback = result.data;
+
   // --- capture: a screenshot, a session recording, or a video ---
   const screenshot = file(form, "screenshot");
   if (screenshot) {
@@ -91,8 +94,6 @@ export async function parseIngest(request: Request, limits: IngestLimits): Promi
   const session = file(form, "session");
   if (session && session.size > limits.sessionBytes) return reject(413, "session too large");
 
-  if (!screenshot && !video && !session) return reject(400, "Missing screenshot, video or session");
-
   // --- audio (optional) ---
   const audio = file(form, "audio");
   if (audio) {
@@ -100,7 +101,15 @@ export async function parseIngest(request: Request, limits: IngestLimits): Promi
     if (audio.size > limits.audioBytes) return reject(413, "audio too large");
   }
 
-  return { ok: true, payload: result.data, files: { screenshot, video, session, audio }, form };
+  // A bug is shown: it needs a capture. A feature request is told: it needs
+  // words, typed or spoken, and a screenshot is only a bonus.
+  if (feedback.kind === "feature") {
+    if (!feedback.text?.trim() && !audio) return reject(400, "Missing text or audio");
+  } else if (!screenshot && !video && !session) {
+    return reject(400, "Missing screenshot, video or session");
+  }
+
+  return { ok: true, payload: feedback, files: { screenshot, video, session, audio }, form };
 }
 
 function file(form: FormData, name: string): File | undefined {

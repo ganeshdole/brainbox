@@ -30,8 +30,9 @@ Ten surfaces, one workspace package each:
   `parseIngest(request, limits)` over a web-standard `Request`, zod only. Its
   README is the written-down upload format.
 - `packages/integrations/` - where a report goes next (`@ganeshdole/brainbox-integrations`):
-  the `Destination` interface, `renderTicket()`, and `githubIssues()` plus the
-  GitHub App helpers. `fetch` and WebCrypto only. The backend decides which
+  the `Destination` interface, `renderTicket()` / `renderTicketHtml()`,
+  `githubIssues()` plus the GitHub App helpers, and `azureDevopsWorkItems()`
+  plus the Azure DevOps catalog and Entra sign-in helpers. `fetch` and WebCrypto only. The backend decides which
   project has which destination and when to deliver.
 - `backend/` - the API (`@ganeshdole/brainbox-backend`). Hono over a pluggable
   store (Postgres or Convex) and file storage (local, R2 or Convex), runnable as

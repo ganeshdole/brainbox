@@ -4,6 +4,8 @@ import type {
   CapturedMetadata,
   DeliveryStatus,
   DestinationConfig,
+  FeatureStatus,
+  Importance,
   IntegrationProvider,
   InviteRole,
   IssueCloseReason,
@@ -11,6 +13,7 @@ import type {
   IssuePriority,
   IssueStatus,
   IssueTriagePatch,
+  IssueKind,
   PlanId,
   ProjectKey,
   Region,
@@ -87,6 +90,11 @@ export interface IssueRecord {
   priority: IssuePriority;
   closeReason: IssueCloseReason | null;
   statusChangedAt: Date | null;
+  kind: IssueKind;
+  /** Only on a feature request, and only when the end-user picked one. */
+  importance: Importance | null;
+  /** The Feature a feature request is attached to; null while unsorted. */
+  featureId: string | null;
   text: string | null;
   screenshotKey: string | null;
   cropKey: string | null;
@@ -111,6 +119,7 @@ export type NewIssue = Omit<
   | "createdAt"
   | "audioTranscript"
   | "videoTranscript"
+  | "featureId"
   | "status"
   | "priority"
   | "closeReason"
@@ -129,6 +138,16 @@ export interface IssueEventRecord {
   from: string | null;
   to: string | null;
   createdAt: Date;
+}
+
+export interface FeatureRecord {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string | null;
+  status: FeatureStatus;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface ConnectionRecord {
@@ -269,8 +288,11 @@ export interface Store {
   };
 
   readonly projects: {
-    /** Newest first, each with its issue count. */
-    listForTeams(teamIds: string[]): Promise<Array<ProjectRecord & { issueCount: number }>>;
+    /** Newest first, each with its issue count and how many of those are
+     *  feature requests. */
+    listForTeams(
+      teamIds: string[],
+    ): Promise<Array<ProjectRecord & { issueCount: number; featureRequestCount: number }>>;
     create(input: Omit<ProjectRecord, "id" | "createdAt">): Promise<ProjectRecord>;
     get(id: string): Promise<ProjectRecord | null>;
     getByKey(key: ProjectKey): Promise<ProjectRecord | null>;
@@ -295,6 +317,31 @@ export interface Store {
     triage(ids: readonly string[], patch: IssueTriagePatch, actorId: string | null): Promise<IssueRecord[]>;
     /** Oldest first. */
     listEvents(issueId: string): Promise<IssueEventRecord[]>;
+    /** Attach a feature request to a Feature, or with null send it back to
+     *  waiting. The caller checks both belong to the same project. */
+    setFeature(id: string, featureId: string | null): Promise<void>;
+  };
+
+  readonly features: {
+    /** Newest first, each with how many requests are attached. */
+    listForProject(projectId: string): Promise<Array<FeatureRecord & { requestCount: number }>>;
+    get(id: string): Promise<FeatureRecord | null>;
+    /** Starts `under_review` unless a status is given. */
+    create(input: {
+      projectId: string;
+      title: string;
+      description: string | null;
+      status?: FeatureStatus;
+    }): Promise<FeatureRecord>;
+    update(
+      id: string,
+      patch: { title?: string; description?: string | null; status?: FeatureStatus },
+    ): Promise<FeatureRecord | null>;
+    /** Its requests go back to waiting. */
+    delete(id: string): Promise<void>;
+    /** Moves every request of `fromId` onto `intoId` and deletes `fromId`, in
+     *  one step: two features found to be the same thing become one. */
+    merge(fromId: string, intoId: string): Promise<void>;
   };
 
   readonly integrations: {

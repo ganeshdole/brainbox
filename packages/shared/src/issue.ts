@@ -1,3 +1,4 @@
+import type { Importance, IssueKind } from "./feedback.ts";
 import type { Delivery } from "./integrations.ts";
 import type { CapturedMetadata } from "./metadata.ts";
 import type { Region } from "./region.ts";
@@ -55,6 +56,13 @@ export interface Issue {
   closeReason?: IssueCloseReason;
   /** When `status` last changed; absent until it first does. */
   statusChangedAt?: string;
+  /** A bug report or a feature request. */
+  kind: IssueKind;
+  /** How much a feature request matters to whoever asked; never on a bug. */
+  importance?: Importance;
+  /** The Feature a feature request is attached to. Absent means it is new
+   *  and waiting to be sorted into one. Never on a bug. */
+  featureId?: string;
   text?: string;
   /** Present for screenshot submissions (absent for screen recordings). */
   screenshot?: StoredFile;

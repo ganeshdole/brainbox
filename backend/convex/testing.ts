@@ -22,6 +22,7 @@ const TABLES: TableNames[] = [
   "projects",
   "issues",
   "issueEvents",
+  "features",
   "connections",
   "destinations",
   "deliveries",

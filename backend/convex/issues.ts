@@ -36,6 +36,7 @@ const {
   priority: _priority,
   closeReason: _closeReason,
   statusChangedAt: _statusChangedAt,
+  featureId: _feature,
   ...newIssueFields
 } = issueFields;
 
@@ -57,8 +58,12 @@ export const create = serverMutation({
       statusChangedAt: null,
       audioTranscript: null,
       videoTranscript: null,
+      featureId: null,
     });
-    await ctx.db.patch(project._id, { issueCount: project.issueCount + 1 });
+    await ctx.db.patch(project._id, {
+      issueCount: project.issueCount + 1,
+      ...(input.kind === "feature" && { featureRequestCount: (project.featureRequestCount ?? 0) + 1 }),
+    });
   },
 });
 
@@ -146,5 +151,16 @@ export const listEvents = serverQuery({
       .withIndex("by_issue", (q) => q.eq("issueId", issueId))
       .collect();
     return rows.map(strip);
+  },
+});
+
+export const setFeature = serverMutation({
+  args: { id: v.string(), featureId: v.union(v.string(), v.null()) },
+  handler: async (ctx, { id, featureId }) => {
+    const row = await ctx.db
+      .query("issues")
+      .withIndex("with_id", (q) => q.eq("id", id))
+      .unique();
+    if (row) await ctx.db.patch(row._id, { featureId });
   },
 });
