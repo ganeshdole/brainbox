@@ -83,6 +83,13 @@ The product has three distinct surfaces - keep them separate:
 - **Delivery** - one issue sent to one destination: pending, sent (with the
   GitHub issue number or work item id, and link) or failed (with the reason,
   and a retry).
+- **Work item update** - a change the team made in Azure DevOps to a work
+  item an issue became: a new state, a comment, or both, with who and when.
+  Arrives through a service hook, is recorded once per revision, and moves
+  the issue's triage status by the state's category. Each one is passed on to
+  the host app through the **status webhook** (`STATUS_WEBHOOK_URL`), a
+  signed event documented in `docs/status-webhook.md`, so the host app can
+  tell the end-user who reported it. A failed call is kept, and can be retried.
 
 ## Data hierarchy
 

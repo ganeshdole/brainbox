@@ -13,9 +13,18 @@ recording and voice note uploaded as attachments, the dashboard's
 Destinations section, docs, and `e2e/tests/azure-devops.spec.ts` against the
 fake.
 
+Phase 2, first part (stacked on Phase 1): work item updates come back
+through a "Work item updated" service hook (`/webhooks/azure-devops`, one
+shared `AZURE_DEVOPS_HOOK_SECRET`). They're recorded once per revision, move
+triage by state category, and go on to the host app as a signed, versioned
+event (`STATUS_WEBHOOK_URL`, `docs/status-webhook.md`). The subscription is
+made by hand (`docs/self-hosting.md`).
+
 Not built yet: Entra "Sign in with Microsoft" (section 2's main path; the
 `auth` field and `authFor()` are the seam), reconnect emails, "retry N failed
-reports", Phase 2 and 3, and the marketing page.
+reports", creating the service hook from Brainbox, automatic retries of the
+status webhook, Brainbox comments back to Azure DevOps, Phase 3, and the
+marketing page.
 
 ## 1. The problem
 

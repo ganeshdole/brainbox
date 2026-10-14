@@ -46,6 +46,8 @@ Everything else is in `backend/src/env.ts`.
 | Only your company signs in | `AUTH_ALLOWED_EMAIL_DOMAINS=acme.com` (comma-separated; unset lets anyone in) |
 | GitHub destinations | `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_WEBHOOK_SECRET` |
 | Azure DevOps destinations | `INTEGRATIONS_ENCRYPTION_KEY` (below) |
+| Azure DevOps updates coming back | `AZURE_DEVOPS_HOOK_SECRET`, plus a service hook (below) |
+| Telling your app about them | `STATUS_WEBHOOK_URL`, `STATUS_WEBHOOK_SECRET` ([the contract](status-webhook.md)) |
 
 A code suits people who read email on a different device from the one they
 sign in on, or whose mail scanner opens links before they do. Only the newest
@@ -82,6 +84,64 @@ The token needs **Work Items (Read & write)** and **Project and Team
 (Read)**. Work items are created as the token's owner, so a service account's
 token keeps working when people leave. When Azure DevOps rejects the token
 (expired or revoked), deliveries stop and the dashboard asks for a new one.
+
+## Azure DevOps updates
+
+When someone changes a work item Brainbox created (Active, Resolved,
+Closed...), or comments on it, Azure DevOps can tell Brainbox through a
+service hook. Brainbox then:
+
+- records the change on the report, so the dashboard shows the item's state
+  beside its link;
+- moves the report's status by the state's category: Proposed → open,
+  InProgress → in progress, Resolved and Completed → resolved,
+  Removed → closed (won't fix);
+- POSTs a signed event to `STATUS_WEBHOOK_URL`, if set. That's how your own
+  app can tell the person who reported it. [The event](status-webhook.md) is
+  versioned and documented.
+
+Set `AZURE_DEVOPS_HOOK_SECRET` to a long random value (`openssl rand -hex 32`).
+It's the password the service hook sends. Without it, Brainbox answers the hook
+with 503 and Azure DevOps keeps retrying. Then create the subscription, once
+per Azure DevOps project. It needs a project administrator, or someone with
+"Edit subscriptions" on service hooks:
+
+1. In Azure DevOps, open the project, then **Project settings** →
+   **Service hooks** → **+ Create subscription**.
+2. Pick **Web Hooks** → **Next**.
+3. Trigger: **Work item updated**. Leave **Field** empty, so both state
+   changes and comments arrive. Narrow by **Area path** (the team's area) or
+   **Work item type** if you like; Brainbox ignores work items it didn't
+   create either way. Leave "Links are added or removed" unticked. **Next**.
+4. Action:
+   - **URL**: `https://<your API>/webhooks/azure-devops`
+   - **Basic authentication username**: anything, e.g. `brainbox`
+   - **Basic authentication password**: the value of `AZURE_DEVOPS_HOOK_SECRET`
+   - **Resource details to send**: **All** (Brainbox reads the current state
+     from them)
+   - **Messages to send** and **Detailed messages to send**: None
+   - **Resource version**: 1.0
+5. **Test** shows Azure DevOps' sample event, which Brainbox answers with
+   `{"ok":true,"recorded":0}`, since it isn't one of its work items. Then
+   **Finish**.
+
+Each update is applied once: Azure DevOps retrying the same revision changes
+nothing. The status webhook is optional; without it, changes are still
+recorded and shown. A failed call to it is kept on the report, and anyone in
+the Team can send it again from there.
+
+To try the whole loop locally without Azure DevOps:
+
+```
+pnpm -F @ganeshdole/brainbox-backend status-receiver   # STATUS_WEBHOOK_SECRET=whsec_...; prints what it gets
+FAKE_ADO_HOOK_URL=http://localhost:8787/webhooks/azure-devops FAKE_ADO_HOOK_SECRET=<hook secret> \
+  pnpm -F @ganeshdole/brainbox-backend fake:ado
+```
+
+Run the backend with `AZURE_DEVOPS_URL=http://localhost:8790`, the same
+`AZURE_DEVOPS_HOOK_SECRET`, `STATUS_WEBHOOK_URL=http://localhost:8791/brainbox`
+and the same `STATUS_WEBHOOK_SECRET`. Send a report, open its work item in the
+fake, and change its state or comment: the receiver prints the event.
 
 ## Teams, invites and who can sign in
 
