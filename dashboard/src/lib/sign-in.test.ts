@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { API_URL } from "./authConfig.ts";
 import {
   codeSignInUrl,
-  fetchEmailSignInMode,
+  fetchSignInOptions,
   isSignInCode,
   savePendingSignIn,
   takePendingSignIn,
@@ -31,31 +31,36 @@ describe("isSignInCode", () => {
   });
 });
 
-describe("fetchEmailSignInMode", () => {
+describe("fetchSignInOptions", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   function respond(body: unknown, ok = true) {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok, status: ok ? 200 : 404, json: async () => body })));
   }
 
-  it("reads the backend's mode", async () => {
-    respond({ email: "code" });
-    await expect(fetchEmailSignInMode()).resolves.toBe("code");
+  it("reads the backend's mode and whether it offers Google", async () => {
+    respond({ email: "code", google: false });
+    await expect(fetchSignInOptions()).resolves.toEqual({ email: "code", google: false });
   });
 
-  it("falls back to links for a backend that predates the setting", async () => {
+  it("offers Google unless the backend says it has none", async () => {
+    respond({ email: "both" });
+    await expect(fetchSignInOptions()).resolves.toEqual({ email: "both", google: true });
+  });
+
+  it("falls back to links and Google for a backend that predates the settings", async () => {
     respond({ error: "Not found" }, false);
-    await expect(fetchEmailSignInMode()).resolves.toBe("link");
+    await expect(fetchSignInOptions()).resolves.toEqual({ email: "link", google: true });
   });
 
   it("falls back to links for an answer it does not know", async () => {
     respond({ email: "carrier-pigeon" });
-    await expect(fetchEmailSignInMode()).resolves.toBe("link");
+    await expect(fetchSignInOptions()).resolves.toEqual({ email: "link", google: true });
   });
 
   it("falls back to links when the API is unreachable", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("offline"))));
-    await expect(fetchEmailSignInMode()).resolves.toBe("link");
+    await expect(fetchSignInOptions()).resolves.toEqual({ email: "link", google: true });
   });
 });
 
