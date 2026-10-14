@@ -14,7 +14,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:seed": "tsx --env-file=.env scripts/seed.ts"
+    "db:seed": "tsx --env-file=.env scripts/seed.ts",
+    "fake:ado": "tsx scripts/fake-azure-devops.ts"
   },
   "dependencies": {
     "@ai-sdk/groq": "^4.0.5",
