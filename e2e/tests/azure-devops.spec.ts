@@ -8,7 +8,7 @@ import { person, signIn } from "./people.ts";
 
 // Azure DevOps end to end, against the local fake (backend/scripts/
 // fake-azure-devops.ts): a Customer connects with a token and picks a team's
-// board, then a report sent the way HapiVet's app sends it (screenshot,
+// board, then a report sent the way a host app sends it (screenshot,
 // screen recording, voice note, host fields) lands there as a work item with
 // all three attached.
 
@@ -62,15 +62,15 @@ test("a report from the app becomes an Azure DevOps work item with its files", a
 
   let issueId = "";
   await test.step("the app sends a report", async () => {
-    await grace.say("a vet reports a problem from the HapiVet app: screenshot, recording and voice note");
+    await grace.say("a customer reports a problem from the app: screenshot, recording and voice note");
     const res = await request.post(`${API_URL}/ingest`, {
       multipart: {
         json: JSON.stringify({
           projectKey,
           kind: "bug",
-          text: "Invoice total doesn't include the vaccine line",
+          text: "Invoice total doesn't include the shipping line",
           metadata: {
-            url: "https://app.hapivet.ai/invoices/7",
+            url: "https://app.fabrikam.example/invoices/7",
             title: "Invoice 7",
             viewport: { width: 1440, height: 900 },
             devicePixelRatio: 2,
@@ -78,9 +78,9 @@ test("a report from the app becomes an Azure DevOps work item with its files", a
             language: "en-US",
             timezone: "America/New_York",
             consoleErrors: ["TypeError: line.total is undefined"],
-            identity: { id: "u-9", name: "Dr. Ana Lima", email: "ana@happypaws.example" },
+            identity: { id: "u-9", name: "Ana Lima", email: "ana@fabrikam.example" },
             fields: [
-              { label: "Organization", value: "Happy Paws" },
+              { label: "Organization", value: "Fabrikam Retail" },
               { label: "Location", value: "Downtown" },
               { label: "Tenant ID", value: "ten-1" },
               { label: "Location ID", value: "loc-3" },
@@ -109,7 +109,7 @@ test("a report from the app becomes an Azure DevOps work item with its files", a
 
     await page.goto(href ?? "");
     await grace.say("opens the work item: screenshot inline, recording and voice note attached, host fields listed");
-    await expect(page.getByRole("heading", { name: "Invoice total doesn't include the vaccine line" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Invoice total doesn't include the shipping line" })).toBeVisible();
     await expect(page.getByText("Attachments (3)")).toBeVisible();
     for (const name of ["screenshot.png", "recording.webm", "audio.webm"]) {
       await expect(page.getByRole("link", { name: new RegExp(name) })).toBeVisible();
@@ -117,7 +117,7 @@ test("a report from the app becomes an Azure DevOps work item with its files", a
     await expect(page.getByRole("link", { name: "Watch the recording" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Listen to the voice note" })).toBeVisible();
     await expect(page.locator(".rich img").first()).toBeVisible();
-    for (const text of ["Dr. Ana Lima <ana@happypaws.example>", "Happy Paws", "Downtown", "ten-1", "loc-3"]) {
+    for (const text of ["Ana Lima <ana@fabrikam.example>", "Fabrikam Retail", "Downtown", "ten-1", "loc-3"]) {
       await expect(page.getByText(text, { exact: true })).toBeVisible();
     }
     await expect(page.getByText("Web Shop\\Sprint 42")).toBeVisible();

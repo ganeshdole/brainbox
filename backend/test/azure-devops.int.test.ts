@@ -243,7 +243,7 @@ describe("delivering to Azure DevOps", () => {
         kind: "bug",
         text: "Invoice total is wrong",
         metadata: {
-          url: "https://app.hapivet.ai/invoices/7",
+          url: "https://app.fabrikam.example/invoices/7",
           title: "Invoice 7",
           viewport: { width: 1440, height: 900 },
           devicePixelRatio: 2,
@@ -251,9 +251,9 @@ describe("delivering to Azure DevOps", () => {
           language: "en-US",
           timezone: "America/New_York",
           consoleErrors: ["TypeError: total is undefined"],
-          identity: { id: "u-9", name: "Dr. Ana Lima", email: "ana@clinic.example" },
+          identity: { id: "u-9", name: "Ana Lima", email: "ana@fabrikam.example" },
           fields: [
-            { label: "Organization", value: "Happy Paws" },
+            { label: "Organization", value: "Fabrikam Retail" },
             { label: "Location", value: "Downtown" },
             { label: "Tenant ID", value: "ten-1" },
             { label: "Location ID", value: "loc-3" },
@@ -289,7 +289,7 @@ describe("delivering to Azure DevOps", () => {
     expect(body).toContain(">Watch the recording</a>");
     expect(body).toContain(">Listen to the voice note</a>");
     expect(body).not.toContain("/f/");
-    for (const text of ["Dr. Ana Lima &lt;ana@clinic.example&gt;", "Happy Paws", "Downtown", "ten-1", "loc-3", "TypeError: total is undefined"]) {
+    for (const text of ["Ana Lima &lt;ana@fabrikam.example&gt;", "Fabrikam Retail", "Downtown", "ten-1", "loc-3", "TypeError: total is undefined"]) {
       expect(body).toContain(text);
     }
     expect(fieldOf(ops, "System.IterationPath")).toBe("Web\\Sprint 12");

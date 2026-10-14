@@ -9,7 +9,7 @@ connections).
 
 ## Context
 
-Customers whose engineering runs on Azure Boards, HapiVet first, copied
+Customers whose engineering runs on Azure Boards, starting with the first to ask, copied
 Brainbox reports into Azure DevOps by hand. A report there has to look
 native: the right type, on the right team's board, the screenshot inline, and
 the recording and voice note one click away.
@@ -20,7 +20,7 @@ Azure DevOps differs from GitHub in three ways that shaped this:
   our key; Azure DevOps needs a token we keep.
 - **What lands where is the process's business.** A team's board is its area
   path, and its sprint is an iteration. A team can show Bugs on the backlog,
-  on the taskboard only (`asTasks`, as HapiVet's does) or nowhere. Bugs keep
+  on the taskboard only (`asTasks`, as the first customer's team does) or nowhere. Bugs keep
   the report in Repro Steps, not Description. Processes add required fields
   of their own.
 - **Sign-in options are in flux.** Azure DevOps OAuth apps take no new

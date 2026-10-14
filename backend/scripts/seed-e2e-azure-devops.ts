@@ -22,10 +22,10 @@ async function seed() {
     emailVerified: null,
     name: "Grace Hopper",
   });
-  const team = await store.teams.create({ name: "HapiVet", ownerId: user.id });
+  const team = await store.teams.create({ name: "Contoso", ownerId: user.id });
   const project = await store.projects.create({
     teamId: team.id,
-    name: "HapiVet app",
+    name: "Contoso app",
     key: generateProjectKey(),
     allowedOrigins: [],
   });
