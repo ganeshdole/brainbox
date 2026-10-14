@@ -57,8 +57,9 @@ test` - but the full `verify` is the gate.
 `e2e/` drives the real backend and dashboard in Chromium over Postgres
 (`brainbox_e2e_<checkout folder>`, dropped and recreated every run by
 `backend/scripts/reset-e2e-db.ts`), and records a video of every person a test
-signs in into `e2e/test-results/`. It is not part of `verify`. Run it with `pnpm -F @ganeshdole/brainbox-e2e e2e`
-(once per machine: `pnpm -F @ganeshdole/brainbox-e2e exec playwright install
+signs in into `e2e/test-results/`. A test that needs data the UI can't create
+seeds it after the reset (`backend/scripts/seed-e2e-*.ts`). It is not part of
+`verify`. Run it with `pnpm -F @ganeshdole/brainbox-e2e e2e` (once per machine: `pnpm -F @ganeshdole/brainbox-e2e exec playwright install
 chromium`); `SLOW_MO=500` slows it down enough to follow the video.
 
 ## Publishing

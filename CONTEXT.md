@@ -97,3 +97,29 @@ Project ──< Feature ──< Issue   (feature requests only; a new one has no
   kind): screenshot, audio, text, region coords (the area the end-user's marks
   cover), and auto-captured metadata. Filed under the project named by the
   project key on the widget's POST.
+
+## Issue lifecycle (triage)
+
+The Customer's side of an Issue: what they decided about it, not what the
+End-user sent.
+
+- **Status** - where the Issue is in triage, one of a fixed set:
+  - `new` - arrived, nobody has triaged it. Every Issue starts here; the
+    **Inbox** is the Issues in `new`.
+  - `open` - accepted, still to do.
+  - `in_progress` - someone is on it.
+  - `resolved` - fixed. Can be reopened.
+  - `closed` - won't be acted on, with a **Close reason**: `wont_fix`,
+    `duplicate`, `not_reproducible` or `spam`. Only a closed Issue has one.
+
+  Issues that existed before triage count as `open`, not `new`.
+- **Priority** - how urgent the Customer judges the Issue: `urgent`, `high`,
+  `medium`, `low` or `none` (the default). The same scale as Linear and GitHub
+  Projects. It is the Customer's call; how much a request matters to the
+  End-user who sent it is a separate thing.
+- **Triage** - changing an Issue's status, priority or close reason. Every
+  Member of the project's Team can triage, whatever their role, one Issue or
+  many at once.
+- **Activity** - the Issue's append-only log of triage changes: who changed
+  which field from what to what, and when. Written together with the change
+  itself, and removed with the Issue.

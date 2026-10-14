@@ -18,6 +18,8 @@ import {
 describe("visibleReports", () => {
   const issue = (overrides: Partial<Issue> & { id: string; projectId: string }): Issue => ({
     createdAt: "2026-07-24T10:00:00.000Z",
+    status: "new",
+    priority: "none",
     kind: "bug",
     metadata: meta(),
     ...overrides,

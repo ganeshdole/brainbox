@@ -2,11 +2,16 @@ import { index, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import type {
   CapturedMetadata,
   Importance,
+  IssueCloseReason,
+  IssueEvent,
   IssueKind,
+  IssuePriority,
+  IssueStatus,
   Region,
   TranscriptStatus,
 } from "@ganeshdole/brainbox-shared";
 
+import { users } from "./auth-schema.ts";
 import { features } from "./features.ts";
 import { projects } from "./projects.ts";
 
@@ -30,6 +35,12 @@ export const issues = pgTable(
   createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
     .notNull()
     .defaultNow(),
+  // Triage. New reports arrive as "new"; the migration that added these set
+  // older issues to "open", so nobody opens an inbox of every report ever sent.
+  status: text("status").$type<IssueStatus>().notNull().default("new"),
+  priority: text("priority").$type<IssuePriority>().notNull().default("none"),
+  closeReason: text("close_reason").$type<IssueCloseReason>(),
+  statusChangedAt: timestamp("status_changed_at", { mode: "date", withTimezone: true }),
   // A bug report or a feature request; rows from before feature requests are bugs.
   kind: text("kind").$type<IssueKind>().notNull().default("bug"),
   // How much a feature request matters to whoever asked; null on bugs.
@@ -63,4 +74,26 @@ export const issues = pgTable(
   metadata: jsonb("metadata").$type<CapturedMetadata>().notNull(),
   },
   (t) => [index("issues_feature_id_idx").on(t.featureId)],
+);
+
+// Append-only log of triage changes, written in the same transaction as the
+// change itself. A deleted Account leaves its events with `actor_id` null.
+export const issueEvents = pgTable(
+  "issue_events",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    issueId: text("issue_id")
+      .notNull()
+      .references(() => issues.id, { onDelete: "cascade" }),
+    actorId: text("actor_id").references(() => users.id, { onDelete: "set null" }),
+    kind: text("kind").$type<IssueEvent["kind"]>().notNull(),
+    from: text("from"),
+    to: text("to"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("issue_events_issue_idx").on(t.issueId, t.createdAt)],
 );

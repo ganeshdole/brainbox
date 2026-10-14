@@ -6,6 +6,7 @@ import {
   deliveryStatus,
   destinationConfig,
   inviteRole,
+  issueEventKind,
   featureFields,
   issueFields,
   nullable,
@@ -122,6 +123,17 @@ export default defineSchema({
   features: defineTable(featureFields)
     .index("with_id", ["id"])
     .index("by_project", ["projectId"]),
+
+  // Append-only triage log; removed with its issue (projects.remove).
+  issueEvents: defineTable({
+    id: v.string(),
+    issueId: v.string(),
+    actorId: nullable(v.string()),
+    kind: issueEventKind,
+    from: nullable(v.string()),
+    to: nullable(v.string()),
+    createdAt: v.number(),
+  }).index("by_issue", ["issueId", "createdAt"]),
 
   connections: defineTable({
     id: v.string(),

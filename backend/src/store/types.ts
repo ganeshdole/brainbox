@@ -8,6 +8,11 @@ import type {
   Importance,
   IntegrationProvider,
   InviteRole,
+  IssueCloseReason,
+  IssueEvent,
+  IssuePriority,
+  IssueStatus,
+  IssueTriagePatch,
   IssueKind,
   PlanId,
   ProjectKey,
@@ -81,6 +86,10 @@ export interface IssueRecord {
   id: string;
   projectId: string;
   createdAt: Date;
+  status: IssueStatus;
+  priority: IssuePriority;
+  closeReason: IssueCloseReason | null;
+  statusChangedAt: Date | null;
   kind: IssueKind;
   /** Only on a feature request, and only when the end-user picked one. */
   importance: Importance | null;
@@ -102,14 +111,34 @@ export interface IssueRecord {
   metadata: CapturedMetadata;
 }
 
-/** A new issue. Transcripts arrive later through `issues.setTranscript`.
+/** A new issue. Transcripts arrive later through `issues.setTranscript`, and
+ *  every new issue starts in triage as `new` with no priority.
  *  `createdAt` defaults to now; set it only when importing existing issues. */
 export type NewIssue = Omit<
   IssueRecord,
-  "createdAt" | "audioTranscript" | "videoTranscript" | "featureId"
+  | "createdAt"
+  | "audioTranscript"
+  | "videoTranscript"
+  | "featureId"
+  | "status"
+  | "priority"
+  | "closeReason"
+  | "statusChangedAt"
 > & {
   createdAt?: Date;
 };
+
+/** One row of an issue's activity log. `actorId` is null for system changes
+ *  and for an Account that has since been deleted. */
+export interface IssueEventRecord {
+  id: string;
+  issueId: string;
+  actorId: string | null;
+  kind: IssueEvent["kind"];
+  from: string | null;
+  to: string | null;
+  createdAt: Date;
+}
 
 export interface FeatureRecord {
   id: string;
@@ -281,6 +310,13 @@ export interface Store {
     get(id: string): Promise<IssueRecord | null>;
     create(input: NewIssue): Promise<void>;
     setTranscript(id: string, kind: "audio" | "video", outcome: TranscriptOutcome): Promise<void>;
+    /** Applies one triage patch to every listed issue as `planTriageWrite`
+     *  decides, atomically: the issues and their activity events are all
+     *  written, or (when the patch is rejected for any of them) none are.
+     *  Returns the issues that exist, after the change. */
+    triage(ids: readonly string[], patch: IssueTriagePatch, actorId: string | null): Promise<IssueRecord[]>;
+    /** Oldest first. */
+    listEvents(issueId: string): Promise<IssueEventRecord[]>;
     /** Attach a feature request to a Feature, or with null send it back to
      *  waiting. The caller checks both belong to the same project. */
     setFeature(id: string, featureId: string | null): Promise<void>;

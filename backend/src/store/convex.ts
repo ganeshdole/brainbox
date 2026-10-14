@@ -7,6 +7,7 @@ import type {
   ConnectionRecord,
   DeliveryRecord,
   DestinationRecord,
+  IssueEventRecord,
   FeatureRecord,
   IssueRecord,
   ProjectRecord,
@@ -116,6 +117,13 @@ export function createConvexStore(convex: ConvexCaller): Store {
           status: outcome.status,
           ...(outcome.status === "done" && { text: outcome.text }),
         });
+      },
+      async triage(ids, patch, actorId) {
+        return (await convex.mutation(api.issues.triage, { ids: [...ids], patch, actorId })).map(toIssue);
+      },
+      async listEvents(issueId) {
+        return (await convex.query(api.issues.listEvents, { issueId })).map(toIssueEvent);
+
       },
       async setFeature(id, featureId) {
         await convex.mutation(api.issues.setFeature, { id, featureId });
@@ -289,18 +297,33 @@ function toProject(
   };
 }
 
-/** Issues stored before feature requests have no kind, importance or feature. */
-type StoredIssue = Omit<Stamped<IssueRecord, "createdAt">, "kind" | "importance" | "featureId"> &
-  Partial<Pick<IssueRecord, "kind" | "importance" | "featureId">>;
+// Issues stored before feature requests or triage lack those fields. They
+// read as bugs, and as "open": the same backfill the Postgres migrations did.
+type IssueDoc = Omit<
+  Stamped<IssueRecord, "createdAt">,
+  "kind" | "importance" | "featureId" | "status" | "priority" | "closeReason" | "statusChangedAt"
+> &
+  Partial<Pick<IssueRecord, "kind" | "importance" | "featureId" | "status" | "priority">> & {
+    closeReason?: IssueRecord["closeReason"];
+    statusChangedAt?: number | null;
+  };
 
-function toIssue(row: StoredIssue): IssueRecord {
+function toIssue({ status, priority, closeReason, statusChangedAt, ...row }: IssueDoc): IssueRecord {
   return {
     ...row,
+    createdAt: new Date(row.createdAt),
     kind: row.kind ?? "bug",
     importance: row.importance ?? null,
     featureId: row.featureId ?? null,
-    createdAt: new Date(row.createdAt),
+    status: status ?? "open",
+    priority: priority ?? "none",
+    closeReason: closeReason ?? null,
+    statusChangedAt: statusChangedAt == null ? null : new Date(statusChangedAt),
   };
+}
+
+function toIssueEvent(row: Stamped<IssueEventRecord, "createdAt">): IssueEventRecord {
+  return { ...row, createdAt: new Date(row.createdAt) };
 }
 
 function toFeature(row: Stamped<FeatureRecord, "createdAt" | "updatedAt">): FeatureRecord {

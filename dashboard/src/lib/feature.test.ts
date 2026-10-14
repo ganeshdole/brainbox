@@ -17,6 +17,8 @@ const issue = (over: Partial<Issue> & { id: string }): Issue => ({
   projectId: "p1",
   createdAt: "2026-10-01T00:00:00.000Z",
   kind: "feature",
+  status: "new",
+  priority: "none",
   metadata: {
     url: "https://app.example.com/",
     title: "App",

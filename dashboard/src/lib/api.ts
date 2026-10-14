@@ -12,6 +12,8 @@ import type {
   IntegrationsState,
   InviteRole,
   Issue,
+  IssueEvent,
+  IssueTriagePatch,
   PlanId,
   Project,
   ProjectDestination,
@@ -130,6 +132,12 @@ export const api = {
   listIssues: (id: string) => req<Issue[]>(`/api/projects/${id}/issues`),
   getIssue: (id: string) => req<Issue>(`/api/issues/${id}`),
   sendIssue: (id: string) => req<Delivery[]>(`/api/issues/${id}/deliveries`, { method: "POST" }),
+  triageIssue: (id: string, patch: IssueTriagePatch) =>
+    req<Issue>(`/api/issues/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  /** One patch for up to 100 issues; all or nothing. */
+  triageIssues: (ids: string[], patch: IssueTriagePatch) =>
+    req<Issue[]>("/api/issues", { method: "PATCH", body: JSON.stringify({ ids, patch }) }),
+  getIssueActivity: (id: string) => req<IssueEvent[]>(`/api/issues/${id}/activity`),
   /** Attach a feature request to a feature, or send it back to waiting with null. */
   setIssueFeature: (id: string, featureId: string | null) =>
     req<Issue>(`/api/issues/${id}/feature`, { method: "PUT", body: JSON.stringify({ featureId }) }),

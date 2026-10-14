@@ -7,6 +7,7 @@ import {
   deliveries,
   features,
   integrationConnections,
+  issueEvents,
   issues,
   projectDestinations,
   projects,
@@ -21,6 +22,7 @@ import {
   waitlistSignups,
   webhookEvents,
 } from "../db/schema/index.ts";
+import { planTriageWrite } from "./issue-triage.ts";
 import { planSubscriptionWrite } from "./subscription-write.ts";
 import { leavesNoOwner } from "./team-rules.ts";
 import type { InviteAcceptance, MembershipChange, Store } from "./types.ts";
@@ -267,6 +269,42 @@ export function createPostgresStore(db: DB): Store {
               : { videoTranscriptStatus: outcome.status, ...(text !== undefined && { videoTranscript: text }) },
           )
           .where(eq(issues.id, id));
+      },
+      async triage(ids, patch, actorId) {
+        if (ids.length === 0) return [];
+        return db.transaction(async (tx) => {
+          // Locked, in id order so two bulk edits can't deadlock, and so two
+          // people triaging at once log a true from → to.
+          const rows = await tx
+            .select()
+            .from(issues)
+            .where(inArray(issues.id, [...ids]))
+            .orderBy(asc(issues.id))
+            .for("update");
+          const now = new Date();
+          const out: typeof rows = [];
+          for (const current of rows) {
+            const write = planTriageWrite(current, patch, now);
+            if (!write) {
+              out.push(current);
+              continue;
+            }
+            const [row] = await tx.update(issues).set(write.values).where(eq(issues.id, current.id)).returning();
+            if (!row) throw new Error(`issue ${current.id} vanished mid-triage`);
+            await tx
+              .insert(issueEvents)
+              .values(write.events.map((e) => ({ ...e, issueId: current.id, actorId })));
+            out.push(row);
+          }
+          return out;
+        });
+      },
+      async listEvents(issueId) {
+        return db
+          .select()
+          .from(issueEvents)
+          .where(eq(issueEvents.issueId, issueId))
+          .orderBy(asc(issueEvents.createdAt));
       },
       async setFeature(id, featureId) {
         await db.update(issues).set({ featureId }).where(eq(issues.id, id));
