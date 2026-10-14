@@ -50,12 +50,41 @@ and tolerates older logs without an offset. `formatClock(ms)` gives `m:ss`.
 
 ## Install
 
-Inside this monorepo the package is consumed from source (`workspace:*`).
-Outside the monorepo, `pnpm build` emits `dist/` (JS plus `.d.ts`) and
-`pnpm pack` produces a tarball whose `exports` point at it (`publishConfig`),
-so another app can `npm install` the `.tgz` files. Every `@ganeshdole/brainbox-*`
-dependency of a package needs its own tarball installed alongside.
+Inside this monorepo the package is consumed from source:
+
+```json
+{ "dependencies": { "@ganeshdole/brainbox-replay": "workspace:*" } }
+```
+
+Outside it, from npm:
+
+```sh
+npm install @ganeshdole/brainbox-replay
+```
+
+`pnpm build` emits `dist/` (JS plus `.d.ts`) and copies `styles.css` next to
+it; the published package's `exports` point at both (`publishConfig`).
+
+## On its own
+
+Any React app can play a recording it has kept: the `session` part of an
+upload, saved as is. The log is gunzipped when its URL ends in `.gz`.
+
+```tsx
+import { createRoot } from "react-dom/client";
+import { SessionReplay } from "@ganeshdole/brainbox-replay";
+import "@ganeshdole/brainbox-replay/styles.css";
+
+const root = document.getElementById("root");
+if (root) {
+  createRoot(root).render(
+    <SessionReplay url="/reports/42/session.json.gz" audioUrl="/reports/42/audio.webm" vw={1280} vh={800} />,
+  );
+}
+```
 
 ## Peer dependencies
 
-`react` and `react-dom` 19+. `@rrweb/replay` is bundled with the package.
+`react` and `react-dom` 19+. `@rrweb/replay` (pinned to 2.1.0) and `lucide-react`
+are ordinary dependencies and install with the package; a host never hands
+the player a `Replayer` of its own, so it has no reason to share that copy.
