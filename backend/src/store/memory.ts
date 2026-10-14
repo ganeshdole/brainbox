@@ -26,7 +26,14 @@ export function createMemoryStore(): Store {
           });
       },
       async create(input) {
-        const row: ProjectRecord = { ...input, id: crypto.randomUUID(), createdAt: new Date() };
+        // The key is how ingest finds the project, so it names one only.
+        if (projects.some((p) => p.key === input.key)) throw new Error("project key already in use");
+        const row: ProjectRecord = {
+          ...input,
+          allowedOrigins: [...input.allowedOrigins],
+          id: crypto.randomUUID(),
+          createdAt: new Date(),
+        };
         projects.unshift(row);
         return copyProject(row);
       },
@@ -63,6 +70,7 @@ export function createMemoryStore(): Store {
         );
       },
       async create({ createdAt, ...input }) {
+        if (!projects.some((p) => p.id === input.projectId)) throw new Error(`no project ${input.projectId}`);
         if (issues.some((i) => i.id === input.id)) throw new Error(`issue ${input.id} already exists`);
         const row: IssueRecord = {
           ...structuredClone(input),

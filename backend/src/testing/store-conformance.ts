@@ -143,6 +143,28 @@ function projectTests(get: () => Store) {
     expect(await store.projects.getByKey(key)).toEqual(created);
   });
 
+  it("refuses a second project with the same key", async () => {
+    const store = get();
+    const project = await newProject(store);
+    await expect(
+      store.projects.create({ teamId: project.teamId, name: "Copy", key: project.key, allowedOrigins: [] }),
+    ).rejects.toThrow();
+    expect((await store.projects.getByKey(project.key))?.id).toBe(project.id);
+  });
+
+  it("keeps its own copy of what it is given", async () => {
+    const store = get();
+    const origins = ["https://a.test"];
+    const project = await store.projects.create({
+      teamId: await newTeamId(store),
+      name: "Shop",
+      key: generateProjectKey(),
+      allowedOrigins: origins,
+    });
+    origins.push("https://evil.test");
+    expect((await store.projects.get(project.id))?.allowedOrigins).toEqual(["https://a.test"]);
+  });
+
   it("has nothing for an unknown id or key", async () => {
     const store = get();
     expect(await store.projects.get(crypto.randomUUID())).toBeNull();
@@ -244,6 +266,13 @@ function issueTests(get: () => Store) {
 
   it("has nothing for an unknown id", async () => {
     expect(await get().issues.get(crypto.randomUUID())).toBeNull();
+  });
+
+  it("refuses an issue for a project it doesn't have", async () => {
+    const store = get();
+    const input = issueInput(crypto.randomUUID());
+    await expect(store.issues.create(input)).rejects.toThrow();
+    expect(await store.issues.get(input.id)).toBeNull();
   });
 
   it("records a transcript, or that it failed, on the audio or the video", async () => {
