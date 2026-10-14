@@ -1,14 +1,21 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, ExternalLink, ZoomIn } from "lucide-react";
-import type { Issue } from "@brainbox/shared";
+import { ArrowLeft, Check, ExternalLink, Inbox, Lightbulb, RotateCcw, ZoomIn } from "lucide-react";
+import type { Issue, IssueEvent, IssueTriagePatch } from "@ganeshdole/brainbox-shared";
+import { SessionReplay } from "@ganeshdole/brainbox-replay";
 
-import { api } from "../lib/api";
-import { issueTitle, pageLabel } from "../lib/issue";
+import { api, isAuthRedirect } from "../lib/api";
+import { importanceLabel, issueTitle, pageLabel } from "../lib/issue";
+import { applyTriage, closeReasonLabel, describeEvent } from "../lib/triage";
+import { timeAgo } from "../lib/utils";
 import { CopyButton } from "./CopyButton";
 import { Eyebrow } from "./Eyebrow";
+import { IssueDeliveries } from "./IssueDeliveries";
+import { IssueFeature } from "./IssueFeature";
+import { ReporterCard } from "./IssueReporter";
 import { Lightbox } from "./Lightbox";
-import { SessionReplay } from "./SessionReplay";
+import { PriorityMenu, StatusMenu } from "./TriageControls";
+import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
 
 function Figure({
@@ -47,6 +54,77 @@ function Shot({ label, url, onZoom }: { label: string; url: string; onZoom: (u: 
   );
 }
 
+/** Whether a keypress belongs to something being typed into, not a shortcut. */
+function isTyping(e: KeyboardEvent): boolean {
+  const t = e.target;
+  return (
+    e.metaKey ||
+    e.ctrlKey ||
+    e.altKey ||
+    (t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))
+  );
+}
+
+/** Status, priority and the one obvious next step, with its shortcut. */
+function TriageBar({
+  issue,
+  busy,
+  error,
+  onChange,
+}: {
+  issue: Issue;
+  busy: boolean;
+  error: string | null;
+  onChange: (patch: IssueTriagePatch) => void;
+}) {
+  const done = issue.status === "resolved" || issue.status === "closed";
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      <StatusMenu status={issue.status} onChange={onChange} disabled={busy} />
+      <PriorityMenu priority={issue.priority} onChange={onChange} disabled={busy} />
+      {issue.status === "closed" && issue.closeReason && (
+        <span className="text-xs text-muted">{closeReasonLabel(issue.closeReason)}</span>
+      )}
+      {issue.status === "new" && (
+        <Button size="sm" variant="secondary" disabled={busy} onClick={() => onChange({ status: "open" })}>
+          <Inbox /> Accept <kbd className="font-mono text-[10px] text-muted">A</kbd>
+        </Button>
+      )}
+      {!done && (
+        <Button size="sm" variant="secondary" disabled={busy} onClick={() => onChange({ status: "resolved" })}>
+          <Check /> Resolve <kbd className="font-mono text-[10px] text-muted">E</kbd>
+        </Button>
+      )}
+      {done && (
+        <Button size="sm" variant="ghost" disabled={busy} onClick={() => onChange({ status: "open" })}>
+          <RotateCcw /> Reopen
+        </Button>
+      )}
+      {error && <span className="text-xs text-error">{error}</span>}
+    </div>
+  );
+}
+
+function Activity({ issue, events }: { issue: Issue; events: IssueEvent[] }) {
+  return (
+    <div className="mb-6">
+      <Eyebrow className="block px-1 pb-2">Activity</Eyebrow>
+      <ol className="space-y-2 px-1 text-xs">
+        <li className="flex items-baseline justify-between gap-3">
+          <span className="text-default">Reported</span>
+          <span className="shrink-0 font-mono text-[11px] text-muted">{timeAgo(issue.createdAt)}</span>
+        </li>
+        {events.map((e) => (
+          <li key={e.id} className="flex items-baseline justify-between gap-3">
+            <span className="text-default">{describeEvent(e)}</span>
+            <span className="shrink-0 font-mono text-[11px] text-muted">{timeAgo(e.createdAt)}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 function Meta({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-4 border-b border-subtle py-2 text-xs">
@@ -62,6 +140,52 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
   const [issue, setIssue] = useState<Issue | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [zoomUrl, setZoomUrl] = useState<string | null>(null);
+  const [events, setEvents] = useState<IssueEvent[]>([]);
+  const [triage, setTriage] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
+
+  const loadActivity = useCallback(() => {
+    api
+      .getIssueActivity(issueId)
+      .then(setEvents)
+      .catch(() => {
+        /* the log is secondary; the issue itself still renders */
+      });
+  }, [issueId]);
+
+  useEffect(loadActivity, [loadActivity]);
+
+  // Shows the change at once and puts it back if the server refuses it.
+  const changeTriage = useCallback(
+    async (patch: IssueTriagePatch) => {
+      if (!issue || triage.busy) return;
+      const before = issue;
+      setIssue(applyTriage(issue, patch));
+      setTriage({ busy: true, error: null });
+      try {
+        const saved = await api.triageIssue(issueId, patch);
+        // PATCH answers without deliveries; keep the ones on screen
+        setIssue((prev) => ({ ...saved, deliveries: prev?.deliveries }));
+        setTriage({ busy: false, error: null });
+        loadActivity();
+      } catch (e) {
+        setIssue(before);
+        setTriage({ busy: false, error: isAuthRedirect(e) ? null : (e as Error).message });
+      }
+    },
+    [issue, issueId, triage.busy, loadActivity],
+  );
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!issue || isTyping(e)) return;
+      if (e.key === "a" && issue.status === "new") void changeTriage({ status: "open" });
+      if (e.key === "e" && issue.status !== "resolved" && issue.status !== "closed") {
+        void changeTriage({ status: "resolved" });
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [issue, changeTriage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,7 +207,8 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
   useEffect(() => {
     const pending =
       issue?.audio?.transcriptStatus === "pending" ||
-      issue?.video?.transcriptStatus === "pending";
+      issue?.video?.transcriptStatus === "pending" ||
+      issue?.deliveries?.some((d) => d.status === "pending");
     if (!pending) return;
     const t = setTimeout(() => {
       api
@@ -96,12 +221,14 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
     return () => clearTimeout(t);
   }, [issue, issueId]);
 
+  // a feature request is reached from, and goes back to, Features
+  const fromFeatures = issue?.kind === "feature";
   const back = (
     <Link
-      to={`/projects/${projectId}`}
+      to={`/projects/${projectId}${fromFeatures ? "/features" : ""}`}
       className="mb-3 flex w-fit items-center gap-1 text-xs text-muted transition hover:text-emphasis"
     >
-      <ArrowLeft className="h-3.5 w-3.5" /> Reports
+      <ArrowLeft className="h-3.5 w-3.5" /> {fromFeatures ? "Features" : "Reports"}
     </Link>
   );
 
@@ -140,6 +267,13 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
           {issueTitle(issue)}
         </h2>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs text-muted">
+          {issue.kind === "feature" && (
+            <span className="flex items-center gap-1 text-emphasis">
+              <Lightbulb className="h-3.5 w-3.5" aria-hidden />
+              Feature request
+              {issue.importance && ` · ${importanceLabel(issue.importance)}`}
+            </span>
+          )}
           <span>{new Date(issue.createdAt).toLocaleString()}</span>
           <a
             href={m.url}
@@ -150,8 +284,26 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
             <span className="truncate">{pageLabel(m.url)}</span>
             <ExternalLink className="h-3 w-3 shrink-0" />
           </a>
-          {m.identity?.email && <span className="truncate">{m.identity.email}</span>}
         </div>
+        <TriageBar
+          issue={issue}
+          busy={triage.busy}
+          error={triage.error}
+          onChange={(patch) => void changeTriage(patch)}
+        />
+        {issue.kind === "feature" && (
+          <IssueFeature
+            issue={issue}
+            projectId={projectId}
+            onChange={(next) => setIssue({ ...issue, featureId: next.featureId })}
+          />
+        )}
+        <IssueDeliveries
+          issueId={issue.id}
+          projectId={projectId}
+          deliveries={issue.deliveries ?? []}
+          onChange={(deliveries) => setIssue({ ...issue, deliveries })}
+        />
       </header>
 
       <div className="mt-6 grid gap-8 border-t border-default p-4 pt-6 sm:p-6 lg:grid-cols-[minmax(0,1.75fr)_minmax(260px,1fr)]">
@@ -163,6 +315,8 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
                 audioUrl={issue.audio?.url}
                 vw={m.viewport.width}
                 vh={m.viewport.height}
+                // local storage serves files behind the session cookie
+                credentials="include"
               />
             </Figure>
           )}
@@ -211,6 +365,8 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
         </div>
 
         <aside className="min-w-0">
+          <ReporterCard identity={m.identity} fields={m.fields} />
+
           {/* status is only set when transcription ran; "done" implies text */}
           {transcript && (
             <div className="mb-6">
@@ -230,6 +386,8 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
             </div>
           )}
 
+          <Activity issue={issue} events={events} />
+
           <Eyebrow className="block px-1 pb-1">Environment</Eyebrow>
           <Meta label="URL" value={m.url} />
           <Meta label="Title" value={m.title} />
@@ -240,7 +398,6 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
           <Meta label="Language" value={m.language} />
           <Meta label="Timezone" value={m.timezone} />
           {m.selector && <Meta label="Selector" value={m.selector} />}
-          {m.identity?.email && <Meta label="User" value={m.identity.email} />}
           <Meta label="User agent" value={m.userAgent} />
 
           {m.consoleErrors.length > 0 && (

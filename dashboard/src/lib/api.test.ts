@@ -41,6 +41,19 @@ afterEach(() => {
 describe("401 handling", () => {
   beforeEach(() => stubLocation("/projects/all"));
 
+  it("does not redirect for the login page's public sign-in options", async () => {
+    // A backend older than /api/sign-in-options answers 401. Sending the login
+    // page to /login for it would reload the page, which asks again, forever.
+    const loc = stubLocation("/login");
+    vi.stubGlobal("fetch", respondWith(401));
+    const { api, isAuthRedirect } = await freshApi();
+
+    const err = await api.getSignInOptions().catch((e: unknown) => e);
+
+    expect(loc.href).toBe("http://localhost/login");
+    expect(isAuthRedirect(err)).toBe(false);
+  });
+
   it("redirects to /login and throws a recognisable error", async () => {
     const loc = stubLocation("/projects/all");
     vi.stubGlobal("fetch", respondWith(401));
@@ -129,5 +142,58 @@ describe("ordinary failures", () => {
 
     expect((err as Error).message).toBe("Project not found");
     expect(isAuthRedirect(err)).toBe(false);
+  });
+});
+
+describe("integration requests", () => {
+  function recordingFetch(body: unknown) {
+    return vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async () =>
+      new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+  }
+
+  it("starts a GitHub install for a project", async () => {
+    const fetch = recordingFetch({ url: "https://github.com/apps/x/installations/new?state=s" });
+    vi.stubGlobal("fetch", fetch);
+    const { api } = await freshApi();
+
+    expect(await api.startGithubInstall("p1")).toEqual({
+      url: "https://github.com/apps/x/installations/new?state=s",
+    });
+    const [url, init] = fetch.mock.calls[0]!;
+    expect(url).toMatch(/\/api\/integrations\/github\/install$/);
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toEqual({ projectId: "p1" });
+  });
+
+  it("saves a destination with PUT under the project and provider", async () => {
+    const fetch = recordingFetch({});
+    vi.stubGlobal("fetch", fetch);
+    const { api } = await freshApi();
+
+    await api.saveDestination("p1", "github", {
+      connectionId: "c1",
+      config: { owner: "acme", repo: "web", labels: ["bug"] },
+      enabled: true,
+    });
+    const [url, init] = fetch.mock.calls[0]!;
+    expect(url).toMatch(/\/api\/projects\/p1\/destinations\/github$/);
+    expect(init?.method).toBe("PUT");
+    expect(JSON.parse(String(init?.body))).toEqual({
+      connectionId: "c1",
+      config: { owner: "acme", repo: "web", labels: ["bug"] },
+      enabled: true,
+    });
+  });
+
+  it("sends an issue with POST to its deliveries", async () => {
+    const fetch = recordingFetch([]);
+    vi.stubGlobal("fetch", fetch);
+    const { api } = await freshApi();
+
+    await api.sendIssue("i1");
+    const [url, init] = fetch.mock.calls[0]!;
+    expect(url).toMatch(/\/api\/issues\/i1\/deliveries$/);
+    expect(init?.method).toBe("POST");
   });
 });

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import type { BillingPeriod, PlanId } from "@brainbox/shared";
+import type { BillingPeriod, PlanId } from "@ganeshdole/brainbox-shared";
 
 import { env } from "../env.ts";
 import { billingStateFor } from "../lib/billing.ts";
@@ -20,7 +20,7 @@ export const billing = new Hono<AppEnv>()
     const token = c.get("authUser").token;
     const uid = token?.sub;
     if (!uid) return c.json({ error: "Unauthorized" }, 401);
-    return c.json(await billingStateFor(uid, token?.email));
+    return c.json(await billingStateFor(c.get("store"), uid, token?.email));
   })
 
   .post("/checkout", async (c) => {
@@ -45,7 +45,7 @@ export const billing = new Hono<AppEnv>()
 
     // Already paying: sending them through checkout again would create a
     // second subscription and bill them twice.
-    const state = await billingStateFor(uid, email);
+    const state = await billingStateFor(c.get("store"), uid, email);
     if (state.subscription?.hasAccess) {
       return c.json({ error: "Already subscribed" }, 409);
     }

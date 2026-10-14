@@ -1,0 +1,71 @@
+/** The widget's foothold in the host page: one element for `<body>` with a
+ *  shadow root, and inside it the container the React tree renders into. */
+export interface ShadowHost {
+  /** The element for the host document. Hidden while screenshotting. */
+  element: HTMLElement;
+  /** Where to render. Carries `.bb-root`, plus the `.dark` class the
+   *  stylesheet keys colours off when the theme is dark (lib/theme.ts). */
+  container: HTMLElement;
+}
+
+/** The `id` of the widget's element on the host page. Exported so a host can
+ *  exempt it (see `isBrainboxEvent`) without hard-coding the string. */
+export const BRAINBOX_HOST_ID = "brainbox-widget";
+
+/**
+ * Whether an event came from inside the widget. Its UI lives in a shadow root,
+ * so outside it `event.target` is our host element, never the textarea or
+ * button underneath: to a focus trap on `document` the widget looks like page
+ * background. A trap that cancels keys aimed outside its modal can call this
+ * first and let the widget's events through.
+ */
+export function isBrainboxEvent(event: Event): boolean {
+  const path = event.composedPath();
+  const nodes = path.length > 0 ? path : [event.target];
+  return nodes.some((n) => n instanceof Element && n.id === BRAINBOX_HOST_ID);
+}
+
+/** Pointer events a host commonly treats as "clicked outside". */
+export const ISOLATED_EVENTS = [
+  "pointerdown",
+  "pointerup",
+  "mousedown",
+  "mouseup",
+  "click",
+  "touchstart",
+  "touchend",
+] as const;
+
+function stopAtHost(event: Event): void {
+  event.stopPropagation();
+}
+
+/** Build the shadow host (ADR 0001: host CSS cannot reach in, ours cannot leak
+ *  out). The stylesheet arrives with the UI chunk (`ui.tsx`), which renders it
+ *  into `container`. Detached: the caller appends `element` to `<body>` when
+ *  it is ready to show it. */
+export function createShadowHost(): ShadowHost {
+  const element = document.createElement("div");
+  element.id = BRAINBOX_HOST_ID;
+  // keep the widget's own UI out of rrweb session recordings (core's blockClass)
+  element.classList.add("rr-block");
+  element.style.position = "relative";
+  element.style.zIndex = "2147483647";
+
+  // The host page must not hear the widget's clicks. Pages close their open
+  // menus on any click elsewhere, and to them a click on the widget is
+  // elsewhere, so picking Screenshot lost the very menu being reported.
+  // Listeners inside the shadow root (React's) have already run by the time
+  // the event reaches this element; it stops here, before the host's document.
+  // Capture-phase listeners still see it. Keys are left alone: the widget's
+  // own shortcuts listen on window.
+  for (const type of ISOLATED_EVENTS) element.addEventListener(type, stopAtHost);
+
+  const shadow = element.attachShadow({ mode: "open" });
+
+  const container = document.createElement("div");
+  container.className = "bb-root dark";
+  shadow.appendChild(container);
+
+  return { element, container };
+}

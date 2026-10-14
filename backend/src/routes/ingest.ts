@@ -1,14 +1,15 @@
-import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { parseIngest } from "@ganeshdole/brainbox-server";
 
-import { db } from "../db/client.ts";
-import { issues, projects } from "../db/schema/index.ts";
 import { env } from "../env.ts";
+import { deliverIssue } from "../integrations/dispatch.ts";
 import { cropRegion } from "../lib/crop.ts";
 import { transcribeAudio, transcriptionEnabled } from "../lib/transcription.ts";
+import { runInBackground } from "../runtime/background.ts";
 import { getStorage } from "../storage/index.ts";
-import { feedbackSchema } from "../validation/feedback.ts";
+import type { Store } from "../store/index.ts";
+import type { AppEnv } from "../types.ts";
 
 const AUDIO_EXT: Record<string, string> = {
   "audio/webm": "webm",
@@ -23,38 +24,28 @@ const VIDEO_EXT: Record<string, string> = {
   "video/mp4": "mp4",
 };
 
-export const ingest = new Hono();
+export const ingest = new Hono<AppEnv>();
 
 // Public: called cross-origin from arbitrary customer sites, no cookies. The
 // per-project origin allowlist is enforced in the handler (not via CORS).
 ingest.use("*", cors({ origin: (origin) => origin ?? "*", credentials: false }));
 
 ingest.post("/", async (c) => {
-  const body = await c.req.parseBody();
-
-  // --- structured json part ---
-  const jsonRaw = body["json"];
-  if (typeof jsonRaw !== "string") {
-    return c.json({ error: "Missing json part" }, 400);
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(jsonRaw);
-  } catch {
-    return c.json({ error: "Invalid json" }, 400);
-  }
-  const result = feedbackSchema.safeParse(parsed);
-  if (!result.success) {
-    return c.json({ error: "Invalid payload", issues: result.error.issues }, 400);
-  }
-  const feedback = result.data;
+  // The wire format itself (parts, schema, types, sizes) is @ganeshdole/brainbox-server's
+  // job; from here on it is ours: which project, where files go, what we store.
+  const parsed = await parseIngest(c.req.raw, {
+    screenshotBytes: env.MAX_SCREENSHOT_BYTES,
+    videoBytes: env.MAX_VIDEO_BYTES,
+    sessionBytes: env.MAX_SESSION_BYTES,
+    audioBytes: env.MAX_AUDIO_BYTES,
+  });
+  if (!parsed.ok) return c.json(parsed.body, parsed.status);
+  const feedback = parsed.payload;
+  const { screenshot, video, session, audio } = parsed.files;
 
   // --- project key ---
-  const [project] = await db
-    .select()
-    .from(projects)
-    .where(eq(projects.key, feedback.projectKey))
-    .limit(1);
+  const store = c.get("store");
+  const project = await store.projects.getByKey(feedback.projectKey);
   if (!project) return c.json({ error: "Unknown project key" }, 401);
 
   // --- origin allowlist (empty = allow all; absent Origin, e.g. curl = allow) ---
@@ -65,52 +56,6 @@ ingest.post("/", async (c) => {
     !project.allowedOrigins.includes(origin)
   ) {
     return c.json({ error: "Origin not allowed" }, 403);
-  }
-
-  // --- capture: a screenshot OR a screen recording (video) ---
-  const screenshotField = body["screenshot"];
-  const screenshot = screenshotField instanceof File ? screenshotField : undefined;
-  if (screenshot) {
-    if (!screenshot.type.startsWith("image/")) {
-      return c.json({ error: "screenshot must be an image" }, 400);
-    }
-    if (screenshot.size > env.MAX_SCREENSHOT_BYTES) {
-      return c.json({ error: "screenshot too large" }, 413);
-    }
-  }
-
-  const videoField = body["video"];
-  const video = videoField instanceof File ? videoField : undefined;
-  if (video) {
-    if (!video.type.startsWith("video/")) {
-      return c.json({ error: "video must be a video file" }, 400);
-    }
-    if (video.size > env.MAX_VIDEO_BYTES) {
-      return c.json({ error: "video too large" }, 413);
-    }
-  }
-
-  // Session replay: a gzipped rrweb event log (application/gzip or application/json).
-  const sessionField = body["session"];
-  const session = sessionField instanceof File ? sessionField : undefined;
-  if (session && session.size > env.MAX_SESSION_BYTES) {
-    return c.json({ error: "session too large" }, 413);
-  }
-
-  if (!screenshot && !video && !session) {
-    return c.json({ error: "Missing screenshot, video or session" }, 400);
-  }
-
-  // --- audio (optional) ---
-  const audioField = body["audio"];
-  const audio = audioField instanceof File ? audioField : undefined;
-  if (audio) {
-    if (!audio.type.startsWith("audio/")) {
-      return c.json({ error: "audio must be an audio file" }, 400);
-    }
-    if (audio.size > env.MAX_AUDIO_BYTES) {
-      return c.json({ error: "audio too large" }, 413);
-    }
   }
 
   // --- store + persist ---
@@ -127,7 +72,11 @@ ingest.post("/", async (c) => {
     // Auto-crop the highlighted region into a second image (best-effort).
     if (feedback.region) {
       try {
-        const cropBytes = await cropRegion(screenshotBytes, feedback.region);
+        const cropBytes = await cropRegion(
+          screenshotBytes,
+          feedback.region,
+          feedback.metadata.viewport.width,
+        );
         if (cropBytes) {
           cropKey = `${project.id}/${issueId}/crop.png`;
           await storage.put(cropKey, cropBytes, "image/png");
@@ -171,9 +120,11 @@ ingest.post("/", async (c) => {
   // The video's mic audio track; whisper takes the webm/mp4 container as-is.
   const willTranscribeVideo = videoBytes !== null && transcriptionEnabled();
 
-  await db.insert(issues).values({
+  await store.issues.create({
     id: issueId,
     projectId: project.id,
+    kind: feedback.kind ?? "bug",
+    importance: feedback.kind === "feature" ? (feedback.importance ?? null) : null,
     text: feedback.text ?? null,
     screenshotKey,
     cropKey,
@@ -188,42 +139,38 @@ ingest.post("/", async (c) => {
     metadata: feedback.metadata,
   });
 
-  // Fire-and-forget: transcription must never delay or fail the submission.
+  // In the background: transcription must never delay or fail the submission.
+  // Delivery waits for it so the ticket carries the transcript.
+  const transcriptions: Promise<void>[] = [];
   if (audioBytes && willTranscribeAudio) {
-    void transcribeAndStore(issueId, audioBytes, "audio");
+    transcriptions.push(transcribeAndStore(store, issueId, audioBytes, "audio"));
   }
   if (videoBytes && willTranscribeVideo) {
-    void transcribeAndStore(issueId, videoBytes, "video");
+    transcriptions.push(transcribeAndStore(store, issueId, videoBytes, "video"));
   }
+  runInBackground(
+    c,
+    Promise.allSettled(transcriptions)
+      .then(() => deliverIssue(store, issueId))
+      .catch((err: unknown) => console.error(`[ingest] delivery failed for ${issueId}:`, err)),
+  );
 
   return c.json({ id: issueId }, 201);
 });
 
 async function transcribeAndStore(
+  store: Store,
   issueId: string,
   media: Uint8Array,
   kind: "audio" | "video",
 ): Promise<void> {
   try {
     const text = await transcribeAudio(media);
-    await db
-      .update(issues)
-      .set(
-        kind === "audio"
-          ? { audioTranscript: text, audioTranscriptStatus: "done" }
-          : { videoTranscript: text, videoTranscriptStatus: "done" },
-      )
-      .where(eq(issues.id, issueId));
+    await store.issues.setTranscript(issueId, kind, { status: "done", text });
   } catch (err) {
     console.error(`[ingest] ${kind} transcription failed for issue ${issueId}:`, err);
-    await db
-      .update(issues)
-      .set(
-        kind === "audio"
-          ? { audioTranscriptStatus: "failed" }
-          : { videoTranscriptStatus: "failed" },
-      )
-      .where(eq(issues.id, issueId))
+    await store.issues
+      .setTranscript(issueId, kind, { status: "failed" })
       .catch((dbErr: unknown) => {
         console.error(`[ingest] failed to mark transcription failed for ${issueId}:`, dbErr);
       });

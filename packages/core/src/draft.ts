@@ -1,0 +1,306 @@
+import type { Identity, Importance, IssueKind, Region, ReportField } from "@ganeshdole/brainbox-shared";
+import { createAnnotations, type Annotations } from "./annotate.ts";
+import { bakeMarks, captureViewport, pickScreenshot } from "./capture.ts";
+import { unionBounds, type Mark } from "./marks.ts";
+import { captureMetadata } from "./metadata.ts";
+import type { PrivacyOptions } from "./privacy.ts";
+import { cssPath, elementAt } from "./selector.ts";
+import {
+  startSessionRecording,
+  type SessionCapture,
+  type SessionRecording,
+} from "./session.ts";
+import type { Report, SubmitResult, Transport } from "./transport.ts";
+
+const MAX_SESSION_BYTES = 15 * 1024 * 1024;
+
+/** What a UI needs to know about the report in progress. A new object on every
+ *  change, so `useSyncExternalStore` and friends can compare by reference. */
+export interface DraftState {
+  /** Object URL of the latest screenshot (plain or baked), for previews. */
+  screenshotUrl: string | null;
+  /** A screenshot, or the bake of the user's marks onto it, is still rendering. */
+  screenshotPending: boolean;
+  /** The screenshot could not be taken. The report can still go out without it. */
+  screenshotFailed: boolean;
+  /** A session recording is attached. */
+  hasSession: boolean;
+  /** Voice was captured during the recording. */
+  hasVoice: boolean;
+}
+
+const EMPTY: DraftState = {
+  screenshotUrl: null,
+  screenshotPending: false,
+  screenshotFailed: false,
+  hasSession: false,
+  hasVoice: false,
+};
+
+/** A session recording in progress. */
+export interface Recording {
+  /** Marks drawn into the host page while recording. rrweb records them as
+   *  ordinary mutations, so they show up in the replay. The ones still in view
+   *  at `stop()` also become the report's region and are baked onto its
+   *  last-frame thumbnail. */
+  annotations: Annotations;
+  /** Whether the mic came up (the permission prompt can take a while). */
+  micActive(): boolean;
+  setMicMuted(muted: boolean): void;
+  /** Finish the recording: attach the session and its voice to the draft and
+   *  take a last-frame thumbnail. Rejects if the recording is too large. */
+  stop(): Promise<void>;
+}
+
+export interface DraftOptions {
+  /** The UI's own host element, left out of screenshots and hidden when
+   *  reading which page element sits under the user's marks. */
+  exclude?: HTMLElement;
+}
+
+/** One feedback report being built. Owns everything that is easy to get wrong
+ *  about timing: the screenshot still rendering when the composer opens, the
+ *  bake of the marks onto it, and results arriving after the user cancelled. */
+export interface Draft {
+  getState(): DraftState;
+  subscribe(listener: () => void): () => void;
+  /** Start rasterising the page now. Rendering a big page takes seconds and
+   *  marking it up takes tens of them, so by the time the user is done the
+   *  shot is usually waiting. */
+  captureScreenshot(): void;
+  /** Record what the user drew. The marks' bounds become the report's region,
+   *  and the marks are baked onto the screenshot in the background. */
+  markUp(marks: Mark[]): void;
+  /** Start recording the page. `onAutoStop` fires at the duration cap so the
+   *  UI can call `stop()`. */
+  startRecording(options?: { onAutoStop?: () => void; maxMs?: number }): Recording;
+  /** Send the report. Waits for a bake in flight rather than sending the
+   *  un-marked shot. Rejects if there is nothing to send, `beforeSend` drops
+   *  it, or the transport fails. A feature request (`kind: "feature"`) needs
+   *  text or a voice note; its screenshot is optional and its console errors
+   *  are left out. */
+  submit(input: SubmitInput): Promise<SubmitResult>;
+  /** Throw the report away. Late screenshots are dropped, object URLs revoked,
+   *  a recording stopped and its marks removed. The draft can be used again. */
+  cancel(): void;
+}
+
+/** What the user said, and what kind of report it is. */
+export interface SubmitInput {
+  text?: string;
+  audio?: Blob | null;
+  /** Default `bug`. */
+  kind?: IssueKind;
+  /** Only sent with a feature request. */
+  importance?: Importance;
+}
+
+/** What a draft borrows from its `Brainbox` instance. */
+export interface DraftContext {
+  transport: Transport;
+  identity(): Identity | undefined;
+  fields(): ReportField[] | undefined;
+  consoleErrors(): string[];
+  privacy?: PrivacyOptions;
+  beforeSend?: BeforeSend;
+  onSubmitted?: (result: SubmitResult) => void;
+}
+
+/** Sees every report before the transport does. Return it, changed or not, to
+ *  send it, or null to send nothing. */
+export type BeforeSend = (report: Report) => Report | null | Promise<Report | null>;
+
+export function createDraft(ctx: DraftContext, { exclude }: DraftOptions = {}): Draft {
+  const { privacy } = ctx;
+  const listeners = new Set<() => void>();
+  let state = EMPTY;
+  const set = (patch: Partial<DraftState>) => {
+    state = { ...state, ...patch };
+    for (const listener of listeners) listener();
+  };
+
+  /** Bumped on every cancel. A capture started for an abandoned run can still
+   *  be seconds from settling, and without this its `then` would revive a dead
+   *  run's screenshot and strand an object URL nobody is looking at. */
+  let run = 0;
+  /** The last screenshot that landed - what a preview is already showing. */
+  let shot: Blob | null = null;
+  /** The freshest screenshot promise. Submit awaits this, not `shot`: leaving
+   *  the markup step swaps in the bake while `shot` still holds the plain
+   *  capture, and sending that would drop every mark the user drew. */
+  let pending: Promise<Blob> | null = null;
+  let session: Blob | null = null;
+  let voice: Blob | null = null;
+  let region: Region | null = null;
+  /** The recording in progress: the handle the UI holds and the rrweb
+   *  recorder behind it, which `cancel()` has to stop directly. */
+  let recording: { handle: Recording; raw: SessionRecording } | null = null;
+
+  /** The area `marks` cover (viewport coordinates) and the element under
+   *  its middle, or null when there are none. */
+  const regionOf = (marks: Mark[]): Region | null => {
+    const bounds = unionBounds(marks);
+    if (!bounds) return null;
+    const cx = bounds.x + bounds.width / 2;
+    const cy = bounds.y + bounds.height / 2;
+    return { ...bounds, selector: cssPath(elementAt(cx, cy, exclude)) };
+  };
+
+  const setShot = (blob: Blob) => {
+    shot = blob;
+    if (state.screenshotUrl) URL.revokeObjectURL(state.screenshotUrl);
+    set({ screenshotUrl: URL.createObjectURL(blob) });
+  };
+
+  /** Adopt `next` as the screenshot to send. Pending stays set until it lands,
+   *  and only clears if it is still the freshest promise: a bake started in the
+   *  meantime has its own `finally` for that. */
+  const track = (next: Promise<Blob>, onFail: () => void) => {
+    const r = run;
+    pending = next;
+    set({ screenshotPending: true });
+    next
+      .then((blob) => {
+        if (run === r) setShot(blob);
+      })
+      .catch(() => {
+        if (run === r) onFail();
+      })
+      .finally(() => {
+        if (run === r && pending === next) set({ screenshotPending: false });
+      });
+  };
+
+  return {
+    getState: () => state,
+
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+
+    captureScreenshot() {
+      set({ screenshotFailed: false });
+      // A failed screenshot must not sink the report - the text and voice
+      // note are still worth filing.
+      track(captureViewport({ exclude, privacy }), () => set({ screenshotFailed: true }));
+    },
+
+    markUp(marks) {
+      // What the user drew *is* the region, so the issue still records where
+      // on the page it happened.
+      region = regionOf(marks) ?? region;
+      const frozen = pending;
+      if (!frozen || marks.length === 0) return;
+      // If the bake fails the plain shot is already attached, so the report
+      // still goes out - just without the markup.
+      track(
+        frozen.then((blob) => bakeMarks(blob, marks)),
+        () => {},
+      );
+    },
+
+    startRecording({ onAutoStop, maxMs } = {}) {
+      const annotations = createAnnotations();
+      const rec = startSessionRecording(() => onAutoStop?.(), maxMs, privacy);
+      const r = run;
+
+      const handle: Recording = {
+        annotations,
+        micActive: rec.micActive,
+        setMicMuted: rec.setMicMuted,
+        async stop() {
+          if (recording?.handle !== handle) return;
+          recording = null;
+          // The marks come off the page only after the recorder has stopped,
+          // so the replay ends with them on screen. The ones in view are the
+          // report's annotations, as the markup step's are for a screenshot:
+          // they bound its region and are baked onto its last frame.
+          let marks: Mark[];
+          let captured: SessionCapture;
+          try {
+            captured = await rec.stop();
+          } finally {
+            marks = annotations.inView();
+            annotations.clear();
+          }
+          if (run !== r) return;
+          const { session: blob, audio } = captured;
+          if (blob.size > MAX_SESSION_BYTES) {
+            throw new Error("Recording too large - try a shorter clip");
+          }
+          session = blob;
+          voice = audio;
+          region = regionOf(marks);
+          set({ hasSession: true, hasVoice: audio !== null });
+          // Last-frame thumbnail: shown in the composer and uploaded as the
+          // report's screenshot so a list view gets a real preview. Best-effort,
+          // and a failed bake still leaves the plain frame.
+          try {
+            const thumb = await captureViewport({ exclude, privacy });
+            const baked = await bakeMarks(thumb, marks).catch(() => thumb);
+            if (run === r) setShot(baked);
+          } catch {
+            /* the composer falls back to a text note */
+          }
+        },
+      };
+      recording = { handle, raw: rec };
+      return handle;
+    },
+
+    async submit({ text, audio, kind = "bug", importance }) {
+      const screenshot = await pickScreenshot(pending, shot);
+      const body = text?.trim() || undefined;
+      const voiceNote = audio ?? voice ?? undefined;
+      const feature = kind === "feature";
+      // A bug can be shown without a word; a feature request has to be told.
+      if (feature ? !body && !voiceNote : !screenshot && !session && !body && !voiceNote) {
+        throw new Error(
+          feature
+            ? "Nothing to send - say or type what you'd like"
+            : "Nothing to send - record a note or add a description",
+        );
+      }
+      const report: Report = {
+        ...(feature && { kind, importance }),
+        text: body,
+        region: region ?? undefined,
+        metadata: captureMetadata({
+          // Errors on the page say nothing about an idea, and would read as a bug.
+          consoleErrors: feature ? [] : ctx.consoleErrors(),
+          identity: ctx.identity(),
+          fields: ctx.fields(),
+          selector: region?.selector,
+        }),
+        screenshot: screenshot ?? undefined,
+        session: session ?? undefined,
+        audio: voiceNote,
+      };
+      // The host's last word: scrub what it may not send, or drop the report.
+      const outgoing = ctx.beforeSend ? await ctx.beforeSend(report) : report;
+      if (!outgoing) throw new Error("This report was not sent");
+      const result = await ctx.transport.send(outgoing);
+      ctx.onSubmitted?.(result);
+      return result;
+    },
+
+    cancel() {
+      run += 1;
+      pending = null;
+      shot = null;
+      session = null;
+      voice = null;
+      region = null;
+      // an abandoned recording must release the mic and the DOM observers
+      const rec = recording;
+      recording = null;
+      if (rec) {
+        rec.handle.annotations.clear();
+        void rec.raw.stop().catch(() => {});
+      }
+      if (state.screenshotUrl) URL.revokeObjectURL(state.screenshotUrl);
+      set(EMPTY);
+    },
+  };
+}

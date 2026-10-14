@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ImageOff, Loader2, Pencil, Play, Send, X } from "lucide-react";
+import { ImageOff, Loader2, Pencil, Play, Send, X } from "./icons.tsx";
 import { VoiceNote } from "./VoiceNote.tsx";
 import { posClass, type Position } from "../lib/position.ts";
 

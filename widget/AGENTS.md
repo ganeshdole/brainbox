@@ -1,24 +1,59 @@
 # widget - AGENTS.md
 
-The embeddable capture UI (`@brainbox/widget`). React, built as an IIFE
-script-tag bundle that runs inside the customer's page. Root rules in `/AGENTS.md`
-apply.
+Brainbox's own capture UI (`@ganeshdole/brainbox-widget`). React, built on
+`@ganeshdole/brainbox-core` (the engine) and `@ganeshdole/brainbox-react` (the provider and hooks).
+Root rules in `/AGENTS.md` apply.
+
+## Three ways in, one UI
+
+- `src/embed.ts` is the script-tag bundle (`widget.js`). It reads the
+  `data-*` attributes, calls `mount()`, and publishes `window.Brainbox`. It is
+  the only file here that runs on load.
+- `mount()` (`src/mount.tsx`) is for a host with no React tree: creates the
+  instance, renders the widget, returns `{ open, start, close, identify, destroy }`.
+- `<BrainboxWidget />` and `useBrainboxWidget()` are for a host's own React
+  tree, under a `<BrainboxProvider>`.
+
+All three render `src/App.tsx` (through `src/ui.tsx`, the lazily loaded chunk
+that also carries the stylesheet), which holds a core `Draft` and shows screens
+off its state. Whether the UI is open lives in `src/lib/widget-store.ts`, one
+store per instance, so a host button and the widget agree without a second
+provider. Core has no idea of "open".
 
 ## What makes the widget different
 
 It runs inside a **host app you don't control**, so isolation is the whole game:
 
-- The UI mounts in a **Shadow DOM** so host CSS can't bleed in and widget CSS
-  can't leak out. Don't reach into `document` for styling or assume global
-  styles; keep everything scoped to the shadow root.
-- `src/embed.ts` is the IIFE entry (the script-tag bundle). `src/App.tsx` is the
-  React surface. The capture flow (open → mark up → compose → submit) is defined
-  in `CONTEXT.md`.
-- Keep DOM/browser logic in `src/lib/*` as small pure functions with a colocated
-  `*.test.ts`. That's why `selector`, `position`, `metadata`, `config`, `submit`
-  are unit-testable without a browser - follow that pattern for new logic.
+- The UI mounts in a **Shadow DOM** (`src/lib/shadow-host.ts`) so host CSS
+  can't bleed in and widget CSS can't leak out. Don't reach into `document`
+  for styling or assume global styles; keep everything scoped to the shadow
+  root. `<BrainboxWidget />` appends the host to `<body>` wherever it sits in
+  the host's tree, so no ancestor's `overflow` or `transform` can trap it.
+- Pointer and click events stop at the shadow host (`ISOLATED_EVENTS` in
+  `shadow-host.ts`), so a host that closes its menus on an outside click keeps
+  them open while the user reports them. Keys are not isolated: the widget's
+  own shortcuts listen on `window`. Keep that split when adding listeners.
+- The engine is not here. Screenshots, marks, recording, metadata and sending
+  live in `@ganeshdole/brainbox-core`. If a change is about *what gets captured or sent*,
+  it belongs in `packages/core`. If it is about *what the user sees*, it
+  belongs here.
+- Keep the UI-side browser logic in `src/lib/*` (`config`, `position`,
+  `shadow-css`, `shadow-host`, `widget-store`, `time`, `multiband`, the
+  drawing hooks) as small pure functions with a colocated `*.test.ts`.
+
+## Build
+
+`pnpm build` emits three things from one source: `dist/widget.js`, the
+IIFE with React bundled; `dist/widget-capture.js`, rrweb and modern-screenshot
+as a second IIFE that `widget.js` injects on first open (core's `lazy.ts` is
+swapped for `src/lib/load-capture.ts` in that build - keep the two in step);
+and `dist/index.js` plus a split `ui-*.js` chunk, an ES module of
+the library entry with React and the other `@ganeshdole/brainbox-*` packages external.
+Inside the monorepo the package is consumed from source (`src/index.ts`).
 
 ## Tests
 
-Vitest under jsdom. Test the `lib/*` functions directly rather than driving the
-React tree. `!` is allowed in `*.test.ts`. Run: `pnpm -F @brainbox/widget test`.
+Vitest under jsdom. `lib/*` functions are tested directly. `widget.test.tsx`,
+`mount.test.tsx` and `embed.test.ts` render the real tree with
+`react-dom/client` inside `act()` and read the shadow root. `!` is allowed in
+`*.test.ts(x)`. Run: `pnpm -F @ganeshdole/brainbox-widget test`.

@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useEffect, useRef } from "react";
 import {
   arrowHead,
   penPath,
@@ -8,7 +8,7 @@ import {
   TEXT_HALO_WIDTH,
   TEXT_SIZE,
   type Mark,
-} from "../lib/marks.ts";
+} from "@ganeshdole/brainbox-core";
 
 /** One mark as SVG. Shared by the markup step and the in-recording overlay so
  *  a box drawn in one looks identical in the other - and matches the bake,
@@ -95,8 +95,18 @@ export function MarkTextInput({
   onCommit: () => void;
   onCancel: () => void;
 }) {
+  const ref = useRef<HTMLInputElement>(null);
+  // The box mounts from the pointerdown that placed it, and that same click's
+  // mousedown lands after `autoFocus` and moves focus to whatever was clicked.
+  // Focus again once the click is done, so the user can type straight away.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => ref.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
   return (
     <input
+      ref={ref}
       autoFocus
       value={at.value}
       onChange={(e) => onChange(e.target.value)}

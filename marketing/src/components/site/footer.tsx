@@ -1,7 +1,21 @@
-const cols = [
-  { h: "Product", links: ["How it works", "Integrations", "Pricing", "Changelog"] },
-  { h: "Company", links: ["About", "Roadmap", "Contact"] },
-  { h: "Connect", links: ["Twitter / X", "GitHub", "Email founder"] },
+import { GITHUB_URL } from "@/lib/links"
+
+// Links without an href are placeholders until the page exists.
+const cols: { h: string; links: { label: string; href?: string }[] }[] = [
+  {
+    h: "Product",
+    links: [
+      { label: "How it works", href: "#how" },
+      { label: "Integrations", href: "#integrations" },
+      { label: "Pricing", href: "#pricing" },
+      { label: "Changelog" },
+    ],
+  },
+  { h: "Company", links: [{ label: "About" }, { label: "Roadmap" }, { label: "Contact" }] },
+  {
+    h: "Connect",
+    links: [{ label: "Twitter / X" }, { label: "GitHub", href: GITHUB_URL }, { label: "Email founder" }],
+  },
 ]
 
 export function Footer() {
@@ -35,9 +49,13 @@ export function Footer() {
               </h3>
               <ul className="mt-4 space-y-3">
                 {c.links.map((l) => (
-                  <li key={l}>
-                    <a href="#" className="text-sm text-default transition-colors hover:text-emphasis">
-                      {l}
+                  <li key={l.label}>
+                    <a
+                      href={l.href ?? "#"}
+                      {...(l.href?.startsWith("http") && { target: "_blank", rel: "noreferrer" })}
+                      className="text-sm text-default transition-colors hover:text-emphasis"
+                    >
+                      {l.label}
                     </a>
                   </li>
                 ))}

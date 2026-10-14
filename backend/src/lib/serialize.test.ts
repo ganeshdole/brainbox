@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { CapturedMetadata, Region } from "@brainbox/shared";
+import type { CapturedMetadata, Region } from "@ganeshdole/brainbox-shared";
 
-import { issues, projects } from "../db/schema/index.ts";
+import type { IssueRecord, ProjectRecord } from "../store/index.ts";
 import type { Storage } from "../storage/index.ts";
-import { toIssue, toProject } from "./serialize.ts";
+import { toIssue, toIssueEvent, toProject } from "./serialize.ts";
 
 const region: Region = { x: 0, y: 0, width: 10, height: 10 };
 const metadata: CapturedMetadata = {
@@ -24,30 +24,39 @@ const storage: Storage = {
 };
 
 describe("toProject", () => {
-  it("maps a row 1:1 with an ISO createdAt", () => {
-    const row: typeof projects.$inferSelect = {
+  it("maps a row 1:1 with an ISO createdAt and the caller's view of its team", () => {
+    const row: ProjectRecord = {
       id: "p1",
-      ownerId: "o1",
+      teamId: "t1",
       name: "N",
       key: "pk_x",
       allowedOrigins: ["a.com"],
       createdAt: new Date("2024-01-01T00:00:00Z"),
     };
-    expect(toProject(row)).toEqual({
+    const team = { id: "t1", name: "Acme", role: "member" as const };
+    expect(toProject(row, team)).toEqual({
       id: "p1",
       name: "N",
       key: "pk_x",
       allowedOrigins: ["a.com"],
+      team,
       createdAt: "2024-01-01T00:00:00.000Z",
     });
   });
 });
 
 describe("toIssue", () => {
-  const base: typeof issues.$inferSelect = {
+  const base: IssueRecord = {
     id: "i1",
     projectId: "p1",
     createdAt: new Date("2024-01-01T00:00:00Z"),
+    status: "new",
+    priority: "none",
+    closeReason: null,
+    statusChangedAt: null,
+    kind: "bug",
+    importance: null,
+    featureId: null,
     text: "hi",
     screenshotKey: "p1/i1/s.png",
     cropKey: null,
@@ -74,6 +83,13 @@ describe("toIssue", () => {
       mime: "audio/webm",
     });
     expect(issue.text).toBe("hi");
+  });
+
+  it("carries the kind, and a feature request's importance", async () => {
+    expect(await toIssue(base, storage)).toMatchObject({ kind: "bug" });
+    expect((await toIssue(base, storage)).importance).toBeUndefined();
+    const feature = await toIssue({ ...base, kind: "feature", importance: "critical" }, storage);
+    expect(feature).toMatchObject({ kind: "feature", importance: "critical" });
   });
 
   it("omits audio when there is no audioKey", async () => {
@@ -147,8 +163,54 @@ describe("toIssue", () => {
     });
   });
 
+  it("passes triage through, omitting a close reason and change time it lacks", async () => {
+    const issue = await toIssue(base, storage);
+    expect(issue.status).toBe("new");
+    expect(issue.priority).toBe("none");
+    expect(issue.closeReason).toBeUndefined();
+    expect(issue.statusChangedAt).toBeUndefined();
+  });
+
+  it("maps a closed issue's reason and when it changed", async () => {
+    const issue = await toIssue(
+      { ...base, status: "closed", closeReason: "duplicate", statusChangedAt: new Date("2024-01-02T00:00:00Z") },
+      storage,
+    );
+    expect(issue.closeReason).toBe("duplicate");
+    expect(issue.statusChangedAt).toBe("2024-01-02T00:00:00.000Z");
+  });
+
   it("maps null text to undefined", async () => {
     const issue = await toIssue({ ...base, text: null }, storage);
     expect(issue.text).toBeUndefined();
+  });
+});
+
+describe("toIssueEvent", () => {
+  const row = {
+    id: "e1",
+    issueId: "i1",
+    actorId: "u1",
+    kind: "status" as const,
+    from: "new",
+    to: "open",
+    createdAt: new Date("2024-01-01T00:00:00Z"),
+  };
+
+  it("names the actor when the name is known", () => {
+    expect(toIssueEvent(row, new Map([["u1", "Ada"]]))).toEqual({
+      id: "e1",
+      issueId: "i1",
+      kind: "status",
+      from: "new",
+      to: "open",
+      actor: { id: "u1", name: "Ada" },
+      createdAt: "2024-01-01T00:00:00.000Z",
+    });
+  });
+
+  it("keeps an unnamed actor by id, and leaves a system change without one", () => {
+    expect(toIssueEvent(row, new Map()).actor).toEqual({ id: "u1" });
+    expect(toIssueEvent({ ...row, actorId: null }, new Map())).not.toHaveProperty("actor");
   });
 });

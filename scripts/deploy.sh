@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #
-# Production deploy for brainbox — runs ON the EC2 box, invoked by the GitHub
-# Actions pipeline (.github/workflows/ci.yml) over SSH:
+# Production deploy for brainbox — runs ON the EC2 box, invoked over SSH:
 #
 #   git show <sha>:scripts/deploy.sh | bash -s -- <sha>
 #
@@ -32,12 +31,14 @@ cd "$REPO"
 PREV_SHA="$(git rev-parse HEAD)"
 echo ">> deploy $PREV_SHA -> $TARGET_SHA"
 
-build_backend() { pnpm -F @brainbox/backend build; }
+build_backend() { pnpm -F @ganeshdole/brainbox-backend build; }
 
 publish_static() {
-  # dashboard/dist has index.html + assets/ (NOT widget.js). --exclude keeps the
-  # existing widget.js from being deleted, then we overwrite it explicitly.
-  rsync -a --delete --exclude widget.js dashboard/dist/ "$WEB"/
+  # dashboard/dist has index.html + assets/ (NOT the widget). --exclude keeps the
+  # existing widget files from being deleted, then we overwrite them explicitly.
+  # widget-capture.js goes first: a widget.js that can't find it can't capture.
+  rsync -a --delete --exclude widget.js --exclude widget-capture.js dashboard/dist/ "$WEB"/
+  cp -f widget/dist/widget-capture.js "$WEB"/widget-capture.js
   cp -f widget/dist/widget.js "$WEB"/widget.js
   # Marketing, served from this box since we left Vercel. It loads the widget
   # from app.brainbox.sh, so it needs no widget.js of its own.
@@ -77,8 +78,8 @@ bash backend/scripts/backup.sh
 
 # --- 4. build all deployables ---
 build_backend
-pnpm -F @brainbox/widget build
-pnpm -F @brainbox/dashboard build
+pnpm -F @ganeshdole/brainbox-widget build
+pnpm -F @ganeshdole/brainbox-dashboard build
 pnpm -F brainbox-landing build
 
 # --- 5. snapshot current static for rollback, then migrate ---
@@ -87,7 +88,7 @@ rm -rf "$PREV_WEB"; cp -a "$WEB" "$PREV_WEB"
 # marketing webroot does not exist yet. An if-block is the safe form.
 rm -rf "$PREV_WWW"
 if [ -d "$WWW" ]; then cp -a "$WWW" "$PREV_WWW"; fi
-pnpm -F @brainbox/backend db:migrate || rollback
+pnpm -F @ganeshdole/brainbox-backend db:migrate || rollback
 
 # --- 6. publish static + restart backend ---
 publish_static

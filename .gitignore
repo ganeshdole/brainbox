@@ -31,8 +31,18 @@ dist-ssr
 *.sln
 *.sw?
 dashboard/public/widget.js
+dashboard/public/widget-capture.js
 marketing/public/widget.js
+marketing/public/widget-capture.js
 .vercel/
 
 # Local widget UI screenshots (scripts/shoot.mjs)
 widget/.shots/
+
+# Azure Functions local settings (secrets)
+local.settings.json
+
+# e2e (Playwright) output and seeded login
+e2e/test-results/
+e2e/playwright-report/
+e2e/.auth/

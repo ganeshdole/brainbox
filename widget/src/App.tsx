@@ -1,292 +1,304 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { FeedbackPayload, ProjectKey, Region } from "@brainbox/shared";
-import type { WidgetConfig } from "./lib/config.ts";
-import { captureMetadata } from "./lib/metadata.ts";
-import { cssPath, elementAt } from "./lib/selector.ts";
-import { bakeMarks, captureViewport, pickScreenshot } from "./lib/capture.ts";
-import { unionBounds, type Mark } from "./lib/marks.ts";
-import { canSessionRecord, startSessionRecording, type SessionRecording } from "./lib/session.ts";
-import { clearHighlights } from "./lib/annotate.ts";
-import { submitFeedback } from "./lib/submit.ts";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  canSessionRecord,
+  preloadCapture,
+  type Brainbox,
+  type Importance,
+  type IssueKind,
+  type Mark,
+  type Recording,
+} from "@ganeshdole/brainbox-core";
+import { useDraft } from "@ganeshdole/brainbox-react";
+import type { TriggerMode } from "@ganeshdole/brainbox-shared";
+import type { Position } from "./lib/position.ts";
+import { widgetStore } from "./lib/widget-store.ts";
 import { Launcher } from "./components/Launcher.tsx";
 import { Chooser } from "./components/Chooser.tsx";
 import { MarkupOverlay } from "./components/MarkupOverlay.tsx";
 import { RecordOverlay } from "./components/RecordOverlay.tsx";
 import { Composer } from "./components/Composer.tsx";
+import { FeatureComposer } from "./components/FeatureComposer.tsx";
 import { Result } from "./components/Result.tsx";
 
-const MAX_SESSION_BYTES = 15 * 1024 * 1024;
-
+/** Which screen is showing. The report itself - screenshot, bake, recording,
+ *  what gets sent - lives in the core `Draft`; this is only the UI's position
+ *  in the flow. */
 type Status =
   | "idle"
   | "choosing"
   | "marking"
   | "recording"
   | "composing"
+  | "requesting"
   | "submitting"
   | "done"
   | "error";
 
-export function App({ config, hostEl }: { config: WidgetConfig; hostEl: HTMLElement }) {
-  const [status, setStatus] = useState<Status>("idle");
-  const [region, setRegion] = useState<Region | null>(null);
-  const [shot, setShot] = useState<Blob | null>(null);
-  const [shotUrl, setShotUrl] = useState("");
-  const [session, setSession] = useState<Blob | null>(null);
-  const [recAudio, setRecAudio] = useState<Blob | null>(null);
-  const [shotPending, setShotPending] = useState(false);
-  const [shotFailed, setShotFailed] = useState(false);
+export function App({
+  brainbox,
+  hostEl,
+  trigger,
+  position,
+  featureRequests,
+}: {
+  brainbox: Brainbox;
+  /** The shadow host: left out of screenshots. */
+  hostEl: HTMLElement;
+  trigger: TriggerMode;
+  position: Position;
+  /** Whether the chooser offers "Suggest a feature". */
+  featureRequests: boolean;
+}) {
+  // Open/closed is shared with the host (`useBrainboxWidget`, `mount().open()`),
+  // so it lives outside this component and the screen follows it.
+  const ui = useMemo(() => widgetStore(brainbox), [brainbox]);
+  const [status, setStatus] = useState<Status>(() => (ui.isOpen() ? "choosing" : "idle"));
+  const [recording, setRecording] = useState<Recording | null>(null);
   const [error, setError] = useState("");
   const [issueId, setIssueId] = useState("");
-  const recRef = useRef<SessionRecording | null>(null);
-  /** In-flight screenshot. The composer opens before this settles, so submit
-   *  awaits it here rather than blocking the UI on it. */
-  const shotRef = useRef<Promise<Blob> | null>(null);
-  /** Bumped on every reset. A capture started for an abandoned run can still be
-   *  seconds from settling - the markup step is long and Esc is right there -
-   *  and without this its `then` would revive a dead run's screenshot and strand
-   *  an object URL for a run nobody is looking at any more. */
-  const runRef = useRef(0);
+  // A feature request takes its own form, and its screenshot is a detour that
+  // comes back to it rather than going on to the bug composer.
+  const [kind, setKind] = useState<IssueKind>("bug");
+
+  // One draft for the lifetime of the widget; `cancel()` resets it between runs.
+  const draft = useMemo(() => brainbox.draft({ exclude: hostEl }), [brainbox, hostEl]);
+  const report = useDraft(draft);
 
   const reset = useCallback(() => {
-    runRef.current += 1;
-    setShotUrl("");
-    // an abandoned recording must release the mic + DOM observers
-    const rec = recRef.current;
-    recRef.current = null;
-    if (rec) void rec.stop().catch(() => {});
-    clearHighlights();
-    shotRef.current = null;
+    draft.cancel();
+    setRecording(null);
     setStatus("idle");
-    setRegion(null);
-    setShot(null);
-    setSession(null);
-    setRecAudio(null);
-    setShotPending(false);
-    setShotFailed(false);
     setError("");
     setIssueId("");
-  }, []);
+    setKind("bug");
+    ui.close();
+  }, [draft, ui]);
 
-  // The one place object URLs are handed back: whenever `shotUrl` changes - a
-  // bake replacing the plain shot, a reset clearing it - and on unmount. Doing
-  // it inside a `setShotUrl` updater instead would put a side effect in a
-  // function React is free to call more than once.
+  // Fetch the capture libraries while the user is still choosing, so the
+  // screenshot or recording they pick isn't waiting on the network.
+  const open = status !== "idle";
   useEffect(() => {
-    if (!shotUrl) return;
-    return () => URL.revokeObjectURL(shotUrl);
-  }, [shotUrl]);
+    if (open) preloadCapture();
+  }, [open]);
 
-  // window.Brainbox.open()/close() drive the widget programmatically.
-  useEffect(() => {
-    const open = () => setStatus((s) => (s === "idle" ? "choosing" : s));
-    window.addEventListener("brainbox:open", open);
-    window.addEventListener("brainbox:close", reset);
-    return () => {
-      window.removeEventListener("brainbox:open", open);
-      window.removeEventListener("brainbox:close", reset);
-    };
-  }, [reset]);
+  // Not a dialog while recording: then the user is working in the host page.
+  const modal = open && status !== "recording";
 
-  /** Enter the markup step and start rasterising immediately.
-   *
-   *  The capture is kicked off here rather than when the user finishes drawing:
-   *  rendering a big page takes seconds, marking one up takes tens of them, so
-   *  starting now means the shot is already waiting at Done instead of the user
-   *  watching a spinner after it. */
   const startMarkup = useCallback(() => {
-    setShotPending(true);
-    setShotFailed(false);
+    draft.captureScreenshot();
     setStatus("marking");
-
-    const run = runRef.current;
-    const pending = captureViewport(hostEl);
-    shotRef.current = pending;
-    pending
-      .then((blob) => {
-        if (runRef.current !== run) return;
-        setShot(blob);
-        setShotUrl(URL.createObjectURL(blob));
-      })
-      .catch(() => {
-        // A failed screenshot must not sink the report - the text and voice
-        // note are still worth filing.
-        if (runRef.current === run) setShotFailed(true);
-      })
-      .finally(() => {
-        // Only clears if this is still the shot we intend to send. Leaving the
-        // markup step swaps in the bake, and that one is not ready yet - its
-        // own `finally` below is what ends the pending state then.
-        if (runRef.current === run && shotRef.current === pending) setShotPending(false);
-      });
-  }, [hostEl]);
+  }, [draft]);
 
   const onMarksDone = useCallback(
     (marks: Mark[]) => {
-      // No separate "select the area" step any more - what the user drew *is*
-      // the region, so the issue still records where on the page it happened.
-      const bounds = unionBounds(marks);
-      if (bounds) {
-        const cx = bounds.x + bounds.width / 2;
-        const cy = bounds.y + bounds.height / 2;
-        setRegion({ ...bounds, selector: cssPath(elementAt(cx, cy, hostEl)) });
-      }
-      setStatus("composing");
-
-      const frozen = shotRef.current;
-      if (!frozen || marks.length === 0) return;
-
-      // Flatten in the background: the composer is already up and the user's
-      // next move is to start talking. If it fails the plain shot is already
-      // attached, so the report still goes out - just without the markup.
-      //
-      // Pending until it lands, so the composer says "still working" rather than
-      // showing the pre-markup shot as if it were final - and so a Send during
-      // that window reads as waiting on something rather than as a dead button.
-      const run = runRef.current;
-      setShotPending(true);
-      const baked = frozen.then((blob) => bakeMarks(blob, marks));
-      shotRef.current = baked;
-      baked
-        .then((blob) => {
-          if (runRef.current !== run) return;
-          setShot(blob);
-          setShotUrl(URL.createObjectURL(blob));
-        })
-        .catch(() => {})
-        .finally(() => {
-          if (runRef.current === run && shotRef.current === baked) setShotPending(false);
-        });
+      draft.markUp(marks);
+      setStatus(kind === "feature" ? "requesting" : "composing");
     },
-    [hostEl],
+    [draft, kind],
   );
 
-  const finishRecording = useCallback(async () => {
-    const rec = recRef.current;
-    if (!rec) return;
-    recRef.current = null;
-    // clear before stop() so the removal lands inside the recording
-    clearHighlights();
+  const startFeature = useCallback(() => {
+    setKind("feature");
+    setStatus("requesting");
+  }, []);
+
+  // Back to the form without the screenshot. The draft holds nothing else of a
+  // feature request; its words live in the form.
+  const dropScreenshot = useCallback(() => {
+    draft.cancel();
+    setStatus("requesting");
+  }, [draft]);
+
+  const finishRecording = useCallback(async (rec: Recording) => {
+    setRecording(null);
     try {
-      const { session: blob, audio } = await rec.stop();
-      if (blob.size > MAX_SESSION_BYTES) {
-        setError("Recording too large - try a shorter clip");
-        setStatus("error");
-        return;
-      }
-      setSession(blob);
-      setRecAudio(audio);
-      // last-frame thumbnail: shown in the composer and uploaded as the issue's
-      // screenshot so the dashboard list gets a real preview. Best-effort.
-      try {
-        const thumb = await captureViewport(hostEl);
-        setShot(thumb);
-        setShotUrl(URL.createObjectURL(thumb));
-      } catch {
-        /* composer falls back to the text note */
-      }
+      await rec.stop();
       setStatus("composing");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Recording failed");
       setStatus("error");
     }
-  }, [hostEl]);
+  }, []);
 
   // rrweb DOM recording - starts instantly, no permission prompt, captures only the app.
   const startRecord = useCallback(() => {
     try {
-      recRef.current = startSessionRecording(() => void finishRecording());
+      const rec: Recording = draft.startRecording({
+        onAutoStop: () => void finishRecording(rec),
+      });
+      setRecording(rec);
       setStatus("recording");
     } catch {
       setStatus("choosing");
     }
-  }, [finishRecording]);
+  }, [draft, finishRecording]);
+
+  // Read by the store listener below, which must not restart a run under way.
+  const statusRef = useRef(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  // The screen follows the shared open state. `open()` lands on the chooser;
+  // a host's `start(mode)` goes straight into a screenshot, a recording or a
+  // feature request.
+  useEffect(() => {
+    const sync = () => {
+      if (!ui.isOpen()) return reset();
+      const mode = ui.takeStart();
+      if (!mode) return setStatus((s) => (s === "idle" ? "choosing" : s));
+      if (statusRef.current !== "idle" && statusRef.current !== "choosing") return;
+      if (mode === "screenshot") startMarkup();
+      else if (mode === "feature") startFeature();
+      else if (canSessionRecord()) startRecord();
+      else setStatus("choosing");
+    };
+    const unsubscribe = ui.subscribe(sync);
+    // A start() made before this subscription, e.g. `mount()` then `start()`
+    // in one tick, notified no one. Pick it up once, as a store notification
+    // would: deferred, and skipped if this effect was torn down meanwhile.
+    let live = true;
+    queueMicrotask(() => {
+      if (live && ui.isOpen()) sync();
+    });
+    return () => {
+      live = false;
+      unsubscribe();
+    };
+  }, [ui, reset, startMarkup, startRecord, startFeature]);
 
   const onSubmit = useCallback(
     async (text: string, audio: Blob | null) => {
       setStatus("submitting");
-      // The capture - and the bake of the user's markup onto it - ran while the
-      // user was talking. If they hit Send first, wait for it rather than
-      // sending the older, un-marked version sitting in state.
-      const screenshot = await pickScreenshot(shotRef.current, shot);
-      if (!screenshot && !session && !text.trim() && !audio) {
-        setError("Nothing to send - record a note or add a description");
-        setStatus("error");
-        return;
-      }
-      const payload: FeedbackPayload = {
-        projectKey: config.projectKey as ProjectKey,
-        region: region ?? undefined,
-        text: text.trim() || undefined,
-        metadata: captureMetadata(region?.selector),
-      };
       try {
-        const id = await submitFeedback({
-          endpoint: config.endpoint,
-          payload,
-          screenshot: screenshot ?? undefined,
-          session: session ?? undefined,
-          audio: audio ?? recAudio ?? undefined,
-        });
-        setIssueId(id);
+        const { id } = await draft.submit({ text, audio });
+        setIssueId(id ?? "");
         setStatus("done");
       } catch (e) {
         setError(e instanceof Error ? e.message : "Upload failed");
         setStatus("error");
       }
     },
-    [shot, session, recAudio, region, config],
+    [draft],
+  );
+
+  const onSubmitFeature = useCallback(
+    async (text: string, audio: Blob | null, importance: Importance | undefined) => {
+      setStatus("submitting");
+      try {
+        const { id } = await draft.submit({ text, audio, kind: "feature", importance });
+        setIssueId(id ?? "");
+        setStatus("done");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Upload failed");
+        setStatus("error");
+      }
+    },
+    [draft],
   );
 
   return (
     <>
-      {config.mode === "float" && status === "idle" && (
-        <Launcher position={config.position} onClick={() => setStatus("choosing")} />
+      {/* First, so it commits before any panel below autofocuses. */}
+      <DialogMark hostEl={hostEl} active={modal} />
+      {trigger === "floating" && status === "idle" && (
+        <Launcher position={position} onClick={ui.open} />
       )}
       {status === "choosing" && (
         <Chooser
-          position={config.position}
+          position={position}
           canRecord={canSessionRecord()}
           onScreenshot={startMarkup}
           onRecord={startRecord}
+          onFeature={featureRequests ? startFeature : undefined}
           onCancel={reset}
         />
       )}
       {status === "marking" && (
         <MarkupOverlay
-          frozenUrl={shotUrl || undefined}
-          pending={shotPending}
-          failed={shotFailed}
+          frozenUrl={report.screenshotUrl ?? undefined}
+          pending={report.screenshotPending}
+          failed={report.screenshotFailed}
           onDone={onMarksDone}
-          onCancel={reset}
+          onCancel={kind === "feature" ? dropScreenshot : reset}
         />
       )}
-      {status === "recording" && (
+      {status === "recording" && recording && (
         <RecordOverlay
-          onStop={() => void finishRecording()}
-          micActive={() => recRef.current?.micActive() ?? false}
-          onMuteChange={(muted) => recRef.current?.setMicMuted(muted)}
+          annotations={recording.annotations}
+          onStop={() => void finishRecording(recording)}
+          micActive={recording.micActive}
+          onMuteChange={recording.setMicMuted}
         />
       )}
       {status === "composing" && (
         <Composer
-          screenshotUrl={shotUrl || undefined}
-          sessionReady={!!session}
-          voiceCaptured={!!recAudio}
-          capturePending={shotPending}
-          captureFailed={shotFailed}
-          position={config.position}
+          screenshotUrl={report.screenshotUrl ?? undefined}
+          sessionReady={report.hasSession}
+          voiceCaptured={report.hasVoice}
+          capturePending={report.screenshotPending}
+          captureFailed={report.screenshotFailed}
+          position={position}
           onCancel={reset}
           onSubmit={onSubmit}
         />
       )}
-      {status === "submitting" && <Result kind="loading" position={config.position} />}
+      {/* Kept mounted, hidden, while its screenshot is marked up, so what the
+          user typed or said is still there when they come back. */}
+      {kind === "feature" && (status === "requesting" || status === "marking") && (
+        <div hidden={status === "marking"}>
+          <FeatureComposer
+            screenshotUrl={report.screenshotUrl ?? undefined}
+            capturePending={report.screenshotPending}
+            captureFailed={report.screenshotFailed}
+            position={position}
+            onScreenshot={startMarkup}
+            onRemoveScreenshot={dropScreenshot}
+            onCancel={reset}
+            onSubmit={(text, audio, importance) => void onSubmitFeature(text, audio, importance)}
+          />
+        </div>
+      )}
+      {status === "submitting" && <Result kind="loading" position={position} />}
       {status === "done" && (
-        <Result kind="success" id={issueId} position={config.position} onClose={reset} />
+        <Result
+          kind="success"
+          id={issueId}
+          thanks={kind === "feature" ? "Thanks! Your idea was sent." : undefined}
+          position={position}
+          onClose={reset}
+        />
       )}
       {status === "error" && (
-        <Result kind="error" message={error} position={config.position} onClose={reset} />
+        <Result kind="error" message={error} position={position} onClose={reset} />
       )}
     </>
   );
+}
+
+/**
+ * While a panel is up the widget is a dialog over the page, and says so on the
+ * shadow host, the one element the host's document can see. Many focus traps
+ * already let events from another dialog through, so a host modal left open
+ * behind the composer stops eating its spaces, Enters and Tabs.
+ *
+ * The timing matters. A trap that pulls focus back on `focusin` judges the
+ * composer's `autoFocus`, which React applies while committing the textarea,
+ * before any passive effect, and before its ancestors' layout effects too. A
+ * layout effect in an earlier sibling is committed ahead of it, so this
+ * renders before every panel.
+ */
+function DialogMark({ hostEl, active }: { hostEl: HTMLElement; active: boolean }) {
+  useLayoutEffect(() => {
+    if (!active) return;
+    hostEl.setAttribute("role", "dialog");
+    hostEl.setAttribute("aria-modal", "true");
+    hostEl.setAttribute("aria-label", "Brainbox feedback");
+    return () => {
+      hostEl.removeAttribute("role");
+      hostEl.removeAttribute("aria-modal");
+      hostEl.removeAttribute("aria-label");
+    };
+  }, [hostEl, active]);
+  return null;
 }

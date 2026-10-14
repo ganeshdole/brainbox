@@ -1,21 +1,25 @@
-import { DrizzleAdapter } from "@auth/drizzle-adapter";
+import { randomInt } from "node:crypto";
 import Google from "@auth/core/providers/google";
 import type { EmailConfig } from "@auth/core/providers/email";
 
-import { db } from "../db/client.ts";
-import {
-  accounts,
-  sessions,
-  users,
-  verificationTokens,
-} from "../db/schema/index.ts";
 import { getEmailer } from "../email/index.ts";
 import { magicLinkEmail } from "../email/templates/magic-link.ts";
+import { signInCodeEmail } from "../email/templates/sign-in-code.ts";
 import { env } from "../env.ts";
+import { AUTH_ERROR_PATH } from "../routes/auth-error.ts";
+import { getStore } from "../store/index.ts";
+import { signInAllowed } from "./allowed.ts";
+import { CODE_LIFETIME_MS, withCodeAttemptLimit } from "./code-attempts.ts";
 
-// How long a sign-in link stays usable. Short enough that a forwarded or
-// leaked mail stops working quickly, long enough to survive a slow inbox.
-const MAGIC_LINK_MAX_AGE_SECONDS = 15 * 60;
+/** A 6-digit sign-in code, zero-padded: every one of the million is equally likely. */
+export function generateSignInCode(): string {
+  return randomInt(0, 1_000_000).toString().padStart(6, "0");
+}
+
+// How long a sign-in link or code stays usable. Short enough that a forwarded
+// or leaked mail stops working quickly, long enough to survive a slow inbox.
+// The code attempt limit counts over the same span (code-attempts.ts).
+const MAGIC_LINK_MAX_AGE_SECONDS = CODE_LIFETIME_MS / 1000;
 
 // Magic-link sign-in, declared inline rather than via the Nodemailer provider:
 // that one hard-imports `nodemailer` and throws without an SMTP `server`, and
@@ -23,8 +27,13 @@ const MAGIC_LINK_MAX_AGE_SECONDS = 15 * 60;
 // plus a Resend-verified domain. Auth.js treats any `type: "email"` provider
 // generically, so this needs no extra dependency.
 //
-// Requires the adapter's verificationTokens table, which the Drizzle schema
-// already defines for exactly this purpose.
+// Requires the store's Auth.js adapter to keep verification tokens.
+//
+// AUTH_EMAIL_MODE picks what the email carries. With "code" or "both" the
+// verification token is a 6-digit code instead of Auth.js's 64-character one;
+// the dashboard sends it to the same callback a link opens, so Auth.js checks
+// both the same way. withCodeAttemptLimit caps guessing.
+const sendsCode = env.AUTH_EMAIL_MODE !== "link";
 const magicLink: EmailConfig = {
   id: "magic-link",
   type: "email",
@@ -32,8 +41,12 @@ const magicLink: EmailConfig = {
   from: env.EMAIL_FROM,
   maxAge: MAGIC_LINK_MAX_AGE_SECONDS,
   options: {},
-  async sendVerificationRequest({ identifier, url }) {
-    const { subject, html, text } = magicLinkEmail(url, MAGIC_LINK_MAX_AGE_SECONDS / 60);
+  ...(sendsCode && { generateVerificationToken: generateSignInCode }),
+  async sendVerificationRequest({ identifier, url, token }) {
+    const minutes = MAGIC_LINK_MAX_AGE_SECONDS / 60;
+    const { subject, html, text } = !sendsCode
+      ? magicLinkEmail(url, minutes)
+      : signInCodeEmail(token, env.AUTH_EMAIL_MODE === "both" ? url : null, minutes);
     // Throwing here surfaces to the caller as a failed sign-in, which is what
     // we want: silently swallowing it would leave the user waiting for a mail
     // that is never coming.
@@ -67,17 +80,16 @@ export function getAuthConfig() {
   return {
     secret: env.AUTH_SECRET,
     trustHost: true,
-    adapter: DrizzleAdapter(db, {
-      usersTable: users,
-      accountsTable: accounts,
-      sessionsTable: sessions,
-      verificationTokensTable: verificationTokens,
-    }),
+    adapter: withCodeAttemptLimit(getStore().authAdapter(), getStore().signIn, env.AUTH_EMAIL_MODE),
 
     // Auth.js otherwise renders its own unbranded pages on the API origin, so a
     // failed sign-in dropped the user on app.brainbox.sh/api/auth/error with a
-    // bare error code and no way back. Point both at the dashboard's /login,
-    // which reads ?error= and explains itself.
+    // bare error code and no way back. Every page leads to the dashboard's
+    // /login, which reads ?error= and explains itself.
+    // signIn and verifyRequest are used as given, so they are the dashboard URL.
+    // error is not: when a sign-in step throws, Auth.js prefixes it with the
+    // API's origin, so it is a path on the API that forwards to the dashboard
+    // (routes/auth-error.ts).
     // Note none of these may carry a query string: Auth.js appends the incoming
     // request's own `?...` verbatim (lib/pages/index.js), so `/login?check=1`
     // would come out as `/login?check=1?provider=...` and parse as nonsense.
@@ -85,7 +97,7 @@ export function getAuthConfig() {
     // login page keys its "check your inbox" state off.
     pages: {
       signIn: `${env.DASHBOARD_ORIGIN}/login`,
-      error: `${env.DASHBOARD_ORIGIN}/login`,
+      error: AUTH_ERROR_PATH,
       verifyRequest: `${env.DASHBOARD_ORIGIN}/login`,
     },
 
@@ -125,6 +137,13 @@ export function getAuthConfig() {
     ],
 
     callbacks: {
+      // AUTH_ALLOWED_EMAIL_DOMAINS. For email sign-in this runs before the
+      // email is sent, so a refused address gets no mail. A refusal lands on
+      // the login page as ?error=AccessDenied.
+      async signIn({ user }: { user: { email?: string | null } }) {
+        return signInAllowed(getStore(), user.email, env.AUTH_ALLOWED_EMAIL_DOMAINS);
+      },
+
       // Auth.js's default drops any callbackUrl whose origin differs from the
       // API's, falling back to the API root. In production the dashboard and
       // the API share app.brainbox.sh so it never showed; locally (5173 vs

@@ -1,28 +1,55 @@
-import { createElement } from "react";
-import { createRoot } from "react-dom/client";
-import type { Identity } from "@brainbox/shared";
-import { App } from "./App.tsx";
-import { readConfig } from "./lib/config.ts";
-import { installCapture, setIdentity } from "./lib/metadata.ts";
-import { shadowCss } from "./lib/shadow-css.ts";
-import css from "./index.css?inline";
+import {
+  brainboxTransport,
+  type Identity,
+  type ProjectKey,
+  type ReportField,
+} from "@ganeshdole/brainbox-core";
+import { readConfig, triggerAction } from "./lib/config.ts";
+import { isBrainboxEvent } from "./lib/shadow-host.ts";
+import type { StartMode } from "./lib/widget-store.ts";
+import { mount, type WidgetHandle } from "./mount.tsx";
+
+// The script-tag bundle (`widget.js`). The one file in this package that runs
+// on load: it reads the <script> tag, mounts the widget, and publishes the
+// `window.Brainbox` API that pasted snippets rely on.
 
 // Captured at eval time - for a classic <script src> this is the embedding tag.
 // Module scripts (dev harness) leave it null, so we fall back to a query below.
 const currentScript = document.currentScript as HTMLScriptElement | null;
 
-// Window events for host pages: "brainbox:open" / "brainbox:close" (fired by the
-// api below) and "brainbox:submitted" ({ detail: { id } }) after a successful submit.
+/** Set once the DOM is ready. Calls that beat it are no-ops, not crashes,
+ *  except who is reporting and the app's fields: a snippet sets those right
+ *  away, so they are kept and applied when the widget mounts. */
+let widget: WidgetHandle | null = null;
+let earlyIdentity: Identity | undefined;
+let earlyFields: ReportField[] | undefined;
+
+// Public API for host pages. "brainbox:submitted" ({ detail: { id } }) fires
+// on window after a successful submit.
 const api = {
   identify(identity: Identity) {
-    setIdentity(identity);
+    if (widget) widget.identify(identity);
+    else earlyIdentity = identity;
+  },
+  /** Your app's own details for every report, e.g.
+   *  `[{ label: "Plan", value: "Pro" }]`. Replaces the previous ones. */
+  setFields(fields: ReportField[]) {
+    if (widget) widget.setFields(fields);
+    else earlyFields = fields;
   },
   open() {
-    window.dispatchEvent(new CustomEvent("brainbox:open"));
+    widget?.open();
+  },
+  /** "screenshot", "record" or "feature": skips the chooser. */
+  start(mode: StartMode) {
+    widget?.start(mode);
   },
   close() {
-    window.dispatchEvent(new CustomEvent("brainbox:close"));
+    widget?.close();
   },
+  /** True for an event from inside the widget, for a host's focus trap to let
+   *  through: outside its shadow root the target is only the host element. */
+  isBrainboxEvent,
 };
 
 declare global {
@@ -39,44 +66,47 @@ function findScript(): HTMLScriptElement | null {
   );
 }
 
-function mount() {
+function boot() {
   const config = readConfig(findScript());
   if (!config) {
     console.error("[brainbox] missing data-project or data-endpoint on the script tag");
     return;
   }
 
-  installCapture();
+  widget = mount({
+    transport: brainboxTransport({
+      endpoint: config.endpoint,
+      projectKey: config.projectKey as ProjectKey,
+    }),
+    trigger: config.trigger,
+    position: config.position,
+    theme: config.theme,
+    featureRequests: config.featureRequests,
+    identity: earlyIdentity,
+    fields: earlyFields,
+    onSubmitted: ({ id }) =>
+      window.dispatchEvent(new CustomEvent("brainbox:submitted", { detail: { id } })),
+  });
 
-  const host = document.createElement("div");
-  host.id = "brainbox-widget";
-  // keep the widget's own UI out of rrweb session recordings (session.ts blockClass)
-  host.classList.add("rr-block");
-  host.style.position = "relative";
-  host.style.zIndex = "2147483647";
-  document.body.appendChild(host);
-
-  const shadow = host.attachShadow({ mode: "open" });
-
-  const style = document.createElement("style");
-  style.textContent = shadowCss(css);
-  shadow.appendChild(style);
-
-  const container = document.createElement("div");
-  container.className = "dark";
-  shadow.appendChild(container);
-
-  // "mount" mode: the host renders feedback through their own trigger.
-  if (config.mode === "mount" && config.mount) {
-    const target = document.querySelector(config.mount);
-    target?.addEventListener("click", () => api.open());
+  // "mount" mode: the host opens feedback from its own element.
+  if (config.trigger === "manual" && config.mount) {
+    document.querySelector(config.mount)?.addEventListener("click", () => api.open());
   }
 
-  createRoot(container).render(createElement(App, { config, hostEl: host }));
+  // Any element marked data-brainbox is a trigger, e.g.
+  // <button data-brainbox="feature">Request a feature</button>. Delegated, so
+  // elements a single-page app renders later work too.
+  document.addEventListener("click", (event) => {
+    const el = event.target instanceof Element ? event.target.closest("[data-brainbox]") : null;
+    if (!(el instanceof HTMLElement)) return;
+    const action = triggerAction(el.dataset.brainbox);
+    if (action === "open") api.open();
+    else if (action) api.start(action);
+  });
 }
 
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", mount);
+  document.addEventListener("DOMContentLoaded", boot);
 } else {
-  mount();
+  boot();
 }

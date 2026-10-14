@@ -1,0 +1,289 @@
+import { describe, expect, it } from "vitest";
+import type { CapturedMetadata } from "@ganeshdole/brainbox-shared";
+
+import { renderTicket, renderTicketHtml, type Ticket } from "./ticket.ts";
+
+const metadata: CapturedMetadata = {
+  url: "https://app.example.com/billing",
+  title: "Billing · Example",
+  viewport: { width: 1440, height: 900 },
+  devicePixelRatio: 2,
+  userAgent: "Mozilla/5.0 (Macintosh) Chrome/130",
+  language: "en-US",
+  timezone: "Europe/Berlin",
+  consoleErrors: [],
+};
+
+function ticket(overrides: Partial<Ticket> = {}): Ticket {
+  return {
+    id: "iss_1",
+    createdAt: "2026-10-11T09:30:00.000Z",
+    metadata,
+    links: { dashboard: "https://app.brainbox.sh/projects/p1/issues/iss_1" },
+    ...overrides,
+  };
+}
+
+describe("renderTicket title", () => {
+  it("uses the first non-empty line of the text, whitespace collapsed", () => {
+    const t = ticket({ text: "\n\n  The save   button\tdoes nothing\nSecond line" });
+    expect(renderTicket(t).title).toBe("The save button does nothing");
+  });
+
+  it("truncates a long first line with an ellipsis at 72 chars", () => {
+    const t = ticket({ text: "a".repeat(100) });
+    const { title } = renderTicket(t);
+    expect(title).toHaveLength(72);
+    expect(title.endsWith("…")).toBe(true);
+  });
+
+  it("says a wordless feature request is one in its fallback title", () => {
+    expect(renderTicket(ticket({ kind: "feature" })).title).toBe(
+      "Feature request from Billing · Example",
+    );
+  });
+
+  it("falls back to the transcript, then to the page title, then to the URL", () => {
+    expect(renderTicket(ticket({ transcript: "it crashed" })).title).toBe("it crashed");
+    expect(renderTicket(ticket()).title).toBe("Feedback on Billing · Example");
+    expect(
+      renderTicket(ticket({ metadata: { ...metadata, title: "  " } })).title,
+    ).toBe("Feedback on https://app.example.com/billing");
+  });
+});
+
+describe("renderTicket body", () => {
+  it("renders the full layout for a complete ticket", () => {
+    const t = ticket({
+      text: "Clicking save does nothing.",
+      transcript: "I pressed save\nand nothing happened",
+      region: { x: 1, y: 2, width: 3, height: 4, selector: "form > button.save" },
+      metadata: {
+        ...metadata,
+        identity: { email: "jane@example.com" },
+        consoleErrors: ["TypeError: x is undefined"],
+      },
+      links: {
+        dashboard: "https://app.brainbox.sh/i/1",
+        screenshot: "https://api.brainbox.sh/f/shot",
+        crop: "https://api.brainbox.sh/f/crop",
+        replay: "https://app.brainbox.sh/i/1#replay",
+      },
+    });
+
+    expect(renderTicket(t).body).toBe(
+      [
+        "![Highlighted region](https://api.brainbox.sh/f/crop)",
+        "",
+        "Clicking save does nothing.",
+        "",
+        "**Voice note**",
+        "",
+        "> I pressed save",
+        "> and nothing happened",
+        "",
+        "| | |",
+        "|---|---|",
+        "| Page | [Billing · Example](https://app.example.com/billing) |",
+        "| Viewport | 1440 × 900 @2x |",
+        "| Browser | Mozilla/5.0 (Macintosh) Chrome/130 |",
+        "| Locale | en-US, Europe/Berlin |",
+        "| User | jane@example.com |",
+        "| Element | `form > button.save` |",
+        "| Reported | 2026-10-11T09:30:00.000Z |",
+        "",
+        "<details>",
+        "<summary>1 console error</summary>",
+        "",
+        "```",
+        "TypeError: x is undefined",
+        "```",
+        "",
+        "</details>",
+        "",
+        "[Open in Brainbox](https://app.brainbox.sh/i/1) · [Session replay](https://app.brainbox.sh/i/1#replay) · [Full screenshot](https://api.brainbox.sh/f/shot)",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("shows the screenshot inline when there is no crop, and no image when there is neither", () => {
+    const shot = renderTicket(
+      ticket({ links: { dashboard: "d", screenshot: "https://x/shot" } }),
+    ).body;
+    expect(shot.startsWith("![Screenshot](https://x/shot)")).toBe(true);
+    expect(shot).not.toContain("Full screenshot");
+
+    const none = renderTicket(ticket()).body;
+    expect(none).not.toContain("![");
+    expect(none.startsWith("| | |")).toBe(true);
+  });
+
+  it("falls back to the metadata selector and to 'anonymous'", () => {
+    const body = renderTicket(
+      ticket({ metadata: { ...metadata, selector: "#root" } }),
+    ).body;
+    expect(body).toContain("| Element | `#root` |");
+    expect(body).toContain("| User | anonymous |");
+  });
+
+  it("names the reporter and lists the app's own fields as it labelled them", () => {
+    const body = renderTicket(
+      ticket({
+        metadata: {
+          ...metadata,
+          identity: { email: "jane@example.com", name: "Jane Roe", phone: "+1 555 0100" },
+          fields: [
+            { label: "Clinic", value: "Acme | Vet" },
+            { label: "Tenant ID", value: "t-1", type: "id" },
+          ],
+        },
+      }),
+    ).body;
+    expect(body).toContain("| User | Jane Roe <jane@example.com> |");
+    expect(body).toContain("| Phone | +1 555 0100 |");
+    expect(body).toContain("| Clinic | Acme \\| Vet |");
+    expect(body).toContain("| Tenant ID | t-1 |");
+  });
+
+  it("names a reporter known only by phone instead of calling them anonymous", () => {
+    const body = renderTicket(
+      ticket({ metadata: { ...metadata, identity: { phone: "+1 555 0100" } } }),
+    ).body;
+    expect(body).toContain("| User | +1 555 0100 |");
+  });
+
+  it("skips a blank reporter name or phone rather than leaving cells blank", () => {
+    for (const blank of ["", "   "]) {
+      const body = renderTicket(
+        ticket({ metadata: { ...metadata, identity: { name: blank, phone: blank, email: "jane@example.com" } } }),
+      ).body;
+      expect(body).toContain("| User | jane@example.com |");
+      expect(body).not.toContain("| Phone |");
+    }
+  });
+
+  it("escapes pipes and newlines inside table cells", () => {
+    const body = renderTicket(
+      ticket({ metadata: { ...metadata, title: "A | B\nC", userAgent: "UA|1" } }),
+    ).body;
+    expect(body).toContain("| Page | [A \\| B C](https://app.example.com/billing) |");
+    expect(body).toContain("| Browser | UA\\|1 |");
+  });
+
+  it("links a voice note with no transcript, so a spoken request still reaches the ticket", () => {
+    const body = renderTicket(
+      ticket({ kind: "feature", links: { dashboard: "d", audio: "https://x/voice" } }),
+    ).body;
+    expect(body.startsWith("**Voice note**\n\n[Listen to the voice note](https://x/voice)")).toBe(true);
+  });
+
+  it("quotes a transcribed voice note and links the recording in the footer", () => {
+    const body = renderTicket(
+      ticket({ transcript: "add CSV export", links: { dashboard: "d", audio: "https://x/voice" } }),
+    ).body;
+    expect(body).toContain("> add CSV export");
+    expect(body).not.toContain("Listen to the voice note");
+    expect(body).toContain("[Open in Brainbox](d) · [Voice note](https://x/voice)");
+  });
+
+  it("marks a feature request and its importance at the top of the details", () => {
+    const body = renderTicket(
+      ticket({ kind: "feature", importance: "critical", text: "Bulk export" }),
+    ).body;
+    expect(body).toContain(
+      ["|---|---|", "| Type | Feature request |", "| Importance | Blocking them |", "| Page |"].join("\n"),
+    );
+    expect(renderTicket(ticket({ kind: "feature" })).body).not.toContain("| Importance |");
+    expect(renderTicket(ticket()).body).not.toContain("| Type |");
+  });
+
+  it("caps console errors at 20 and says how many more there were", () => {
+    const errors = Array.from({ length: 23 }, (_, i) => `err ${i}`);
+    const body = renderTicket(ticket({ metadata: { ...metadata, consoleErrors: errors } })).body;
+    expect(body).toContain("<summary>23 console errors</summary>");
+    expect(body).toContain("err 19");
+    expect(body).not.toContain("err 20\n");
+    expect(body).toContain("… and 3 more");
+  });
+});
+
+describe("renderTicketHtml", () => {
+  it("says what the Markdown says, as HTML", () => {
+    const { title, body } = renderTicketHtml(
+      ticket({
+        text: "Clicking save does nothing.\n\nSecond paragraph",
+        transcript: "I pressed save\nand nothing happened",
+        region: { x: 1, y: 2, width: 3, height: 4, selector: "form > button.save" },
+        metadata: { ...metadata, identity: { email: "jane@example.com" }, consoleErrors: ["TypeError: x"] },
+        links: {
+          dashboard: "https://app.brainbox.sh/i/1",
+          screenshot: "https://api.brainbox.sh/f/shot",
+          crop: "https://api.brainbox.sh/f/crop",
+          replay: "https://app.brainbox.sh/i/1#replay",
+        },
+      }),
+    );
+    expect(title).toBe("Clicking save does nothing.");
+    expect(body).toContain('<img src="https://api.brainbox.sh/f/crop" alt="Highlighted region"');
+    expect(body).toContain("<p>Clicking save does nothing.</p>\n<p>Second paragraph</p>");
+    expect(body).toContain("<blockquote>I pressed save<br>and nothing happened</blockquote>");
+    expect(body).toContain('<tr><th align="left">Page</th><td><a href="https://app.example.com/billing">Billing · Example</a></td></tr>');
+    expect(body).toContain("<td><code>form &gt; button.save</code></td>");
+    expect(body).toContain("<strong>1 console error</strong></p>\n<pre>TypeError: x</pre>");
+    expect(body).toContain(
+      '<a href="https://app.brainbox.sh/i/1">Open in Brainbox</a> · <a href="https://app.brainbox.sh/i/1#replay">Session replay</a> · <a href="https://api.brainbox.sh/f/shot">Full screenshot</a>',
+    );
+  });
+
+  it("escapes everything the end-user and host app wrote", () => {
+    const { body } = renderTicketHtml(
+      ticket({
+        text: '<script>alert("x")</script>',
+        metadata: {
+          ...metadata,
+          title: "<b>T</b>",
+          userAgent: "UA & co",
+          fields: [{ label: "<i>Plan</i>", value: "'pro'" }],
+          consoleErrors: ["<img onerror=x>"],
+        },
+      }),
+    );
+    expect(body).not.toMatch(/<script|<b>|<i>|<img onerror/);
+    expect(body).toContain("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;");
+    expect(body).toContain("UA &amp; co");
+    expect(body).toContain("<th align=\"left\">&lt;i&gt;Plan&lt;/i&gt;</th><td>&#39;pro&#39;</td>");
+  });
+
+  it("links a voice note with no transcript", () => {
+    const { body } = renderTicketHtml(ticket({ links: { dashboard: "d", audio: "https://x/voice" } }));
+    expect(body).toContain('<p><strong>Voice note</strong></p>\n<p><a href="https://x/voice">Listen to the voice note</a></p>');
+  });
+
+  it("does not link a page URL that isn't http(s)", () => {
+    const { body } = renderTicketHtml(ticket({ metadata: { ...metadata, url: "javascript:alert(1)" } }));
+    expect(body).not.toContain("javascript:");
+    expect(body).toContain('<a href="#">Billing · Example</a>');
+  });
+
+  it("uses the tracker's own copies in place of every public link, and splits out the environment", () => {
+    const { body, environment } = renderTicketHtml(
+      ticket({ links: { dashboard: "d", crop: "https://x/crop", screenshot: "https://x/shot" } }),
+      { crop: "https://dev.azure.com/o/_apis/wit/attachments/c", screenshot: "https://dev.azure.com/o/_apis/wit/attachments/s" },
+    );
+    expect(body).toContain('<img src="https://dev.azure.com/o/_apis/wit/attachments/c" alt="Highlighted region"');
+    expect(body).toContain('<a href="https://dev.azure.com/o/_apis/wit/attachments/s">Full screenshot</a>');
+    expect(body).not.toContain("https://x/");
+    expect(environment).toContain(">Viewport</th><td>1440 × 900 @2x</td>");
+    expect(environment).toContain(">Locale</th>");
+    expect(environment).not.toContain(">User<");
+  });
+
+  it("keeps the public link for an image the tracker has no copy of", () => {
+    const { body } = renderTicketHtml(
+      ticket({ links: { dashboard: "d", crop: "https://x/crop", screenshot: "https://x/shot" } }),
+      { crop: "https://dev.azure.com/o/_apis/wit/attachments/c" },
+    );
+    expect(body).toContain('<a href="https://x/shot">Full screenshot</a>');
+  });
+});

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Check, Loader2, X } from "lucide-react";
+import { Check, Loader2, X } from "./icons.tsx";
 import { posClass, type Position } from "../lib/position.ts";
 
 const SUCCESS_DISMISS_MS = 3000;
@@ -8,12 +8,15 @@ export function Result({
   kind,
   id,
   message,
+  thanks = "Thanks! Feedback sent.",
   position,
   onClose,
 }: {
   kind: "loading" | "success" | "error";
   id?: string;
   message?: string;
+  /** What a success says. */
+  thanks?: string;
   position: Position;
   onClose?: () => void;
 }) {
@@ -36,7 +39,7 @@ export function Result({
       {kind === "success" && (
         <div>
           <p className="flex items-center gap-2 text-sm text-success">
-            <Check className="h-4 w-4" /> Thanks! Feedback sent.
+            <Check className="h-4 w-4" /> {thanks}
           </p>
           {id && <p className="mt-1 font-mono text-xs text-muted">#{id.slice(0, 8)}</p>}
           <button onClick={onClose} className="mt-3 text-xs text-muted hover:text-emphasis">

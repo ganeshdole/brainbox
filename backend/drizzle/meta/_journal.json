@@ -71,6 +71,55 @@
       "when": 1785218716902,
       "tag": "0009_long_la_nuit",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791708393415,
+      "tag": "0010_careless_karnak",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791803982790,
+      "tag": "0011_sign_in_attempts",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791903156299,
+      "tag": "0012_issue_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791906471241,
+      "tag": "0013_features",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791948774996,
+      "tag": "0014_teams",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1791948775996,
+      "tag": "0015_team_owned",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791949118320,
+      "tag": "0016_issue_triage",
+      "breakpoints": true
     }
   ]
 }

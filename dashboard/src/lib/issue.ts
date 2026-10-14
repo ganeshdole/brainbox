@@ -1,4 +1,4 @@
-import type { Issue } from "@brainbox/shared";
+import type { Importance, Issue } from "@ganeshdole/brainbox-shared";
 
 /** One-line label for a report: the end-user's note if they wrote one, else
  *  the page's document title. The bare host+path is a last resort - inside a
@@ -7,6 +7,11 @@ export function issueTitle(issue: Pick<Issue, "text" | "metadata">): string {
   const text = issue.text?.trim();
   if (text) return text;
   return issue.metadata.title || pageLabel(issue.metadata.url) || "Untitled report";
+}
+
+/** Reports is for what's broken; feature requests live under Features. */
+export function isBugReport(issue: Pick<Issue, "kind">): boolean {
+  return issue.kind !== "feature";
 }
 
 /** The Reports-page filter pills: what each report carries. */
@@ -18,6 +23,24 @@ export const REPORT_FILTERS = [
 ] as const;
 
 export type ReportFilterKey = (typeof REPORT_FILTERS)[number]["key"];
+
+/** The pills worth showing for a list: All, and each filter that matches
+ *  something. */
+export function shownFilters(issues: Issue[]): typeof REPORT_FILTERS[number][] {
+  return REPORT_FILTERS.filter((f) => f.key === "all" || issues.some(f.match));
+}
+
+const IMPORTANCE_LABEL: Record<Importance, string> = {
+  nice: "Nice to have",
+  important: "Important",
+  critical: "Blocking them",
+};
+
+/** "Important", or "Blocking them" for a request the end-user can't work
+ *  without. The same words as the ticket. */
+export function importanceLabel(importance: Importance): string {
+  return IMPORTANCE_LABEL[importance];
+}
 
 /** The full list pipeline: project untick (all view) → type filter → search. */
 export function visibleReports(
@@ -37,15 +60,20 @@ export function newestFirst<T extends Pick<Issue, "createdAt">>(issues: T[]): T[
   return [...issues].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-/** Case-insensitive search across everything a row shows: the title/note,
- *  the page, and the reporter. An empty query matches everything. */
+/** Case-insensitive search across the title/note, the page, the reporter
+ *  (name, email, phone) and the app's own field values, so a clinic name finds
+ *  its reports. An empty query matches everything. */
 export function matchesIssue(issue: Pick<Issue, "text" | "metadata">, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
+  const { identity, fields } = issue.metadata;
   const haystack = [
     issueTitle(issue),
     pageLabel(issue.metadata.url),
-    issue.metadata.identity?.email ?? "",
+    identity?.name ?? "",
+    identity?.email ?? "",
+    identity?.phone ?? "",
+    ...(fields ?? []).map((field) => field.value),
   ]
     .join("\n")
     .toLowerCase();
@@ -72,10 +100,4 @@ export function pagePath(url: string): string {
   } catch {
     return "";
   }
-}
-
-/** 83000 → "1:23" */
-export function formatClock(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }

@@ -1,9 +1,7 @@
-import { eq } from "drizzle-orm";
-import type { BillingState, PlanId, Subscription } from "@brainbox/shared";
+import type { BillingState, PlanId, Subscription } from "@ganeshdole/brainbox-shared";
 
-import { db } from "../db/client.ts";
-import { subscriptions } from "../db/schema/index.ts";
 import { env } from "../env.ts";
+import type { Store } from "../store/index.ts";
 
 // Tickets included per billing cycle, before overage. Mirrors the marketing
 // page's `lib/pricing.ts`; both ultimately mirror the free_threshold on the
@@ -16,9 +14,11 @@ export const TICKETS_PER_MONTH: Record<PlanId, number> = {
   business: 5_000,
 };
 
-/** Accounts allowed past the paywall without paying (ours). Case-insensitive:
- *  the address from the OAuth profile need not match the env var's casing. */
+/** Accounts allowed past the paywall without paying: ours, or everyone while
+ *  BILLING_DISABLED is on. Case-insensitive: the address from the OAuth
+ *  profile need not match the env var's casing. */
 export function isExempt(email: string | null | undefined): boolean {
+  if (env.BILLING_DISABLED) return true;
   if (!email) return false;
   return env.BILLING_EXEMPT_EMAILS.includes(email.toLowerCase());
 }
@@ -29,16 +29,13 @@ export function isExempt(email: string | null | undefined): boolean {
  * re-deriving the rule, so there is one place to change if the policy changes.
  */
 export async function billingStateFor(
+  store: Store,
   userId: string,
   email: string | null | undefined,
 ): Promise<BillingState> {
   const exempt = isExempt(email);
 
-  const [row] = await db
-    .select()
-    .from(subscriptions)
-    .where(eq(subscriptions.userId, userId))
-    .limit(1);
+  const row = await store.billing.subscriptionFor(userId);
 
   if (!row) return { subscription: null, exempt, hasAccess: exempt };
 
@@ -60,4 +57,18 @@ export async function billingStateFor(
     exempt,
     hasAccess: subscription.hasAccess || exempt,
   };
+}
+
+/**
+ * Whether a Team may use the product: when one of its Owners may. The plan
+ * stays with the person who pays for it, and covers every Team they own and
+ * everyone in those Teams.
+ */
+export async function teamHasAccess(store: Store, teamId: string): Promise<boolean> {
+  if (env.BILLING_DISABLED) return true;
+  const owners = (await store.teams.members(teamId)).filter((m) => m.role === "owner");
+  for (const owner of owners) {
+    if ((await billingStateFor(store, owner.userId, owner.email)).hasAccess) return true;
+  }
+  return false;
 }

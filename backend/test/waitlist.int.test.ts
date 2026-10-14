@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { app } from "../src/app.ts";
-import { db } from "../src/db/client.ts";
-import { waitlistSignups } from "../src/db/schema/index.ts";
+import { stored } from "./harness.ts";
 import * as emailModule from "../src/email/index.ts";
 
 // Distinct source IPs keep each request in its own rate-limit bucket (the route
@@ -21,7 +20,7 @@ describe("POST /waitlist", () => {
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ ok: true });
 
-    const rows = await db.select().from(waitlistSignups);
+    const rows = await stored.waitlistSignups();
     expect(rows).toHaveLength(1);
     expect(rows[0]!.email).toBe("founder@acme.com");
     expect(rows[0]!.source).toBe("marketing");
@@ -35,7 +34,7 @@ describe("POST /waitlist", () => {
     expect(second.status).toBe(200);
     expect(await second.json()).toEqual({ ok: true, alreadyRegistered: true });
 
-    const rows = await db.select().from(waitlistSignups);
+    const rows = await stored.waitlistSignups();
     expect(rows).toHaveLength(1);
     expect(rows[0]!.email).toBe("founder@acme.com");
   });
@@ -48,14 +47,14 @@ describe("POST /waitlist", () => {
     expect((await post("dup@acme.com", "10.0.0.5")).status).toBe(200);
 
     expect(sendSpy).toHaveBeenCalledTimes(1);
-    expect(await db.select().from(waitlistSignups)).toHaveLength(1);
+    expect(await stored.waitlistSignups()).toHaveLength(1);
     sendSpy.mockRestore();
   });
 
   it("rejects an invalid email with 400", async () => {
     expect((await post("not-an-email", "10.0.0.6")).status).toBe(400);
     expect((await post(undefined, "10.0.0.7")).status).toBe(400);
-    expect(await db.select().from(waitlistSignups)).toHaveLength(0);
+    expect(await stored.waitlistSignups()).toHaveLength(0);
   });
 
   it("still succeeds (signup saved) when the email send fails", async () => {
@@ -67,7 +66,7 @@ describe("POST /waitlist", () => {
     const res = await post("resilient@acme.com", "10.0.0.8");
     expect(res.status).toBe(201);
 
-    const rows = await db.select().from(waitlistSignups);
+    const rows = await stored.waitlistSignups();
     expect(rows).toHaveLength(1);
     expect(rows[0]!.emailStatus).toBe("failed");
     expect(rows[0]!.emailError).toContain("resend down");

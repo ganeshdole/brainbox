@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ImageOff, Loader2 } from "lucide-react";
+import { ImageOff, Loader2 } from "./icons.tsx";
 import {
   boundsOf,
   hitTest,
@@ -8,7 +8,8 @@ import {
   nextColor,
   type Mark,
   type Tool,
-} from "../lib/marks.ts";
+} from "@ganeshdole/brainbox-core";
+import { lockScroll } from "../lib/scroll-lock.ts";
 import { isDragTool, nextMarkId, useDrawing } from "../lib/use-drawing.ts";
 import { MarkShape, MarkTextInput } from "./MarkShape.tsx";
 import { MarkupToolbar } from "./MarkupToolbar.tsx";
@@ -75,8 +76,10 @@ export function MarkupOverlay({
     setSelected(null);
   }, [commit, marks, selected]);
 
-  const commitTyping = useCallback(() => {
-    if (!typing) return;
+  /** The note still open in the text box, as a mark - null if there's nothing
+   *  in it worth keeping. */
+  const typedMark = useCallback((): Mark | null => {
+    if (!typing) return null;
     const mark: Mark = {
       kind: "text",
       id: nextMarkId(),
@@ -85,9 +88,17 @@ export function MarkupOverlay({
       y: typing.y,
       text: typing.value,
     };
+    return isDegenerate(mark) ? null : mark;
+  }, [color, typing]);
+
+  const commitTyping = useCallback(() => {
+    const mark = typedMark();
     setTyping(null);
-    if (!isDegenerate(mark)) commit([...marks, mark]);
-  }, [color, commit, marks, typing]);
+    if (mark) commit([...marks, mark]);
+  }, [commit, marks, typedMark]);
+
+  // The page under the frozen shot must not move while the user draws on it.
+  useEffect(() => lockScroll(), []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -234,8 +245,10 @@ export function MarkupOverlay({
             still sends
           </span>
         ) : (
+          // Say plainly that this is a picture: people otherwise try to click
+          // the page, which Record is for.
           <span className="rounded-full bg-elevated px-3 py-1 text-xs text-muted">
-            Mark up what&apos;s wrong - or just hit Next to describe it
+            This is a snapshot of the page. Mark what&apos;s wrong, or hit Next
           </span>
         )}
       </div>
@@ -254,7 +267,14 @@ export function MarkupOverlay({
         onUndo={undo}
         onDelete={removeSelected}
         onCancel={onCancel}
-        onDone={() => onDone(marks)}
+        // The toolbar swallows its own pointerdowns, so pressing Next never
+        // reaches the surface handler that closes the text box - the note
+        // still being typed has to be folded in here or it's silently dropped.
+        onDone={() => {
+          const mark = typedMark();
+          setTyping(null);
+          onDone(mark ? [...marks, mark] : marks);
+        }}
       />
     </div>
   );

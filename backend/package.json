@@ -1,8 +1,9 @@
 {
-  "name": "@brainbox/backend",
+  "name": "@ganeshdole/brainbox-backend",
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "main": "dist/azure.js",
   "scripts": {
     "dev": "tsx watch --env-file=.env src/index.ts",
     "build": "tsup",
@@ -13,7 +14,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:seed": "tsx --env-file=.env scripts/seed.ts"
+    "db:seed": "tsx --env-file=.env scripts/seed.ts",
+    "fake:ado": "tsx scripts/fake-azure-devops.ts"
   },
   "dependencies": {
     "@ai-sdk/groq": "^4.0.5",
@@ -22,10 +24,15 @@
     "@auth/drizzle-adapter": "^1.11.2",
     "@aws-sdk/client-s3": "^3.1075.0",
     "@aws-sdk/s3-request-presigner": "^3.1075.0",
-    "@brainbox/shared": "workspace:*",
+    "@azure/functions": "^4.16.5",
+    "@ganeshdole/brainbox-integrations": "workspace:*",
+    "@ganeshdole/brainbox-server": "workspace:*",
+    "@ganeshdole/brainbox-shared": "workspace:*",
     "@hono/auth-js": "^1.1.1",
     "@hono/node-server": "^2.0.6",
     "ai": "^7.0.15",
+    "convex": "^1.46.0",
+    "convex-helpers": "^0.1.128",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.27",
     "postgres": "^3.4.9",

@@ -1,5 +1,5 @@
 import { pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
-import type { BillingPeriod, PlanId, SubscriptionStatus } from "@brainbox/shared";
+import type { BillingPeriod, PlanId, SubscriptionStatus } from "@ganeshdole/brainbox-shared";
 
 import { users } from "./auth-schema.ts";
 

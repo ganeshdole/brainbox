@@ -1,0 +1,20 @@
+# Overlay for a host whose ports 80/443 already belong to another reverse proxy
+# (e.g. a shared Caddy). `web` publishes no ports and instead joins that proxy's
+# Docker network as `brainbox-web`; the proxy terminates TLS and forwards to
+# brainbox-web:80 with the original Host header. Run with:
+#   COMPOSE_FILE=compose.yaml:compose.behind-proxy.yaml
+#   EDGE_NETWORK=<proxy network>  APP_HOST=http://app.example.com  WWW_HOST=http://example.com
+# (http:// hosts make the inner Caddy serve plain HTTP and skip certificates.)
+
+services:
+  web:
+    ports: !reset []
+    networks:
+      default: {}
+      edge:
+        aliases: [brainbox-web]
+
+networks:
+  edge:
+    external: true
+    name: ${EDGE_NETWORK:?set EDGE_NETWORK to the reverse proxy's Docker network}

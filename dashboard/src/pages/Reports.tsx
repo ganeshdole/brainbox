@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Camera, Mic, Play, Search, Video } from "lucide-react";
-import type { Issue } from "@brainbox/shared";
+import type { Issue, IssueTriagePatch } from "@ganeshdole/brainbox-shared";
 
 import { EmptyState } from "../components/EmptyState";
 import { InstallSnippet } from "../components/InstallSnippet";
+import { PriorityIcon, PriorityMenu, StatusDot, StatusMenu } from "../components/TriageControls";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -13,14 +14,18 @@ import {
 } from "../components/ui/dropdown-menu";
 import { Skeleton } from "../components/ui/skeleton";
 import { api, isAuthRedirect } from "../lib/api";
+import { cleanIdentity } from "../lib/reporter";
 import {
+  isBugReport,
   issueTitle,
   newestFirst,
   pagePath,
   REPORT_FILTERS,
   type ReportFilterKey,
+  shownFilters,
   visibleReports,
 } from "../lib/issue";
+import { priorityLabel, statusLabel, TRIAGE_TABS, byPriority, defaultTab, type TriageTabKey } from "../lib/triage";
 import { ALL_PROJECTS, useProject } from "../lib/useProject";
 import { cn, isToday, timeAgo } from "../lib/utils";
 
@@ -57,7 +62,8 @@ function ReportRow({ issue, projectLabel }: { issue: Issue; projectLabel?: strin
   // all view the project name leads the meta line instead.
   const titleIsPage = !issue.text?.trim() && !issue.metadata.title;
   const path = titleIsPage ? "" : pagePath(issue.metadata.url);
-  const reporter = issue.metadata.identity?.email;
+  const { name, email, phone } = cleanIdentity(issue.metadata.identity);
+  const reporter = name || email || phone;
   const meta = [
     ...(projectLabel ? [projectLabel] : []),
     ...(path ? [path] : []),
@@ -96,7 +102,15 @@ function ReportRow({ issue, projectLabel }: { issue: Issue; projectLabel?: strin
           </span>
         )}
       </span>
-      <span className="flex min-w-0 flex-1 items-baseline gap-2">
+      <span className="flex min-w-0 flex-1 items-center gap-2">
+        <span title={statusLabel(issue.status)} className="flex">
+          <StatusDot status={issue.status} />
+        </span>
+        {issue.priority !== "none" && (
+          <span title={priorityLabel(issue.priority)} className="flex">
+            <PriorityIcon priority={issue.priority} />
+          </span>
+        )}
         <span className="truncate text-sm text-emphasis">{issueTitle(issue)}</span>
         {meta.length > 0 && (
           <span className="hidden min-w-0 truncate text-xs text-muted sm:block">
@@ -139,25 +153,89 @@ function ReportRow({ issue, projectLabel }: { issue: Issue; projectLabel?: strin
 function ReportList({
   issues,
   projectNames,
+  selected,
+  onToggle,
 }: {
   issues: Issue[];
   /** Present in the all-projects view: id → name for the row meta line. */
   projectNames?: Map<string, string>;
+  selected: ReadonlySet<string>;
+  onToggle: (id: string) => void;
 }) {
   return (
     <ul className="overflow-hidden rounded-xl border border-default bg-elevated">
       {issues.map((issue) => (
-        <li key={issue.id} className="border-t border-default first:border-t-0">
-          <ReportRow issue={issue} projectLabel={projectNames?.get(issue.projectId)} />
+        <li
+          key={issue.id}
+          className={cn(
+            "group/row flex items-center border-t border-default first:border-t-0",
+            selected.has(issue.id) && "bg-interactive",
+          )}
+        >
+          {/* outside the row link, so ticking never opens the report */}
+          <label className="flex cursor-pointer items-center self-stretch pl-4">
+            <input
+              type="checkbox"
+              checked={selected.has(issue.id)}
+              onChange={() => onToggle(issue.id)}
+              aria-label={`Select "${issueTitle(issue)}"`}
+              className={cn(
+                "size-3.5 accent-current transition",
+                selected.size === 0 && "opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100",
+              )}
+            />
+          </label>
+          <div className="min-w-0 flex-1">
+            <ReportRow issue={issue} projectLabel={projectNames?.get(issue.projectId)} />
+          </div>
         </li>
       ))}
     </ul>
   );
 }
 
+/** Shown while rows are ticked: one change for all of them. */
+function BulkBar({
+  count,
+  busy,
+  error,
+  onApply,
+  onClear,
+}: {
+  count: number;
+  busy: boolean;
+  error: string | null;
+  onApply: (patch: IssueTriagePatch) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-default bg-elevated px-3 py-2">
+      <span className="text-xs text-emphasis">
+        <span className="font-mono">{count}</span> selected
+      </span>
+      <StatusMenu label="Set status" onChange={onApply} disabled={busy} />
+      <PriorityMenu label="Set priority" onChange={onApply} disabled={busy} />
+      {error && <span className="text-xs text-error">{error}</span>}
+      <button
+        type="button"
+        onClick={onClear}
+        className="ml-auto rounded-md px-2 py-1 text-xs text-muted transition hover:bg-interactive-hover hover:text-emphasis"
+      >
+        Clear
+      </button>
+    </div>
+  );
+}
+
 export function Reports() {
   const { project, projects } = useProject();
   const [filter, setFilter] = useState<ReportFilterKey>("all");
+  // Both keyed by scope, so another project starts on its default tab with
+  // nothing ticked. No tab picked yet means it follows the data (defaultTab).
+  const [picked, setPicked] = useState<{ scope: string; tab: TriageTabKey } | null>(null);
+  const [ticks, setTicks] = useState<{ scope: string; ids: ReadonlySet<string> } | null>(null);
+  const [sort, setSort] = useState<"newest" | "priority">("newest");
+  const [bulk, setBulk] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const [query, setQuery] = useState("");
   // all-projects view: ids unticked in the Projects dropdown
   const [hiddenProjects, setHiddenProjects] = useState<ReadonlySet<string>>(new Set());
@@ -177,7 +255,8 @@ export function Reports() {
       : Promise.all(projects.map((p) => api.listIssues(p.id))).then((lists) => lists.flat());
     load
       .then((issues) => {
-        if (!cancelled) setResult({ scope, issues: newestFirst(issues) });
+        // feature requests are tracked under Features
+        if (!cancelled) setResult({ scope, issues: newestFirst(issues.filter(isBugReport)) });
       })
       .catch((e: Error) => {
         // A 401/402 is already navigating away; rendering it just flashes a
@@ -246,13 +325,41 @@ export function Reports() {
   const hidden = project ? undefined : hiddenProjects;
   const scoped = issues?.filter((i) => !hidden?.has(i.projectId)) ?? null;
   const active = REPORT_FILTERS.find((f) => f.key === filter) ?? REPORT_FILTERS[0];
-  const visible = issues
-    ? visibleReports(issues, { filter, query, hiddenProjects: hidden })
+  const activeTab = picked?.scope === scope ? picked.tab : defaultTab(scoped ?? []);
+  const selected: ReadonlySet<string> = ticks?.scope === scope ? ticks.ids : new Set();
+  const setSelected = (ids: ReadonlySet<string>) => setTicks({ scope, ids });
+  const tabDef = TRIAGE_TABS.find((t) => t.key === activeTab) ?? TRIAGE_TABS[0];
+  const filtered = scoped
+    ? visibleReports(scoped.filter(tabDef.match), { filter, query })
     : null;
+  const visible = filtered && sort === "priority" ? byPriority(filtered) : filtered;
   const today = visible?.filter((i) => isToday(i.createdAt)) ?? [];
   const earlier = visible?.filter((i) => !isToday(i.createdAt)) ?? [];
-  // group headers only when they separate something
-  const grouped = today.length > 0 && earlier.length > 0;
+  // group headers only when they separate something, and only in time order
+  const grouped = sort === "newest" && today.length > 0 && earlier.length > 0;
+  // a ticked row that has left the view (another tab, a search) isn't edited
+  const ticked = visible?.filter((i) => selected.has(i.id)).map((i) => i.id) ?? [];
+
+  function toggle(id: string) {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelected(next);
+  }
+
+  async function applyBulk(patch: IssueTriagePatch) {
+    setBulk({ busy: true, error: null });
+    try {
+      const updated = new Map((await api.triageIssues(ticked, patch)).map((i) => [i.id, i]));
+      setResult((prev) =>
+        prev?.issues ? { ...prev, issues: prev.issues.map((i) => updated.get(i.id) ?? i) } : prev,
+      );
+      setSelected(new Set());
+      setBulk({ busy: false, error: null });
+    } catch (e) {
+      setBulk({ busy: false, error: isAuthRedirect(e) ? null : (e as Error).message });
+    }
+  }
 
   return (
     <div className="min-h-0 flex-1 lg:overflow-y-auto">
@@ -278,11 +385,10 @@ export function Reports() {
           )}
           {issues && issues.length > 0 && (
             <div className="ml-auto flex flex-wrap items-center gap-1">
-              {REPORT_FILTERS.map((f) => {
-                // presence keyed to everything fetched (stable while ticking
-                // projects); only the count reflects the ticked subset
-                if (f.key !== "all" && issues.filter(f.match).length === 0) return null;
-                const count = (scoped ?? []).filter(f.match).length;
+              {/* presence keyed to everything fetched (stable while ticking
+                  projects and switching tabs); the count is what this tab holds */}
+              {shownFilters(issues).map((f) => {
+                const count = (scoped ?? []).filter(tabDef.match).filter(f.match).length;
                 return (
                   <button
                     key={f.key}
@@ -335,6 +441,48 @@ export function Reports() {
           )}
         </div>
 
+        {scoped && scoped.length > 0 && (
+          <div className="mt-5 flex flex-wrap items-center gap-1 border-b border-default">
+            {TRIAGE_TABS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setPicked({ scope, tab: t.key })}
+                aria-pressed={activeTab === t.key}
+                className={cn(
+                  "-mb-px border-b-2 px-3 py-2 text-sm transition",
+                  activeTab === t.key
+                    ? "border-current text-emphasis"
+                    : "border-transparent text-muted hover:text-emphasis",
+                )}
+              >
+                {t.label} <span className="font-mono text-xs">{scoped.filter(t.match).length}</span>
+              </button>
+            ))}
+            <label className="ml-auto flex items-center gap-1.5 pb-1 text-xs text-muted">
+              Sort
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value === "priority" ? "priority" : "newest")}
+                className="rounded-md bg-transparent px-1 py-0.5 text-emphasis outline-none focus-visible:ring-[3px] focus-visible:ring-focus"
+              >
+                <option value="newest">Newest</option>
+                <option value="priority">Priority</option>
+              </select>
+            </label>
+          </div>
+        )}
+
+        {ticked.length > 0 && (
+          <BulkBar
+            count={ticked.length}
+            busy={bulk.busy}
+            error={bulk.error}
+            onApply={(patch) => void applyBulk(patch)}
+            onClear={() => setSelected(new Set())}
+          />
+        )}
+
         <div className="mt-6 pb-6">
           {!visible && (
             <ul className="overflow-hidden rounded-xl border border-default bg-elevated">
@@ -352,14 +500,14 @@ export function Reports() {
             </ul>
           )}
           {visible && visible.length > 0 && !grouped && (
-            <ReportList issues={visible} projectNames={projectNames} />
+            <ReportList issues={visible} projectNames={projectNames} selected={selected} onToggle={toggle} />
           )}
           {visible && grouped && (
             <>
               <GroupLabel>Today</GroupLabel>
-              <ReportList issues={today} projectNames={projectNames} />
+              <ReportList issues={today} projectNames={projectNames} selected={selected} onToggle={toggle} />
               <GroupLabel>Earlier</GroupLabel>
-              <ReportList issues={earlier} projectNames={projectNames} />
+              <ReportList issues={earlier} projectNames={projectNames} selected={selected} onToggle={toggle} />
             </>
           )}
           {visible && visible.length === 0 && (
@@ -368,7 +516,9 @@ export function Reports() {
                 ? "No projects ticked - pick some in the Projects filter."
                 : query.trim()
                   ? `No reports match "${query.trim()}".`
-                  : `No ${active.label.toLowerCase()} ${project ? "in this project" : "across your projects"} yet.`}
+                  : activeTab === "inbox" && filter === "all"
+                    ? "Inbox zero. New reports land here until someone triages them."
+                    : `No ${filter === "all" ? "" : `${active.label.toLowerCase()} `}reports in ${tabDef.label} ${project ? "in this project" : "across your projects"}.`}
             </p>
           )}
         </div>

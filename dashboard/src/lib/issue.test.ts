@@ -1,21 +1,26 @@
 import { describe, expect, it } from "vitest";
-import type { CapturedMetadata } from "@brainbox/shared";
+import type { CapturedMetadata } from "@ganeshdole/brainbox-shared";
 
-import type { Issue } from "@brainbox/shared";
+import type { Issue } from "@ganeshdole/brainbox-shared";
 
 import {
-  formatClock,
   issueTitle,
   matchesIssue,
   newestFirst,
   pageLabel,
+  importanceLabel,
+  isBugReport,
   pagePath,
+  shownFilters,
   visibleReports,
 } from "./issue";
 
 describe("visibleReports", () => {
   const issue = (overrides: Partial<Issue> & { id: string; projectId: string }): Issue => ({
     createdAt: "2026-07-24T10:00:00.000Z",
+    status: "new",
+    priority: "none",
+    kind: "bug",
     metadata: meta(),
     ...overrides,
   });
@@ -34,6 +39,17 @@ describe("visibleReports", () => {
     expect(ids(visibleReports(issues, { filter: "replay", query: "" }))).toEqual(["1"]);
     expect(ids(visibleReports(issues, { filter: "video", query: "" }))).toEqual(["2"]);
     expect(ids(visibleReports(issues, { filter: "errors", query: "" }))).toEqual(["3"]);
+  });
+
+  it("shows All, and the other pills only when they match something", () => {
+    const keys = (list: Issue[]) => shownFilters(list).map((f) => f.key);
+    expect(keys(issues)).toEqual(["all", "replay", "video", "errors"]);
+    expect(keys([issue({ id: "4", projectId: "p1" })])).toEqual(["all"]);
+  });
+
+  it("tells a bug report from a feature request", () => {
+    expect(isBugReport({ kind: "bug" })).toBe(true);
+    expect(isBugReport({ kind: "feature" })).toBe(false);
   });
 
   it("drops unticked projects in the all view", () => {
@@ -147,6 +163,20 @@ describe("matchesIssue", () => {
     expect(matchesIssue(issue, "dole777")).toBe(true);
   });
 
+  it("matches the reporter's name and phone, and the app's own field values", () => {
+    const fromClinic = {
+      text: "Invoice total is wrong",
+      metadata: meta({
+        identity: { name: "Priya Shah", phone: "+1 555 201 8842" },
+        fields: [{ label: "Clinic", value: "Acme Vet" }],
+      }),
+    };
+    expect(matchesIssue(fromClinic, "priya")).toBe(true);
+    expect(matchesIssue(fromClinic, "201 8842")).toBe(true);
+    expect(matchesIssue(fromClinic, "acme vet")).toBe(true);
+    expect(matchesIssue(fromClinic, "clinic")).toBe(false);
+  });
+
   it("matches everything on an empty or whitespace query", () => {
     expect(matchesIssue(issue, "")).toBe(true);
     expect(matchesIssue(issue, "   ")).toBe(true);
@@ -161,14 +191,10 @@ describe("matchesIssue", () => {
   });
 });
 
-describe("formatClock", () => {
-  it("formats m:ss", () => {
-    expect(formatClock(0)).toBe("0:00");
-    expect(formatClock(83000)).toBe("1:23");
-    expect(formatClock(600000)).toBe("10:00");
-  });
-
-  it("clamps negatives to zero", () => {
-    expect(formatClock(-500)).toBe("0:00");
+describe("importanceLabel", () => {
+  it("names each importance in the ticket's words", () => {
+    expect(importanceLabel("nice")).toBe("Nice to have");
+    expect(importanceLabel("important")).toBe("Important");
+    expect(importanceLabel("critical")).toBe("Blocking them");
   });
 });

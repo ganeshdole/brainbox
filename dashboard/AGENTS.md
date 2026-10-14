@@ -1,6 +1,6 @@
 # dashboard - AGENTS.md
 
-The customer-facing SaaS (`@brainbox/dashboard`). React + Vite + React Router.
+The customer-facing SaaS (`@ganeshdole/brainbox-dashboard`). React + Vite + React Router.
 Root rules in `/AGENTS.md` apply.
 
 ## Structure
@@ -13,9 +13,15 @@ Root rules in `/AGENTS.md` apply.
 - API base URL comes from `src/lib/authConfig.ts`. Auth is a session cookie sent
   with `credentials: "include"`; there's no token to thread through the UI.
 
+## The replay player is not here
+
+Session playback is `<SessionReplay />` from `@ganeshdole/brainbox-replay`, themed through
+the `.bb-replay` block in `src/index.css`. Changes to how a recording plays go
+in `packages/replay`; `IssueDetailPane` only places it.
+
 ## Types are shared
 
-Issue/Project shapes come from `@brainbox/shared`, the same types the backend
+Issue/Project shapes come from `@ganeshdole/brainbox-shared`, the same types the backend
 uses. Import from there instead of redeclaring - if the API shape changes, change
 it in `packages/shared` and let both ends fail to compile.
 
@@ -24,4 +30,4 @@ it in `packages/shared` and let both ends fail to compile.
 Vitest under jsdom. Pure logic in `src/lib/*` (e.g. `normalizeOrigin`, `timeAgo`)
 is tested directly - see `src/lib/utils.test.ts`. Prefer extracting logic into
 `lib/` and testing it over rendering whole route trees. Run:
-`pnpm -F @brainbox/dashboard test`.
+`pnpm -F @ganeshdole/brainbox-dashboard test`.

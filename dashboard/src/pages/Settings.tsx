@@ -1,14 +1,17 @@
 import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import type { Project } from "@brainbox/shared";
+import type { Project } from "@ganeshdole/brainbox-shared";
 
 import { CopyButton } from "../components/CopyButton";
 import { DomainsEditor } from "../components/DomainsEditor";
 import { Eyebrow } from "../components/Eyebrow";
+import { GithubDestination } from "../components/GithubDestination";
 import { InstallSnippet } from "../components/InstallSnippet";
+import { FEATURE_BUTTON_SNIPPET } from "../lib/snippet";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { api } from "../lib/api";
+import { canAdmin } from "../lib/team";
 import { LAST_PROJECT_KEY, useProject } from "../lib/useProject";
 
 function Section({
@@ -125,13 +128,14 @@ export function Settings() {
 
   // Settings are per-project; there's nothing to configure in the all view.
   if (!project) return <Navigate to="/projects/all" replace />;
+  const admin = canAdmin(project.team.role);
 
   return (
     <div className="min-h-0 flex-1 lg:overflow-y-auto">
       <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-10">
         <h1 className="text-lg font-semibold tracking-tight text-emphasis">Settings</h1>
         <p className="mt-1 text-sm text-muted">
-          Install, key, and allowed domains for {project.name}.
+          Install, key, domains and integrations for {project.name}.
         </p>
 
         <div className="mt-8">
@@ -140,6 +144,28 @@ export function Settings() {
             hint="Paste before </body> on every page you want feedback from."
           >
             <InstallSnippet projectKey={project.key} />
+          </Section>
+
+          <Section
+            label="Feature requests"
+            hint="Put a button anywhere in your app. A click opens the widget's feature-request form."
+          >
+            <div className="overflow-hidden rounded-xl border border-default bg-subtle">
+              <div className="flex items-center justify-between border-b border-default px-3 py-2">
+                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
+                  your app
+                </span>
+                <CopyButton text={FEATURE_BUTTON_SNIPPET} label="Copy button" />
+              </div>
+              <code className="block overflow-x-auto whitespace-pre-wrap break-all p-3 font-mono text-xs leading-relaxed text-default">
+                {FEATURE_BUTTON_SNIPPET}
+              </code>
+            </div>
+            <p className="mt-2 text-xs text-muted">
+              From script: <code className="font-mono">window.Brainbox.start("feature")</code>. In
+              React: <code className="font-mono">useBrainboxWidget().start("feature")</code>. The
+              widget's own chooser offers it too.
+            </p>
           </Section>
 
           <Section label="Project key" hint="Identifies this project in the snippet.">
@@ -151,19 +177,40 @@ export function Settings() {
             </div>
           </Section>
 
-          <Section label="Domains" hint="Only these sites can send feedback.">
-            <div className="rounded-xl border border-default bg-elevated px-4 py-3.5">
-              <DomainsEditor
-                projectId={project.id}
-                origins={project.allowedOrigins}
-                onChange={(allowedOrigins) => setProject({ ...project, allowedOrigins })}
-              />
-            </div>
-          </Section>
+          {admin ? (
+            <>
+              <Section label="Domains" hint="Only these sites can send feedback.">
+                <div className="rounded-xl border border-default bg-elevated px-4 py-3.5">
+                  <DomainsEditor
+                    projectId={project.id}
+                    origins={project.allowedOrigins}
+                    onChange={(allowedOrigins) => setProject({ ...project, allowedOrigins })}
+                  />
+                </div>
+              </Section>
 
-          <Section label="Danger zone" hint="This can't be undone.">
-            <DangerZone project={project} projects={projects} onDeleted={removeProject} />
-          </Section>
+              <Section label="GitHub" hint="Open an issue in a repository for each new report.">
+                <GithubDestination projectId={project.id} teamId={project.team.id} />
+              </Section>
+
+              <Section label="Danger zone" hint="This can't be undone.">
+                <DangerZone project={project} projects={projects} onDeleted={removeProject} />
+              </Section>
+            </>
+          ) : (
+            <Section label="Domains" hint="Only these sites can send feedback.">
+              <div className="rounded-xl border border-default bg-elevated px-4 py-3.5 text-sm text-default">
+                {project.allowedOrigins.length > 0 ? (
+                  <span className="font-mono text-xs">{project.allowedOrigins.join(", ")}</span>
+                ) : (
+                  "Any site."
+                )}
+                <p className="mt-2 text-xs text-muted">
+                  Team admins change domains and integrations.
+                </p>
+              </div>
+            </Section>
+          )}
         </div>
       </div>
     </div>

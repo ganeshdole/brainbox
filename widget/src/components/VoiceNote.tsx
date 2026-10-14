@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Mic, Pause, Play, Square, Trash2 } from "lucide-react";
-import { startRecording, type Recorder } from "../lib/audio.ts";
+import { Mic, Pause, Play, Square, Trash2 } from "./icons.tsx";
+import { startAudioRecording, type AudioRecorder } from "@ganeshdole/brainbox-core";
 import { downsample, peakLevel } from "../lib/multiband.ts";
 import { useMultibandVolume } from "../lib/use-multiband.ts";
 import { fmtDuration } from "../lib/time.ts";
@@ -17,7 +17,14 @@ type Phase = "idle" | "recording" | "recorded";
 /** Voice capture as the primary way to file a report: one big mic target, bars
  *  that track the speaker's voice per frequency band, and playback before
  *  sending - people won't submit audio they can't hear back. */
-export function VoiceNote({ onChange }: { onChange: (b: Blob | null) => void }) {
+export function VoiceNote({
+  onChange,
+  prompt = "Say what went wrong",
+}: {
+  onChange: (b: Blob | null) => void;
+  /** The idle label, asking for what the form's textarea asks for. */
+  prompt?: string;
+}) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [envelope, setEnvelope] = useState<number[]>([]);
@@ -26,7 +33,7 @@ export function VoiceNote({ onChange }: { onChange: (b: Blob | null) => void }) 
   const [clipUrl, setClipUrl] = useState("");
   const [playing, setPlaying] = useState(false);
   const [played, setPlayed] = useState(0);
-  const recRef = useRef<Recorder | null>(null);
+  const recRef = useRef<AudioRecorder | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   /** Banked in a ref, not state: this accumulates ~30x a second and is only ever
    *  read once, when recording stops. */
@@ -55,7 +62,7 @@ export function VoiceNote({ onChange }: { onChange: (b: Blob | null) => void }) 
   const start = async () => {
     setErr("");
     try {
-      const rec = await startRecording();
+      const rec = await startAudioRecording();
       recRef.current = rec;
       envelopeRef.current = [];
       setStream(rec.stream);
@@ -158,7 +165,7 @@ export function VoiceNote({ onChange }: { onChange: (b: Blob | null) => void }) 
           {err ? (
             <span className="text-error">{err}</span>
           ) : (
-            <span className="text-emphasis">Say what went wrong</span>
+            <span className="text-emphasis">{prompt}</span>
           )}
         </span>
       ) : (

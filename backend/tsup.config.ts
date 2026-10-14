@@ -1,11 +1,12 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/index.ts"],
+  // index.ts: the Node server. azure.ts: the Azure Functions app (package.json "main").
+  entry: ["src/index.ts", "src/azure.ts"],
   format: ["esm"],
   target: "node22",
   clean: true,
-  // @brainbox/shared ships as TS source with no build output, so it must be
-  // bundled in rather than left as an external runtime import.
-  noExternal: ["@brainbox/shared"],
+  // The workspace packages resolve to TS source inside the monorepo, so they
+  // must be bundled in rather than left as external imports.
+  noExternal: ["@ganeshdole/brainbox-shared", "@ganeshdole/brainbox-server", "@ganeshdole/brainbox-integrations"],
 });

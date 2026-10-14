@@ -1,4 +1,4 @@
-import { MessageSquarePlus } from "lucide-react";
+import { MessageSquarePlus } from "./icons.tsx";
 import { posClass, type Position } from "../lib/position.ts";
 
 export function Launcher({ position, onClick }: { position: Position; onClick: () => void }) {

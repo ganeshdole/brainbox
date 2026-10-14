@@ -1,5 +1,5 @@
 import { useOutletContext } from "react-router-dom";
-import type { Project } from "@brainbox/shared";
+import type { Project } from "@ganeshdole/brainbox-shared";
 
 /** localStorage key remembering the project `/` forwards to. */
 export const LAST_PROJECT_KEY = "brainbox:lastProject";
@@ -17,6 +17,8 @@ export interface ProjectOutletContext {
   setProject: (next: Project) => void;
   /** Drop a project from the layout's cache after deleting it. */
   removeProject: (id: string) => void;
+  /** Rename a Team on every project of it in the layout's cache. */
+  setTeamName: (teamId: string, name: string) => void;
 }
 
 export function useProject(): ProjectOutletContext {
