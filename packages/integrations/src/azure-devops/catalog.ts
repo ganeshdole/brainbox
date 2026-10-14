@@ -1,3 +1,13 @@
+import type {
+  AzureDevopsField,
+  AzureDevopsIterationInfo,
+  AzureDevopsProject,
+  AzureDevopsTeam,
+  AzureDevopsTeamSettings,
+  AzureDevopsWorkItemType,
+  AzureDevopsWorkItemTypeInfo,
+} from "@ganeshdole/brainbox-shared";
+
 import type { FetchLike } from "../destination.ts";
 import { isRecord } from "../github/client.ts";
 import {
@@ -17,54 +27,6 @@ export interface AzureDevopsCatalogOptions {
   baseUrl?: string;
   profileUrl?: string;
   fetch?: FetchLike;
-}
-
-export interface AzureDevopsProject {
-  id: string;
-  name: string;
-}
-
-export interface AzureDevopsTeam {
-  id: string;
-  name: string;
-}
-
-/** Whether a team's board shows Bugs at all ("off": they reach no backlog). */
-export type BugsBehavior = "asRequirements" | "asTasks" | "off";
-
-export interface AzureDevopsIterationInfo {
-  name: string;
-  path: string;
-  timeFrame?: "past" | "current" | "future";
-}
-
-/** What a team's board is made of: the areas it shows, and its sprints. */
-export interface AzureDevopsTeamSettings {
-  defaultAreaPath: string;
-  areaPaths: string[];
-  bugsBehavior: BugsBehavior;
-  backlogIteration: string;
-  iterations: AzureDevopsIterationInfo[];
-}
-
-export interface AzureDevopsWorkItemType {
-  name: string;
-  color?: string;
-}
-
-export interface AzureDevopsField {
-  referenceName: string;
-  name: string;
-  allowedValues: string[];
-}
-
-/** How a work item type is filled: where the report goes, and what else it demands. */
-export interface AzureDevopsWorkItemTypeInfo {
-  bodyField: string;
-  systemInfoField?: string;
-  hasPriority: boolean;
-  /** Always-required fields with no default that Brainbox doesn't fill. */
-  required: AzureDevopsField[];
 }
 
 /** Lookups for setting a destination up. These throw `AzureDevopsApiError`. */

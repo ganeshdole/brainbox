@@ -32,22 +32,11 @@ export {
   azureDevopsWorkItems,
   validateWorkItem,
   type AzureDevopsIteration,
+  type AzureDevopsWorkItemShape,
   type AzureDevopsWorkItemsOptions,
   type ValidationResult,
 } from "./azure-devops/workitems.ts";
-export {
-  azureDevops,
-  type AzureDevopsCatalog,
-  type AzureDevopsCatalogOptions,
-  type AzureDevopsField,
-  type AzureDevopsIterationInfo,
-  type AzureDevopsProject,
-  type AzureDevopsTeam,
-  type AzureDevopsTeamSettings,
-  type AzureDevopsWorkItemType,
-  type AzureDevopsWorkItemTypeInfo,
-  type BugsBehavior,
-} from "./azure-devops/catalog.ts";
+export { azureDevops, type AzureDevopsCatalog, type AzureDevopsCatalogOptions } from "./azure-devops/catalog.ts";
 export { AzureDevopsApiError, type AzureDevopsAuth } from "./azure-devops/client.ts";
 export {
   entraApp,
