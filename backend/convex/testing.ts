@@ -26,6 +26,7 @@ const TABLES: TableNames[] = [
   "connections",
   "destinations",
   "deliveries",
+  "workItemUpdates",
   "subscriptions",
   "webhookEvents",
   "waitlistSignups",

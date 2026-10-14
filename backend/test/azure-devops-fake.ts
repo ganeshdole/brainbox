@@ -63,6 +63,17 @@ export function fakeAzureDevops(opts: { rule?: Rule; rejectAll?: boolean } = {})
     }
     if (p === "p-1/_apis/wit/workitemtypes") return list([{ name: "Bug" }, { name: "Issue" }, { name: "User Story" }]);
     if (p === "p-1/_apis/wit/workitemtypecategories") return list([]);
+    if (/^p-1\/_apis\/wit\/workitemtypes\/[^/]+\/states$/.test(p)) {
+      // Standard states, plus one a custom process added.
+      return list([
+        { name: "New", category: "Proposed" },
+        { name: "Active", category: "InProgress" },
+        { name: "Resolved", category: "Resolved" },
+        { name: "Closed", category: "Completed" },
+        { name: "Shipped", category: "Completed" },
+        { name: "Removed", category: "Removed" },
+      ]);
+    }
     const fields = /^p-1\/_apis\/wit\/workitemtypes\/([^/]+)\/fields$/.exec(p);
     if (fields) {
       const type = fields[1] ?? "";

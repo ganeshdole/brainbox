@@ -21,6 +21,7 @@ import {
   verificationTokens,
   waitlistSignups,
   webhookEvents,
+  workItemUpdates,
 } from "../db/schema/index.ts";
 import { planTriageWrite } from "./issue-triage.ts";
 import { planSubscriptionWrite } from "./subscription-write.ts";
@@ -476,6 +477,40 @@ export function createPostgresStore(db: DB): Store {
             updatedAt: new Date(),
           })
           .where(eq(deliveries.id, id))
+          .returning();
+        return row ?? null;
+      },
+      async deliveriesForExternal(provider, externalId) {
+        return db
+          .select()
+          .from(deliveries)
+          .where(and(eq(deliveries.provider, provider), eq(deliveries.externalId, externalId)));
+      },
+
+      async recordWorkItemUpdate(input) {
+        const [row] = await db.insert(workItemUpdates).values(input).onConflictDoNothing().returning();
+        return row ?? null;
+      },
+      async getWorkItemUpdate(id) {
+        const [row] = await db.select().from(workItemUpdates).where(eq(workItemUpdates.id, id)).limit(1);
+        return row ?? null;
+      },
+      async listWorkItemUpdates(issueId) {
+        return db
+          .select()
+          .from(workItemUpdates)
+          .where(eq(workItemUpdates.issueId, issueId))
+          .orderBy(desc(workItemUpdates.revision));
+      },
+      async finishNotification(id, outcome) {
+        const [row] = await db
+          .update(workItemUpdates)
+          .set({
+            notifyStatus: outcome.ok ? "sent" : "failed",
+            notifyError: outcome.ok ? null : outcome.error,
+            notifyAttempts: sql`${workItemUpdates.notifyAttempts} + 1`,
+          })
+          .where(eq(workItemUpdates.id, id))
           .returning();
         return row ?? null;
       },

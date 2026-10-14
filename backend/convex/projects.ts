@@ -82,7 +82,8 @@ export const update = serverMutation({
   },
 });
 
-/** Removes the project with its issues, their deliveries and events, and its destinations. */
+/** Removes the project with its issues, their deliveries, events and work
+ *  item updates, and its destinations. */
 export const remove = serverMutation({
   args: { id: v.string() },
   handler: async (ctx, { id }) => {
@@ -107,6 +108,11 @@ export const remove = serverMutation({
         .withIndex("by_issue", (q) => q.eq("issueId", issue.id))
         .collect();
       for (const event of events) await ctx.db.delete(event._id);
+      const updates = await ctx.db
+        .query("workItemUpdates")
+        .withIndex("by_issue_item_revision", (q) => q.eq("issueId", issue.id))
+        .collect();
+      for (const update of updates) await ctx.db.delete(update._id);
       await ctx.db.delete(issue._id);
     }
 

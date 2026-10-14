@@ -81,6 +81,32 @@ export const provider = v.union(v.literal("github"), v.literal("azure-devops"));
 export const connectionAuth = v.union(v.literal("app"), v.literal("pat"));
 export const connectionStatus = v.union(v.literal("active"), v.literal("needs_reauth"));
 export const deliveryStatus = v.union(v.literal("pending"), v.literal("sent"), v.literal("failed"));
+export const workItemStateCategory = v.union(
+  v.literal("Proposed"),
+  v.literal("InProgress"),
+  v.literal("Resolved"),
+  v.literal("Completed"),
+  v.literal("Removed"),
+);
+
+/** One change the tool reported on a delivered ticket (Store.integrations.recordWorkItemUpdate). */
+export const workItemUpdateFields = {
+  issueId: v.string(),
+  provider,
+  externalId: v.string(),
+  revision: v.number(),
+  type: nullable(v.string()),
+  state: v.string(),
+  reason: nullable(v.string()),
+  category: nullable(workItemStateCategory),
+  previousState: v.string(),
+  previousReason: nullable(v.string()),
+  previousCategory: nullable(workItemStateCategory),
+  changedByName: nullable(v.string()),
+  changedByEmail: nullable(v.string()),
+  changedAt: v.number(),
+  comment: nullable(v.string()),
+};
 
 const githubConfig = v.object({
   owner: v.string(),

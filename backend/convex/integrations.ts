@@ -1,7 +1,14 @@
 import { v } from "convex/values";
 
 import { newestFirst, removeConnection, removeDestination, serverMutation, serverQuery, strip } from "./lib/server.ts";
-import { connectionAuth, connectionStatus, destinationConfig, nullable, provider } from "./validators.ts";
+import {
+  connectionAuth,
+  connectionStatus,
+  destinationConfig,
+  nullable,
+  provider,
+  workItemUpdateFields,
+} from "./validators.ts";
 
 // Store.integrations. See src/store/types.ts for the contract.
 
@@ -223,6 +230,90 @@ export const finishDelivery = serverMutation({
       error: outcome.ok ? null : outcome.error,
       attempts: row.attempts + 1,
       updatedAt: Date.now(),
+    });
+    const updated = await ctx.db.get(row._id);
+    return updated && strip(updated);
+  },
+});
+
+export const deliveriesForExternal = serverQuery({
+  args: { provider, externalId: v.string() },
+  handler: async (ctx, { provider, externalId }) => {
+    const rows = await ctx.db
+      .query("deliveries")
+      .withIndex("by_provider_external", (q) => q.eq("provider", provider).eq("externalId", externalId))
+      .collect();
+    return rows.map(strip);
+  },
+});
+
+/** Null when this (issue, work item, revision) is already recorded. */
+export const recordWorkItemUpdate = serverMutation({
+  args: workItemUpdateFields,
+  handler: async (ctx, input) => {
+    const existing = await ctx.db
+      .query("workItemUpdates")
+      .withIndex("by_issue_item_revision", (q) =>
+        q
+          .eq("issueId", input.issueId)
+          .eq("provider", input.provider)
+          .eq("externalId", input.externalId)
+          .eq("revision", input.revision),
+      )
+      .first();
+    if (existing) return null;
+    const record = {
+      ...input,
+      id: crypto.randomUUID(),
+      notifyStatus: null,
+      notifyError: null,
+      notifyAttempts: 0,
+      createdAt: Date.now(),
+    };
+    await ctx.db.insert("workItemUpdates", record);
+    return record;
+  },
+});
+
+export const getWorkItemUpdate = serverQuery({
+  args: { id: v.string() },
+  handler: async (ctx, { id }) => {
+    const row = await ctx.db
+      .query("workItemUpdates")
+      .withIndex("with_id", (q) => q.eq("id", id))
+      .unique();
+    return row && strip(row);
+  },
+});
+
+/** Newest first by revision. */
+export const listWorkItemUpdates = serverQuery({
+  args: { issueId: v.string() },
+  handler: async (ctx, { issueId }) => {
+    const rows = await ctx.db
+      .query("workItemUpdates")
+      .withIndex("by_issue_item_revision", (q) => q.eq("issueId", issueId))
+      .collect();
+    return rows.sort((a, b) => b.revision - a.revision).map(strip);
+  },
+});
+
+/** Record how telling STATUS_WEBHOOK_URL went, and count the attempt. */
+export const finishNotification = serverMutation({
+  args: {
+    id: v.string(),
+    outcome: v.union(v.object({ ok: v.literal(true) }), v.object({ ok: v.literal(false), error: v.string() })),
+  },
+  handler: async (ctx, { id, outcome }) => {
+    const row = await ctx.db
+      .query("workItemUpdates")
+      .withIndex("with_id", (q) => q.eq("id", id))
+      .unique();
+    if (!row) return null;
+    await ctx.db.patch(row._id, {
+      notifyStatus: outcome.ok ? "sent" : "failed",
+      notifyError: outcome.ok ? null : outcome.error,
+      notifyAttempts: row.notifyAttempts + 1,
     });
     const updated = await ctx.db.get(row._id);
     return updated && strip(updated);

@@ -32,7 +32,7 @@ const postgres: StoreInspector = {
   async reset() {
     await getDb().execute(
       sql.raw(
-        `truncate table team_invites, team_members, teams, sign_in_attempts, waitlist_signups, webhook_events, subscriptions, deliveries, project_destinations, integration_connections, issue_events, issues, features, projects, accounts, sessions, "verificationTokens", users restart identity cascade`,
+        `truncate table team_invites, team_members, teams, sign_in_attempts, waitlist_signups, webhook_events, subscriptions, work_item_updates, deliveries, project_destinations, integration_connections, issue_events, issues, features, projects, accounts, sessions, "verificationTokens", users restart identity cascade`,
       ),
     );
   },

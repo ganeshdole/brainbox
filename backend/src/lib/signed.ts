@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 import { env } from "../env.ts";
 
@@ -17,6 +17,12 @@ export function verify(token: string, secret = env.AUTH_SECRET): string | null {
   const expected = Buffer.from(mac(body, secret), "base64url");
   if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
   return Buffer.from(body, "base64url").toString("utf8");
+}
+
+/** Whether two secrets match, in time that doesn't depend on where they differ. */
+export function safeEqual(given: string, expected: string): boolean {
+  const digest = (s: string) => createHash("sha256").update(s, "utf8").digest();
+  return timingSafeEqual(digest(given), digest(expected));
 }
 
 function mac(body: string, secret: string): string {

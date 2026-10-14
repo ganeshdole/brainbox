@@ -18,6 +18,7 @@ import type {
   TeamMemberRecord,
   TeamRecord,
   WaitlistSignupRecord,
+  WorkItemUpdateRecord,
 } from "./types.ts";
 
 /** The Convex store: each method is one Convex function (convex/*.ts), which
@@ -196,6 +197,25 @@ export function createConvexStore(convex: ConvexCaller): Store {
       async finishDelivery(id, outcome) {
         return maybe(await convex.mutation(api.integrations.finishDelivery, { id, outcome }), toDelivery);
       },
+      async deliveriesForExternal(provider, externalId) {
+        return (await convex.query(api.integrations.deliveriesForExternal, { provider, externalId })).map(toDelivery);
+      },
+      async recordWorkItemUpdate(input) {
+        const row = await convex.mutation(api.integrations.recordWorkItemUpdate, {
+          ...input,
+          changedAt: input.changedAt.getTime(),
+        });
+        return maybe(row, toWorkItemUpdate);
+      },
+      async getWorkItemUpdate(id) {
+        return maybe(await convex.query(api.integrations.getWorkItemUpdate, { id }), toWorkItemUpdate);
+      },
+      async listWorkItemUpdates(issueId) {
+        return (await convex.query(api.integrations.listWorkItemUpdates, { issueId })).map(toWorkItemUpdate);
+      },
+      async finishNotification(id, outcome) {
+        return maybe(await convex.mutation(api.integrations.finishNotification, { id, outcome }), toWorkItemUpdate);
+      },
     },
 
     billing: {
@@ -370,6 +390,10 @@ function toDestination(row: DestinationDoc): DestinationRecord {
 
 function toDelivery(row: Stamped<DeliveryRecord, "createdAt" | "updatedAt">): DeliveryRecord {
   return { ...row, createdAt: new Date(row.createdAt), updatedAt: new Date(row.updatedAt) };
+}
+
+function toWorkItemUpdate(row: Stamped<WorkItemUpdateRecord, "createdAt" | "changedAt">): WorkItemUpdateRecord {
+  return { ...row, changedAt: new Date(row.changedAt), createdAt: new Date(row.createdAt) };
 }
 
 function toSubscription(

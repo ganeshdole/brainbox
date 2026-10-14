@@ -4,7 +4,7 @@ import { getStore } from "../src/store/index.ts";
 
 // Seeds the Azure DevOps e2e test (e2e/tests/azure-devops.spec.ts) into the
 // database reset-e2e-db.ts just recreated: one Account owning a Team with an
-// empty project. Prints the project's id and key as JSON on stdout.
+// empty project. Prints the project's id and key, and the user's id, as JSON on stdout.
 
 const EMAIL = "grace.ado@acme.test";
 
@@ -29,7 +29,7 @@ async function seed() {
     key: generateProjectKey(),
     allowedOrigins: [],
   });
-  console.log(JSON.stringify({ projectId: project.id, projectKey: project.key, email: EMAIL }));
+  console.log(JSON.stringify({ projectId: project.id, projectKey: project.key, email: EMAIL, userId: user.id }));
   process.exit(0);
 }
 

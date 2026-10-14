@@ -1,6 +1,7 @@
 import {
   boolean,
   foreignKey,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -14,6 +15,7 @@ import type {
   DeliveryStatus,
   DestinationConfig,
   IntegrationProvider,
+  WorkItemStateCategory,
 } from "@ganeshdole/brainbox-shared";
 
 import type { SealedCredentials } from "../../store/credentials.ts";
@@ -111,5 +113,47 @@ export const deliveries = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [uniqueIndex("deliveries_issue_destination_key").on(t.issueId, t.destinationId)],
+  (t) => [
+    uniqueIndex("deliveries_issue_destination_key").on(t.issueId, t.destinationId),
+    // Service hooks name the work item; this finds the issue behind it.
+    index("deliveries_provider_external_id_idx").on(t.provider, t.externalId),
+  ],
+);
+
+// What the tool reported back about a delivered ticket: one row per work item
+// revision that changed state or added a comment. The unique index is what
+// makes a repeated service hook a no-op.
+export const workItemUpdates = pgTable(
+  "work_item_updates",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    issueId: text("issue_id")
+      .notNull()
+      .references(() => issues.id, { onDelete: "cascade" }),
+    provider: text("provider").$type<IntegrationProvider>().notNull(),
+    externalId: text("external_id").notNull(),
+    revision: integer("revision").notNull(),
+    type: text("type"),
+    state: text("state").notNull(),
+    reason: text("reason"),
+    category: text("category").$type<WorkItemStateCategory>(),
+    previousState: text("previous_state").notNull(),
+    previousReason: text("previous_reason"),
+    previousCategory: text("previous_category").$type<WorkItemStateCategory>(),
+    changedByName: text("changed_by_name"),
+    changedByEmail: text("changed_by_email"),
+    changedAt: timestamp("changed_at", { mode: "date", withTimezone: true }).notNull(),
+    comment: text("comment"),
+    notifyStatus: text("notify_status").$type<"sent" | "failed">(),
+    notifyError: text("notify_error"),
+    notifyAttempts: integer("notify_attempts").notNull().default(0),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("work_item_updates_issue_item_revision_key").on(t.issueId, t.provider, t.externalId, t.revision),
+  ],
 );

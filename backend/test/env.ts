@@ -86,4 +86,8 @@ export const testEnv: Record<string, string> = {
 
   // Seals Azure DevOps tokens. Fixed, so a test can open what a route sealed.
   INTEGRATIONS_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
+  // Azure DevOps service hooks in, the status webhook out (to a stubbed host).
+  AZURE_DEVOPS_HOOK_SECRET: "ado-hook-test-secret",
+  STATUS_WEBHOOK_URL: "https://status.test/brainbox",
+  STATUS_WEBHOOK_SECRET: `whsec_${Buffer.from("status-webhook-test-secret").toString("base64")}`,
 };

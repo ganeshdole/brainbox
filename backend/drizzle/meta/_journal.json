@@ -127,6 +127,13 @@
       "when": 1791952959227,
       "tag": "0017_integration_credentials",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791958192478,
+      "tag": "0018_work_item_updates",
+      "breakpoints": true
     }
   ]
 }

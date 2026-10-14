@@ -7,6 +7,7 @@ import {
   connectionStatus,
   deliveryStatus,
   destinationConfig,
+  workItemUpdateFields,
   inviteRole,
   issueEventKind,
   featureFields,
@@ -185,7 +186,21 @@ export default defineSchema({
   })
     .index("with_id", ["id"])
     .index("by_issue_destination", ["issueId", "destinationId"])
-    .index("by_destination", ["destinationId"]),
+    .index("by_destination", ["destinationId"])
+    .index("by_provider_external", ["provider", "externalId"]),
+
+  // What the tool reported back about a delivered ticket; removed with its
+  // issue (projects.remove). One per (issue, work item, revision).
+  workItemUpdates: defineTable({
+    id: v.string(),
+    ...workItemUpdateFields,
+    notifyStatus: nullable(v.union(v.literal("sent"), v.literal("failed"))),
+    notifyError: nullable(v.string()),
+    notifyAttempts: v.number(),
+    createdAt: v.number(),
+  })
+    .index("with_id", ["id"])
+    .index("by_issue_item_revision", ["issueId", "provider", "externalId", "revision"]),
 
   subscriptions: defineTable({
     id: v.string(),

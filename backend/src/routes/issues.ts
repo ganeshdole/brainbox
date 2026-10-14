@@ -3,8 +3,9 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 import { deliverIssue } from "../integrations/dispatch.ts";
+import { notifyStatus, statusWebhookConfigured } from "../integrations/status-webhook.ts";
 import { projectAccess } from "../lib/access.ts";
-import { toDelivery, toIssue, toIssueEvent } from "../lib/serialize.ts";
+import { toDelivery, toIssue, toIssueEvent, toWorkItemUpdate } from "../lib/serialize.ts";
 import { getStorage } from "../storage/index.ts";
 import type { IssueRecord } from "../store/index.ts";
 import { triageError } from "../store/issue-triage.ts";
@@ -48,8 +49,12 @@ export const issuesRoute = new Hono<AppEnv>()
   .get("/:id", async (c) => {
     const access = await issueAccess(c, c.req.param("id"));
     if (access instanceof Response) return access;
-    const sent = await c.get("store").integrations.listDeliveries(access.issue.id);
-    return c.json(await toIssue(access.issue, getStorage(), sent));
+    const store = c.get("store");
+    const [sent, updates] = await Promise.all([
+      store.integrations.listDeliveries(access.issue.id),
+      store.integrations.listWorkItemUpdates(access.issue.id),
+    ]);
+    return c.json(await toIssue(access.issue, getStorage(), sent, updates));
   })
   .patch("/:id", async (c) => {
     const access = await issueAccess(c, c.req.param("id"));
@@ -123,5 +128,17 @@ export const issuesRoute = new Hono<AppEnv>()
     if (access instanceof Response) return access;
     const results = await deliverIssue(c.get("store"), access.issue.id, { force: true });
     if (results.length === 0) return c.json({ error: "No destination configured" }, 409);
-    return c.json(results.map(toDelivery));
+    return c.json(results.map((d) => toDelivery(d)));
+  })
+  // Tells the host app about a work item update again, after a failure.
+  .post("/:id/work-item-updates/:updateId/notify", async (c) => {
+    const access = await issueAccess(c, c.req.param("id"));
+    if (access instanceof Response) return access;
+    const store = c.get("store");
+    const update = await store.integrations.getWorkItemUpdate(c.req.param("updateId"));
+    if (!update || update.issueId !== access.issue.id) return c.json({ error: "Not found" }, 404);
+    if (!statusWebhookConfigured()) return c.json({ error: "No status webhook is configured" }, 409);
+    const result = await notifyStatus(store, update.id);
+    if (!result) return c.json({ error: "Not found" }, 404);
+    return c.json(toWorkItemUpdate(result));
   });

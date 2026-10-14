@@ -12,6 +12,7 @@ import type {
   TeamInvite,
   TeamMember,
   TeamRole,
+  WorkItemUpdate,
 } from "@ganeshdole/brainbox-shared";
 
 import type { Storage } from "../storage/index.ts";
@@ -27,6 +28,7 @@ import type {
   TeamInviteRecord as TeamInviteRow,
   TeamMemberProfile,
   TeamRecord as TeamRow,
+  WorkItemUpdateRecord as WorkItemUpdateRow,
 } from "../store/index.ts";
 import { inviteUrl } from "./teams.ts";
 
@@ -35,6 +37,7 @@ export async function toIssue(
   row: IssueRow,
   storage: Storage,
   deliveryRows?: DeliveryRow[],
+  updates: WorkItemUpdateRow[] = [],
 ): Promise<Issue> {
   const screenshot = row.screenshotKey
     ? { key: row.screenshotKey, url: await storage.presignGet(row.screenshotKey) }
@@ -82,7 +85,7 @@ export async function toIssue(
     audio,
     region: row.region ?? undefined,
     metadata: row.metadata,
-    ...(deliveryRows && { deliveries: deliveryRows.map(toDelivery) }),
+    ...(deliveryRows && { deliveries: deliveryRows.map((d) => toDelivery(d, updates)) }),
   };
 }
 
@@ -152,8 +155,12 @@ export function toTeamInvite(row: TeamInviteRow): TeamInvite {
   };
 }
 
-export function toDelivery(row: DeliveryRow): Delivery {
+/** `updates` are the issue's work item updates, newest first; the delivery
+ *  shows the newest one for its own work item. */
+export function toDelivery(row: DeliveryRow, updates: WorkItemUpdateRow[] = []): Delivery {
+  const latest = updates.find((u) => u.provider === row.provider && u.externalId === row.externalId);
   return {
+    ...(latest && { workItem: toWorkItemUpdate(latest) }),
     id: row.id,
     issueId: row.issueId,
     provider: row.provider,
@@ -164,6 +171,25 @@ export function toDelivery(row: DeliveryRow): Delivery {
     attempts: row.attempts,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+export function toWorkItemUpdate(row: WorkItemUpdateRow): WorkItemUpdate {
+  return {
+    id: row.id,
+    state: row.state,
+    ...(row.reason && { reason: row.reason }),
+    ...(row.category && { category: row.category }),
+    ...(row.changedByName && { changedBy: row.changedByName }),
+    changedAt: row.changedAt.toISOString(),
+    ...(row.comment && { comment: row.comment }),
+    ...(row.notifyStatus && {
+      notification: {
+        status: row.notifyStatus,
+        ...(row.notifyError && { error: row.notifyError }),
+        attempts: row.notifyAttempts,
+      },
+    }),
   };
 }
 

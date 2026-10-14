@@ -1,10 +1,14 @@
-import { verifyGithubSignature } from "@ganeshdole/brainbox-integrations";
+import { parseWorkItemUpdated, verifyGithubSignature } from "@ganeshdole/brainbox-integrations";
 import { Hono } from "hono";
 import { Webhook } from "standardwebhooks";
 import type { SubscriptionStatus } from "@ganeshdole/brainbox-shared";
 
 import { env } from "../env.ts";
+import { notifyStatus } from "../integrations/status-webhook.ts";
+import { applyWorkItemEvent } from "../integrations/work-item-sync.ts";
 import { planForProductId } from "../lib/dodo.ts";
+import { safeEqual } from "../lib/signed.ts";
+import { runInBackground } from "../runtime/background.ts";
 import type { SubscriptionChange } from "../store/index.ts";
 import type { AppEnv } from "../types.ts";
 
@@ -168,4 +172,38 @@ function subscriptionChange(
     sentAt,
     create,
   };
+}
+
+// Azure DevOps service hooks ("Work item updated"), authenticated by the
+// basic auth password set on the subscription. A change to a work item a
+// report became is recorded on the report; then the host app is told, in the
+// background, so a slow receiver never holds up or fails Azure DevOps' call.
+webhooks.post("/azure-devops", async (c) => {
+  if (!env.AZURE_DEVOPS_HOOK_SECRET) {
+    // 503 so Azure DevOps retries once the secret is configured.
+    return c.json({ error: "Azure DevOps service hooks are not configured" }, 503);
+  }
+  if (!hookPasswordMatches(c.req.header("authorization"), env.AZURE_DEVOPS_HOOK_SECRET)) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  const event = parseWorkItemUpdated(await c.req.json().catch(() => null));
+  if (!event) return c.json({ ok: true, recorded: 0 });
+  const store = c.get("store");
+  const updates = await applyWorkItemEvent(store, event);
+  if (updates.length > 0) {
+    runInBackground(c, Promise.all(updates.map((u) => notifyStatus(store, u.id))));
+  }
+  return c.json({ ok: true, recorded: updates.length });
+});
+
+/** Basic auth with any user name and the secret as the password. */
+function hookPasswordMatches(header: string | undefined, secret: string): boolean {
+  if (!header?.startsWith("Basic ")) return false;
+  let decoded: string;
+  try {
+    decoded = atob(header.slice("Basic ".length).trim());
+  } catch {
+    return false;
+  }
+  return safeEqual(decoded.slice(decoded.indexOf(":") + 1), secret);
 }

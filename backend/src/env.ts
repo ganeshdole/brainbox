@@ -1,3 +1,5 @@
+import { Webhook } from "standardwebhooks";
+
 import { isEncryptionKey } from "./store/credentials.ts";
 
 function required(name: string): string {
@@ -41,6 +43,19 @@ if (STORAGE_DRIVER === "s3" && !S3_ACCESS_KEY_ID !== !S3_SECRET_ACCESS_KEY) {
 const INTEGRATIONS_ENCRYPTION_KEY = process.env.INTEGRATIONS_ENCRYPTION_KEY ?? "";
 if (INTEGRATIONS_ENCRYPTION_KEY && !isEncryptionKey(INTEGRATIONS_ENCRYPTION_KEY)) {
   throw new Error("INTEGRATIONS_ENCRYPTION_KEY must be 32 bytes, base64 (openssl rand -base64 32)");
+}
+
+// The status webhook signs every event, so a URL without a usable secret
+// would only fail later, on the first update. Fail the boot instead.
+const STATUS_WEBHOOK_URL = process.env.STATUS_WEBHOOK_URL ?? "";
+const STATUS_WEBHOOK_SECRET = process.env.STATUS_WEBHOOK_SECRET ?? "";
+if (STATUS_WEBHOOK_URL) {
+  if (!/^https?:\/\//.test(STATUS_WEBHOOK_URL)) throw new Error("STATUS_WEBHOOK_URL must be an http(s) URL");
+  try {
+    new Webhook(STATUS_WEBHOOK_SECRET);
+  } catch {
+    throw new Error("STATUS_WEBHOOK_URL needs STATUS_WEBHOOK_SECRET: whsec_ followed by base64 (`echo whsec_$(openssl rand -base64 32)`)");
+  }
 }
 
 // AUTH_SECRET and the chosen store's settings are infra and must be present to
@@ -169,6 +184,16 @@ export const env = {
   // Azure DevOps Services unless set, e.g. to the local fake
   // (`pnpm fake:ado`, http://localhost:8790).
   AZURE_DEVOPS_URL: (process.env.AZURE_DEVOPS_URL ?? "https://dev.azure.com").replace(/\/+$/, ""),
+  // The password Azure DevOps service hooks send (basic auth) to
+  // /webhooks/azure-devops. Optional: unset = that route answers 503 and
+  // work item changes don't come back.
+  AZURE_DEVOPS_HOOK_SECRET: process.env.AZURE_DEVOPS_HOOK_SECRET ?? "",
+
+  // Where Brainbox POSTs a signed event when a report's work item changes
+  // state or gets a comment (docs/status-webhook.md). Optional: unset = off.
+  // The secret signs it the Standard Webhooks way: whsec_ followed by base64.
+  STATUS_WEBHOOK_URL,
+  STATUS_WEBHOOK_SECRET,
 
   // Accounts allowed past the paywall without a subscription (ours). Kept in
   // env rather than the codebase so access can be granted or revoked without a

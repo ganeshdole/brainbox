@@ -7,11 +7,19 @@
 // Point the backend at it with AZURE_DEVOPS_URL=http://localhost:8790. Any
 // PAT equal to FAKE_ADO_PAT (default "fake-pat") is accepted, as is any
 // Bearer token. Everything is in memory and gone on restart. Dev only.
+//
+// Changing a work item's state or commenting on its page (or POSTing JSON
+// `{ state?, comment? }` to /_fake/workitems/{id}) fires a "Work item updated"
+// service hook at FAKE_ADO_HOOK_URL (e.g. http://localhost:8787/webhooks/azure-devops),
+// with FAKE_ADO_HOOK_SECRET as its basic auth password, the way a real
+// subscription would.
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
 const PORT = Number(process.env.FAKE_ADO_PORT ?? 8790);
 const PAT = process.env.FAKE_ADO_PAT ?? "fake-pat";
+const HOOK_URL = process.env.FAKE_ADO_HOOK_URL ?? "";
+const HOOK_SECRET = process.env.FAKE_ADO_HOOK_SECRET ?? "";
 const ORG = "acme";
 const ORIGIN = `http://localhost:${PORT}`;
 
@@ -32,11 +40,21 @@ interface Field {
 
 interface WorkItem {
   id: number;
+  rev: number;
   type: string;
   fields: Record<string, unknown>;
   relations: Array<{ rel: string; url: string; attributes?: { comment?: string } }>;
   createdAt: Date;
 }
+
+/** The states every type here has, and what each means (Azure DevOps' categories). */
+const STATES: Array<{ name: string; category: string; reason: string }> = [
+  { name: "New", category: "Proposed", reason: "New" },
+  { name: "Active", category: "InProgress", reason: "Approved" },
+  { name: "Resolved", category: "Resolved", reason: "Fixed" },
+  { name: "Closed", category: "Completed", reason: "Verified" },
+  { name: "Removed", category: "Removed", reason: "Removed from the backlog" },
+];
 
 const project = { id: "5b0c1c6e-0000-4000-8000-00000000a11d", name: "Web Shop" };
 const checkout: Team = { id: "t-checkout", name: "Checkout Team", area: "Web Shop\\Checkout", bugsBehavior: "asRequirements" };
@@ -97,6 +115,18 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     const item = workItems.find((w) => w.id === Number(seg[4]));
     return item ? page(res, workItemPage(item)) : send(res, 404, { message: "No such work item" });
   }
+  if (method === "POST" && seg[0] === "_fake" && seg[1] === "workitems") {
+    const item = workItems.find((w) => w.id === Number(seg[2]));
+    if (!item) return send(res, 404, { message: "No such work item" });
+    const raw = (await body(req)).toString("utf8");
+    const form = (req.headers["content-type"] ?? "").includes("json")
+      ? (JSON.parse(raw || "{}") as { state?: string; comment?: string })
+      : Object.fromEntries(new URLSearchParams(raw));
+    await update(item, form.state || undefined, form.comment?.trim() || undefined);
+    return (req.headers["content-type"] ?? "").includes("json")
+      ? send(res, 200, { id: item.id, rev: item.rev, fields: item.fields })
+      : redirect(res, `/${ORG}/${encodeURIComponent(project.name)}/_workitems/edit/${item.id}`);
+  }
   if (method === "GET" && seg[2] === "_apis" && seg[4] === "attachments" && seg[5]) {
     const file = attachments.get(seg[5]);
     if (!file) return send(res, 404, { message: "No such attachment" });
@@ -137,6 +167,9 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
 
   if (method === "GET" && wit[0] === "workitemtypes" && wit.length === 1) {
     return send(res, 200, list(Object.keys(types).map((name) => ({ name, referenceName: `Microsoft.VSTS.WorkItemTypes.${name}`, color: name === "Bug" ? "CC293D" : "009CCC" }))));
+  }
+  if (method === "GET" && wit[0] === "workitemtypes" && wit[2] === "states") {
+    return send(res, 200, list(STATES.map(({ name, category }) => ({ name, category }))));
   }
   if (method === "GET" && wit[0] === "workitemtypecategories") {
     return send(res, 200, list([{ referenceName: "Microsoft.HiddenCategory", workItemTypes: hiddenTypes.map((name) => ({ name })) }]));
@@ -190,7 +223,8 @@ function createWorkItem(res: ServerResponse, type: string, ops: PatchOp[], valid
   values["System.IterationPath"] = iteration;
   if (validateOnly) return send(res, 200, { id: -1, fields: values });
 
-  const item: WorkItem = { id: nextId++, type, fields: values, relations, createdAt: new Date() };
+  values["System.Reason"] ??= "New";
+  const item: WorkItem = { id: nextId++, rev: 1, type, fields: values, relations, createdAt: new Date() };
   workItems.unshift(item);
   const href = `${ORIGIN}/${ORG}/${encodeURIComponent(project.name)}/_workitems/edit/${item.id}`;
   return send(res, 200, { id: item.id, rev: 1, fields: values, relations, _links: { html: { href } } });
@@ -249,6 +283,13 @@ function workItemPage(w: WorkItem): string {
       </main>
       <aside>
         <dl>${side}</dl>
+        <h2>Change it</h2>
+        <form method="post" action="/_fake/workitems/${w.id}" class="change">
+          <select name="state">${STATES.map((s) => `<option${s.name === f["System.State"] ? " selected" : ""}>${s.name}</option>`).join("")}</select>
+          <textarea name="comment" placeholder="Add a comment"></textarea>
+          <button>Save${HOOK_URL ? " (fires the service hook)" : ""}</button>
+        </form>
+        ${String(f["System.History"] ?? "") ? `<h2>Latest comment</h2><div class="rich">${String(f["System.History"])}</div>` : ""}
         <h2>Attachments (${files.length})</h2>${files.map((r) => `<a href="${esc(r.url)}">📎 ${esc(r.attributes?.comment ?? "file")}</a>`).join("<br>")}
         <h2>Links</h2>${links.map((r) => `<a href="${esc(r.url)}">🔗 ${esc(r.attributes?.comment ?? r.url)}</a>`).join("<br>")}
       </aside>
@@ -272,7 +313,60 @@ function shell(title: string, content: string): string {
     h2{font-size:13px;text-transform:uppercase;color:#605e5c;border-bottom:1px solid #edebe9;padding-bottom:4px}
     .rich table{border-collapse:collapse}.rich th,.rich td{border:1px solid #edebe9;padding:4px 8px;text-align:left;vertical-align:top}
     .rich img{max-width:100%;border:1px solid #edebe9}dl{display:grid;grid-template-columns:100px 1fr;gap:6px}dt{color:#605e5c}dd{margin:0}aside a{color:#0078d4}
+    .change{display:grid;gap:6px}.change textarea{min-height:50px;font:inherit}.change button{background:#0078d4;color:#fff;border:0;border-radius:3px;padding:6px}
   </style></head><body><header>Azure DevOps <small>local fake for Brainbox development</small></header><div class="wrap">${content}</div></body></html>`;
+}
+
+/** Applies a state change and/or comment as a new revision, then fires the service hook. */
+async function update(item: WorkItem, state: string | undefined, comment: string | undefined) {
+  const changed: Record<string, { oldValue?: unknown; newValue: unknown }> = {};
+  const next = state && state !== item.fields["System.State"] ? STATES.find((s) => s.name === state) : undefined;
+  if (next) {
+    changed["System.State"] = { oldValue: item.fields["System.State"], newValue: next.name };
+    changed["System.Reason"] = { oldValue: item.fields["System.Reason"], newValue: next.reason };
+    item.fields["System.State"] = next.name;
+    item.fields["System.Reason"] = next.reason;
+  }
+  if (comment) {
+    changed["System.History"] = { newValue: `<div>${esc(comment)}</div>` };
+    item.fields["System.History"] = `<div>${esc(comment)}</div>`;
+  }
+  if (Object.keys(changed).length === 0) return;
+  item.rev += 1;
+  changed["System.Rev"] = { oldValue: item.rev - 1, newValue: item.rev };
+  if (!HOOK_URL) return;
+  const payload = {
+    id: crypto.randomUUID(),
+    eventType: "workitem.updated",
+    publisherId: "tfs",
+    resource: {
+      id: item.rev,
+      workItemId: item.id,
+      rev: item.rev,
+      revisedBy: { displayName: "Demo User", uniqueName: "demo.user@acme.example" },
+      revisedDate: new Date().toISOString(),
+      fields: changed,
+      revision: {
+        id: item.id,
+        rev: item.rev,
+        fields: { ...item.fields, "System.WorkItemType": item.type },
+        url: `${ORIGIN}/${ORG}/${project.id}/_apis/wit/workItems/${item.id}/revisions/${item.rev}`,
+      },
+      url: `${ORIGIN}/${ORG}/${project.id}/_apis/wit/workItems/${item.id}/updates/${item.rev}`,
+    },
+    resourceVersion: "1.0",
+    createdDate: new Date().toISOString(),
+  };
+  try {
+    const res = await fetch(HOOK_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Basic ${btoa(`azure-devops:${HOOK_SECRET}`)}` },
+      body: JSON.stringify(payload),
+    });
+    console.log(`[fake-ado] service hook for ${item.type} ${item.id} rev ${item.rev}: ${res.status} ${await res.text()}`);
+  } catch (err) {
+    console.error(`[fake-ado] service hook for ${item.type} ${item.id} failed:`, err);
+  }
 }
 
 // Helpers

@@ -79,6 +79,12 @@ connection `needs_reauth` (`sendTicket` in `dispatch.ts`). Tests stub Azure
 DevOps with `test/azure-devops-fake.ts`; `scripts/fake-azure-devops.ts` is a
 fake to run against by hand and in `e2e/`.
 
+Changes come back the other way through `POST /webhooks/azure-devops` (service
+hooks): `integrations/work-item-sync.ts` records each once and moves triage;
+`integrations/status-webhook.ts` passes it on to `STATUS_WEBHOOK_URL`. That
+event is a public contract (`docs/status-webhook.md`, `ReportStatusEvent` in
+`packages/shared`): add fields, never change or remove one, within a version.
+
 ## Auth boundary
 
 `app.ts` gates routes in order: `/health`, `/ingest`, `/f` (signed public file

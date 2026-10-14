@@ -19,6 +19,20 @@ describe("INTEGRATIONS_ENCRYPTION_KEY", () => {
   });
 });
 
+describe("STATUS_WEBHOOK_URL", () => {
+  it("refuses to boot without a secret to sign events with", async () => {
+    await expect(loadEnv({ STATUS_WEBHOOK_URL: "https://notify.example/hook", STATUS_WEBHOOK_SECRET: "" })).rejects.toThrow(
+      /STATUS_WEBHOOK_SECRET/,
+    );
+  });
+
+  it("boots with one", async () => {
+    const secret = `whsec_${btoa("a-secret-for-tests")}`;
+    const env = await loadEnv({ STATUS_WEBHOOK_URL: "https://notify.example/hook", STATUS_WEBHOOK_SECRET: secret });
+    expect(env.STATUS_WEBHOOK_URL).toBe("https://notify.example/hook");
+  });
+});
+
 describe("STORAGE_DRIVER=s3", () => {
   it("boots with both keys", async () => {
     const env = await loadEnv({ ...S3, S3_ACCESS_KEY_ID: "id", S3_SECRET_ACCESS_KEY: "secret" });

@@ -22,6 +22,7 @@ import type {
   SubscriptionStatus,
   TeamRole,
   TranscriptStatus,
+  WorkItemStateCategory,
 } from "@ganeshdole/brainbox-shared";
 
 import type { SealedCredentials } from "./credentials.ts";
@@ -203,6 +204,43 @@ export interface DeliveryRecord {
   createdAt: Date;
   updatedAt: Date;
 }
+
+/**
+ * One change the tool reported on a delivered ticket: an Azure DevOps work
+ * item that changed state or got a comment. One per (issue, work item,
+ * revision), which is how a repeated service hook is recognised.
+ */
+export interface WorkItemUpdateRecord {
+  id: string;
+  issueId: string;
+  provider: IntegrationProvider;
+  /** The work item id, as the delivery stores it. */
+  externalId: string;
+  revision: number;
+  type: string | null;
+  state: string;
+  reason: string | null;
+  category: WorkItemStateCategory | null;
+  /** The same as `state` when only a comment changed. */
+  previousState: string;
+  previousReason: string | null;
+  previousCategory: WorkItemStateCategory | null;
+  changedByName: string | null;
+  changedByEmail: string | null;
+  changedAt: Date;
+  /** HTML, as Azure DevOps stores it. */
+  comment: string | null;
+  /** How telling STATUS_WEBHOOK_URL went; null when it wasn't called. */
+  notifyStatus: "sent" | "failed" | null;
+  notifyError: string | null;
+  notifyAttempts: number;
+  createdAt: Date;
+}
+
+export type NewWorkItemUpdate = Omit<
+  WorkItemUpdateRecord,
+  "id" | "createdAt" | "notifyStatus" | "notifyError" | "notifyAttempts"
+>;
 
 export interface SubscriptionRecord {
   id: string;
@@ -397,6 +435,21 @@ export interface Store {
     }): Promise<DeliveryRecord | null>;
     /** Record the outcome and count the attempt. A failure keeps any earlier link. */
     finishDelivery(id: string, outcome: DeliveryOutcome): Promise<DeliveryRecord | null>;
+    /** Every delivery that made this ticket in the tool (one per organization
+     *  at most, in practice), for matching the tool's events back to issues. */
+    deliveriesForExternal(provider: IntegrationProvider, externalId: string): Promise<DeliveryRecord[]>;
+
+    /** Null when this (issue, work item, revision) is already recorded: the
+     *  tool sent the same change again. */
+    recordWorkItemUpdate(input: NewWorkItemUpdate): Promise<WorkItemUpdateRecord | null>;
+    getWorkItemUpdate(id: string): Promise<WorkItemUpdateRecord | null>;
+    /** Newest first by revision. */
+    listWorkItemUpdates(issueId: string): Promise<WorkItemUpdateRecord[]>;
+    /** Record how telling STATUS_WEBHOOK_URL went, and count the attempt. */
+    finishNotification(
+      id: string,
+      outcome: { ok: true } | { ok: false; error: string },
+    ): Promise<WorkItemUpdateRecord | null>;
   };
 
   readonly billing: {
