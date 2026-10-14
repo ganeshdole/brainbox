@@ -17,7 +17,14 @@ type Phase = "idle" | "recording" | "recorded";
 /** Voice capture as the primary way to file a report: one big mic target, bars
  *  that track the speaker's voice per frequency band, and playback before
  *  sending - people won't submit audio they can't hear back. */
-export function VoiceNote({ onChange }: { onChange: (b: Blob | null) => void }) {
+export function VoiceNote({
+  onChange,
+  prompt = "Say what went wrong",
+}: {
+  onChange: (b: Blob | null) => void;
+  /** The idle label, asking for what the form's textarea asks for. */
+  prompt?: string;
+}) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [envelope, setEnvelope] = useState<number[]>([]);
@@ -158,7 +165,7 @@ export function VoiceNote({ onChange }: { onChange: (b: Blob | null) => void }) 
           {err ? (
             <span className="text-error">{err}</span>
           ) : (
-            <span className="text-emphasis">Say what went wrong</span>
+            <span className="text-emphasis">{prompt}</span>
           )}
         </span>
       ) : (

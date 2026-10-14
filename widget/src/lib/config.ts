@@ -1,5 +1,6 @@
 import type { TriggerMode, WidgetTheme } from "@ganeshdole/brainbox-shared";
 import type { Position } from "./position.ts";
+import type { StartMode } from "./widget-store.ts";
 
 /** What the script tag asked for, read off its `data-*` attributes. */
 export interface WidgetConfig {
@@ -11,6 +12,9 @@ export interface WidgetConfig {
   mount?: string;
   position: Position;
   theme: WidgetTheme;
+  /** Whether the chooser offers "Suggest a feature". `data-feature-requests="off"`
+   *  hides it; a host's own `start("feature")` works either way. */
+  featureRequests: boolean;
 }
 
 const POSITIONS: Position[] = ["bottom-right", "bottom-left", "top-right", "top-left"];
@@ -32,5 +36,17 @@ export function readConfig(script: HTMLScriptElement | null): WidgetConfig | nul
     mount: ds.mount,
     position: position && POSITIONS.includes(position) ? position : "bottom-right",
     theme: theme && THEMES.includes(theme) ? theme : "dark",
+    featureRequests: ds.featureRequests !== "off",
   };
+}
+
+const START_MODES: StartMode[] = ["screenshot", "record", "feature"];
+
+/** What clicking an element marked `data-brainbox` does: `open` (also the
+ *  bare attribute) shows the chooser, a start mode skips it. Null for a value
+ *  we don't know, so a typo does nothing rather than something surprising. */
+export function triggerAction(value: string | undefined): StartMode | "open" | null {
+  if (value === undefined) return null;
+  if (value === "" || value === "open") return "open";
+  return START_MODES.find((mode) => mode === value) ?? null;
 }

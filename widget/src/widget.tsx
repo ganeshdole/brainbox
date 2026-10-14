@@ -20,6 +20,9 @@ export interface BrainboxWidgetProps {
   position?: Position;
   /** `dark` (default), `light`, or `system` to follow the visitor's OS. */
   theme?: WidgetTheme;
+  /** Offer "Suggest a feature" in the chooser (default `true`). A host's own
+   *  `start("feature")` opens the form either way. */
+  featureRequests?: boolean;
 }
 
 /**
@@ -32,6 +35,7 @@ export function BrainboxWidget({
   trigger = "floating",
   position = "bottom-right",
   theme = "dark",
+  featureRequests = true,
 }: BrainboxWidgetProps) {
   const brainbox = useBrainbox();
   // Built detached during render (nothing on the page changes yet, and there
@@ -60,7 +64,13 @@ export function BrainboxWidget({
   if (!brainbox || !host || !wanted) return null;
   return createPortal(
     <Suspense fallback={null}>
-      <WidgetUi brainbox={brainbox} hostEl={host.element} trigger={trigger} position={position} />
+      <WidgetUi
+        brainbox={brainbox}
+        hostEl={host.element}
+        trigger={trigger}
+        position={position}
+        featureRequests={featureRequests}
+      />
     </Suspense>,
     host.container,
   );

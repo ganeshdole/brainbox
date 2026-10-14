@@ -108,6 +108,71 @@ describe("delivery after ingest", () => {
     expect(sent.body).toContain(`/projects/${project.id}/issues/${id}`);
   });
 
+  it("labels a feature request with the destination's feature labels, else enhancement", async () => {
+    const gh = fakeGithub();
+    const { project, conn } = await setup();
+    await makeDestination(project.id, conn.id, {
+      config: { owner: "acme", repo: "web", labels: ["feedback"] },
+    });
+    const feature = await makeIssue(project.id, {
+      kind: "feature",
+      importance: "nice",
+      text: "Dark mode",
+      screenshotKey: null,
+      region: null,
+    });
+    await deliverIssue(getStore(), feature.id);
+    const sent = gh.issueCalls()[0]?.body as { title: string; body: string; labels: string[] };
+    expect(sent.title).toBe("Dark mode");
+    expect(sent.labels).toEqual(["enhancement"]);
+    expect(sent.body).toContain("| Type | Feature request |");
+    expect(sent.body).toContain("| Importance | Nice to have |");
+
+    await makeDestination(project.id, conn.id, {
+      config: { owner: "acme", repo: "web", labels: ["feedback"], featureLabels: ["idea"] },
+    });
+    const next = await makeIssue(project.id, { kind: "feature", text: "SSO" });
+    await deliverIssue(getStore(), next.id);
+    expect((gh.issueCalls()[1]?.body as { labels: string[] }).labels).toEqual(["idea"]);
+  });
+
+  it("links a voice-only feature request's note in the ticket when nothing transcribed it", async () => {
+    const gh = fakeGithub();
+    const { project, conn } = await setup();
+    await makeDestination(project.id, conn.id);
+    const fd = new FormData();
+    fd.append(
+      "json",
+      JSON.stringify({
+        projectKey: project.key,
+        kind: "feature",
+        metadata: {
+          url: "http://host/app",
+          title: "App",
+          viewport: { width: 800, height: 600 },
+          devicePixelRatio: 1,
+          userAgent: "UA",
+          language: "en",
+          timezone: "UTC",
+          consoleErrors: [],
+        },
+      }),
+    );
+    fd.append("audio", new File([new Uint8Array([1, 2, 3])], "v.webm", { type: "audio/webm" }));
+
+    const res = await app.request("/ingest", { method: "POST", body: fd });
+    expect(res.status).toBe(201);
+    const { id } = (await res.json()) as { id: string };
+    await settled(id);
+
+    const body = (gh.issueCalls()[0]?.body as { body: string }).body;
+    const link = body.match(/\[Listen to the voice note\]\((http:\/\/localhost:8787\/f\/[^)]+)\)/)?.[1];
+    expect(link).toBeTruthy();
+    const voice = await app.request(new URL(link!).pathname);
+    expect(voice.status).toBe(200);
+    expect(voice.headers.get("content-type")).toBe("audio/webm");
+  });
+
   it("waits for transcription so the ticket carries the transcript", async () => {
     const gh = fakeGithub();
     transcriptionEnabledMock.mockReturnValue(true);
@@ -267,6 +332,18 @@ describe("project destinations API", () => {
       }),
     });
     expect(await updated.json()).toMatchObject({ config: { repo: "api", labels: ["bug"] }, enabled: false });
+
+    const withFeatures = await app.request(url, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({
+        connectionId: conn.id,
+        config: { owner: "acme", repo: "api", labels: ["bug"], featureLabels: ["enhancement", "idea"] },
+      }),
+    });
+    expect(await withFeatures.json()).toMatchObject({
+      config: { labels: ["bug"], featureLabels: ["enhancement", "idea"] },
+    });
 
     const list = await app.request(`/api/projects/${project.id}/destinations`, { headers });
     expect(await list.json()).toHaveLength(1);

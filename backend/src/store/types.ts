@@ -4,7 +4,10 @@ import type {
   CapturedMetadata,
   DeliveryStatus,
   DestinationConfig,
+  FeatureStatus,
+  Importance,
   IntegrationProvider,
+  IssueKind,
   PlanId,
   ProjectKey,
   Region,
@@ -35,6 +38,11 @@ export interface IssueRecord {
   id: string;
   projectId: string;
   createdAt: Date;
+  kind: IssueKind;
+  /** Only on a feature request, and only when the end-user picked one. */
+  importance: Importance | null;
+  /** The Feature a feature request is attached to; null while unsorted. */
+  featureId: string | null;
   text: string | null;
   screenshotKey: string | null;
   cropKey: string | null;
@@ -53,9 +61,22 @@ export interface IssueRecord {
 
 /** A new issue. Transcripts arrive later through `issues.setTranscript`.
  *  `createdAt` defaults to now; set it only when importing existing issues. */
-export type NewIssue = Omit<IssueRecord, "createdAt" | "audioTranscript" | "videoTranscript"> & {
+export type NewIssue = Omit<
+  IssueRecord,
+  "createdAt" | "audioTranscript" | "videoTranscript" | "featureId"
+> & {
   createdAt?: Date;
 };
+
+export interface FeatureRecord {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string | null;
+  status: FeatureStatus;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 export interface ConnectionRecord {
   id: string;
@@ -166,8 +187,11 @@ export type WebhookResult = "applied" | "duplicate";
 
 export interface Store {
   readonly projects: {
-    /** Newest first, each with its issue count. */
-    listForOwner(ownerId: string): Promise<Array<ProjectRecord & { issueCount: number }>>;
+    /** Newest first, each with its issue count and how many of those are
+     *  feature requests. */
+    listForOwner(
+      ownerId: string,
+    ): Promise<Array<ProjectRecord & { issueCount: number; featureRequestCount: number }>>;
     create(input: Omit<ProjectRecord, "id" | "createdAt">): Promise<ProjectRecord>;
     get(id: string): Promise<ProjectRecord | null>;
     getByKey(key: ProjectKey): Promise<ProjectRecord | null>;
@@ -185,6 +209,31 @@ export interface Store {
     get(id: string): Promise<IssueRecord | null>;
     create(input: NewIssue): Promise<void>;
     setTranscript(id: string, kind: "audio" | "video", outcome: TranscriptOutcome): Promise<void>;
+    /** Attach a feature request to a Feature, or with null send it back to
+     *  waiting. The caller checks both belong to the same project. */
+    setFeature(id: string, featureId: string | null): Promise<void>;
+  };
+
+  readonly features: {
+    /** Newest first, each with how many requests are attached. */
+    listForProject(projectId: string): Promise<Array<FeatureRecord & { requestCount: number }>>;
+    get(id: string): Promise<FeatureRecord | null>;
+    /** Starts `under_review` unless a status is given. */
+    create(input: {
+      projectId: string;
+      title: string;
+      description: string | null;
+      status?: FeatureStatus;
+    }): Promise<FeatureRecord>;
+    update(
+      id: string,
+      patch: { title?: string; description?: string | null; status?: FeatureStatus },
+    ): Promise<FeatureRecord | null>;
+    /** Its requests go back to waiting. */
+    delete(id: string): Promise<void>;
+    /** Moves every request of `fromId` onto `intoId` and deletes `fromId`, in
+     *  one step: two features found to be the same thing become one. */
+    merge(fromId: string, intoId: string): Promise<void>;
   };
 
   readonly integrations: {

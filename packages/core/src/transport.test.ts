@@ -55,6 +55,18 @@ describe("brainboxTransport", () => {
     expect(body?.get("session")).toBeNull();
   });
 
+  it("sends a feature request's kind and importance in the json part", async () => {
+    const sent = stubFetch(new Response(JSON.stringify({ id: "f" }), { status: 201 }));
+    await transport.send({
+      text: "dark mode",
+      kind: "feature",
+      importance: "nice",
+      metadata: report.metadata,
+    });
+    expect(JSON.parse(String(sent()?.get("json")))).toMatchObject({ kind: "feature", importance: "nice" });
+    expect(sent()?.get("screenshot")).toBeNull();
+  });
+
   it("names the session part by its encoding and includes audio only when provided", async () => {
     const sent = stubFetch(new Response(JSON.stringify({ id: "a" }), { status: 201 }));
 

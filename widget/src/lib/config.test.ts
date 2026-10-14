@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readConfig } from "./config.ts";
+import { readConfig, triggerAction } from "./config.ts";
 
 function script(attrs: Record<string, string>): HTMLScriptElement {
   const s = document.createElement("script");
@@ -19,6 +19,13 @@ describe("readConfig", () => {
       position: "bottom-right",
       theme: "dark",
     });
+  });
+
+  it("offers feature requests unless data-feature-requests is off", () => {
+    const base = { "data-project": "pk_a", "data-endpoint": "e" };
+    expect(readConfig(script(base))?.featureRequests).toBe(true);
+    expect(readConfig(script({ ...base, "data-feature-requests": "on" }))?.featureRequests).toBe(true);
+    expect(readConfig(script({ ...base, "data-feature-requests": "off" }))?.featureRequests).toBe(false);
   });
 
   it("reads data-theme, keeping dark for an unknown one", () => {
@@ -54,5 +61,20 @@ describe("readConfig", () => {
     expect(readConfig(script({ "data-endpoint": "e" }))).toBeNull();
     expect(readConfig(script({ "data-project": "pk_a" }))).toBeNull();
     expect(readConfig(null)).toBeNull();
+  });
+});
+
+describe("triggerAction", () => {
+  it("opens the chooser for open or a bare attribute, and starts a known mode", () => {
+    expect(triggerAction("")).toBe("open");
+    expect(triggerAction("open")).toBe("open");
+    expect(triggerAction("feature")).toBe("feature");
+    expect(triggerAction("screenshot")).toBe("screenshot");
+    expect(triggerAction("record")).toBe("record");
+  });
+
+  it("does nothing for an unknown value or a missing attribute", () => {
+    expect(triggerAction("bug")).toBeNull();
+    expect(triggerAction(undefined)).toBeNull();
   });
 });

@@ -22,6 +22,12 @@ describe("feedbackSchema", () => {
     expect(feedbackSchema.safeParse(valid).success).toBe(true);
   });
 
+  it("accepts a feature request's kind and importance, and nothing else for them", () => {
+    expect(feedbackSchema.safeParse({ ...valid, kind: "feature", importance: "critical" }).success).toBe(true);
+    expect(feedbackSchema.safeParse({ ...valid, kind: "idea" }).success).toBe(false);
+    expect(feedbackSchema.safeParse({ ...valid, importance: "urgent" }).success).toBe(false);
+  });
+
   it("rejects a projectKey without the pk_ prefix", () => {
     expect(feedbackSchema.safeParse({ ...valid, projectKey: "nope" }).success).toBe(false);
   });
