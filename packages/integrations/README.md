@@ -93,7 +93,9 @@ export default {
       region: payload.region,
       links: { dashboard: `https://admin.example.com/reports/${id}` },
     });
-    return Response.json({ id, issue: result.ok ? result.url : null }, { status: 201 });
+    // Nothing else kept the report: tell the widget it failed rather than drop it.
+    if (!result.ok) return Response.json({ error: result.error }, { status: 502 });
+    return Response.json({ id, issue: result.url }, { status: 201 });
   },
 };
 ```
