@@ -21,9 +21,18 @@ function oneOf<const T extends string>(name: string, allowed: readonly T[], fall
 
 // Where data and uploaded files live. Each driver needs only its own settings,
 // checked at boot so a misconfigured deployment fails loudly.
-const DATABASE_DRIVER = oneOf("DATABASE_DRIVER", ["postgres", "convex"], "postgres");
-const STORAGE_DRIVER = oneOf("STORAGE_DRIVER", ["local", "r2", "convex"], "local");
+// "custom" means the entry passes its own to setStore() / setStorage().
+const DATABASE_DRIVER = oneOf("DATABASE_DRIVER", ["postgres", "convex", "custom"], "postgres");
+const STORAGE_DRIVER = oneOf("STORAGE_DRIVER", ["local", "s3", "r2", "convex", "custom"], "local");
 const USES_CONVEX = DATABASE_DRIVER === "convex" || STORAGE_DRIVER === "convex";
+
+// Both S3 keys, or neither (the SDK's own credential chain). One alone would
+// boot fine and then fail, or quietly sign as someone else, on the first upload.
+const S3_ACCESS_KEY_ID = process.env.S3_ACCESS_KEY_ID ?? "";
+const S3_SECRET_ACCESS_KEY = process.env.S3_SECRET_ACCESS_KEY ?? "";
+if (STORAGE_DRIVER === "s3" && !S3_ACCESS_KEY_ID !== !S3_SECRET_ACCESS_KEY) {
+  throw new Error("Set both S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY, or neither to use an IAM role");
+}
 
 // AUTH_SECRET and the chosen store's settings are infra and must be present to
 // boot. GOOGLE_* are optional so the server can boot for inspection before the
@@ -50,13 +59,23 @@ export const env = {
   // to the backend package folder). Unset: the dashboard is hosted elsewhere.
   DASHBOARD_DIR: process.env.DASHBOARD_DIR ?? "",
 
-  // Object storage. "local" writes to backend/.storage/ (dev only); "r2" uses
-  // Cloudflare R2 (R2_* below); "convex" uses Convex file storage (CONVEX_URL).
+  // Object storage. "local" writes to backend/.storage/ (dev only); "s3" is
+  // any S3-compatible store (S3_* below); "r2" is Cloudflare R2 (R2_* below);
+  // "convex" uses Convex file storage (CONVEX_URL).
   STORAGE_DRIVER,
-  R2_ENDPOINT: process.env.R2_ENDPOINT ?? "",
-  R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID ?? "",
-  R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY ?? "",
-  R2_BUCKET: process.env.R2_BUCKET ?? "",
+  // S3_ENDPOINT unset means AWS itself. Keys unset means the SDK's own
+  // credential chain (an IAM role). S3_FORCE_PATH_STYLE=true for MinIO and
+  // Supabase Storage.
+  S3_BUCKET: STORAGE_DRIVER === "s3" ? required("S3_BUCKET") : "",
+  S3_REGION: STORAGE_DRIVER === "s3" ? required("S3_REGION") : "",
+  S3_ENDPOINT: process.env.S3_ENDPOINT ?? "",
+  S3_ACCESS_KEY_ID,
+  S3_SECRET_ACCESS_KEY,
+  S3_FORCE_PATH_STYLE: process.env.S3_FORCE_PATH_STYLE === "true",
+  R2_ENDPOINT: STORAGE_DRIVER === "r2" ? required("R2_ENDPOINT") : "",
+  R2_ACCESS_KEY_ID: STORAGE_DRIVER === "r2" ? required("R2_ACCESS_KEY_ID") : "",
+  R2_SECRET_ACCESS_KEY: STORAGE_DRIVER === "r2" ? required("R2_SECRET_ACCESS_KEY") : "",
+  R2_BUCKET: STORAGE_DRIVER === "r2" ? required("R2_BUCKET") : "",
 
   // How email sign-in works: "link" emails a one-time sign-in link, "code"
   // emails a 6-digit code typed into the dashboard (link scanners in mail
