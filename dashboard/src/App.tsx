@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import { ProjectLayout } from "./components/ProjectLayout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { RequireModule } from "./components/RequireModule";
 import { Billing } from "./pages/Billing";
 import { BillingReturn } from "./pages/BillingReturn";
 import { FeaturePage } from "./pages/Feature";
@@ -22,11 +23,21 @@ export const router = createBrowserRouter([
     children: [
       // Signed in but not necessarily paid. These must stay outside anything
       // that redirects on 402, or the paywall would have no exit.
-      { path: "/billing", element: <Billing /> },
-      { path: "/billing/return", element: <BillingReturn /> },
+      {
+        element: <RequireModule module="billing" />,
+        children: [
+          { path: "/billing", element: <Billing /> },
+          { path: "/billing/return", element: <BillingReturn /> },
+        ],
+      },
       // Joining a Team never needs a plan of one's own.
-      { path: "/invite/:inviteId", element: <Invite /> },
-      { path: "/teams/:teamId", element: <StandaloneTeam /> },
+      {
+        element: <RequireModule module="teams" />,
+        children: [
+          { path: "/invite/:inviteId", element: <Invite /> },
+          { path: "/teams/:teamId", element: <StandaloneTeam /> },
+        ],
+      },
 
       { path: "/", element: <Home /> },
       {
@@ -35,10 +46,18 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <Reports /> },
           { path: "issues/:issueId", element: <Report /> },
-          { path: "features", element: <Features /> },
-          { path: "features/:featureId", element: <FeaturePage /> },
+          {
+            element: <RequireModule module="features" />,
+            children: [
+              { path: "features", element: <Features /> },
+              { path: "features/:featureId", element: <FeaturePage /> },
+            ],
+          },
           { path: "settings", element: <Settings /> },
-          { path: "team", element: <Team /> },
+          {
+            element: <RequireModule module="teams" />,
+            children: [{ path: "team", element: <Team /> }],
+          },
         ],
       },
       // old deep links from before the inbox routes

@@ -8,7 +8,7 @@ import { Input } from "../components/ui/input";
 import { Spinner } from "../components/ui/spinner";
 import {
   codeSignInUrl,
-  fetchEmailSignInMode,
+  fetchSignInOptions,
   isSignInCode,
   normalizeEmail,
   savePendingSignIn,
@@ -74,12 +74,17 @@ export function Login() {
   const [email, setEmail] = useState(retry?.email ?? "");
   const [status, setStatus] = useState<Status>(retry ? "sent" : "idle");
   const [mode, setMode] = useState<EmailSignInMode>(retry ? "code" : "link");
+  // Hidden only once the backend says it has no Google client.
+  const [google, setGoogle] = useState(true);
   // Why the API refused to send, e.g. AccessDenied for an address outside
   // AUTH_ALLOWED_EMAIL_DOMAINS. Null when the send itself failed.
   const [refusal, setRefusal] = useState<string | null>(null);
 
   useEffect(() => {
-    void fetchEmailSignInMode().then(setMode);
+    void fetchSignInOptions().then((options) => {
+      setMode(options.email);
+      setGoogle(options.google);
+    });
   }, []);
 
   const errorMessage = retry
@@ -158,20 +163,27 @@ export function Login() {
             </p>
           )}
 
-          <Button
-            variant="secondary"
-            className="mt-7 w-full"
-            onClick={() => signIn("google", { callbackUrl })}
-          >
-            <GoogleMark />
-            Continue with Google
-          </Button>
+          {google ? (
+            <>
+              <Button
+                variant="secondary"
+                className="mt-7 w-full"
+                onClick={() => signIn("google", { callbackUrl })}
+              >
+                <GoogleMark />
+                Continue with Google
+              </Button>
 
-          <div className="my-6 flex items-center gap-3">
-            <span className="h-px flex-1 bg-subtle" />
-            <span className="text-xs text-muted">or</span>
-            <span className="h-px flex-1 bg-subtle" />
-          </div>
+              <div className="my-6 flex items-center gap-3">
+                <span className="h-px flex-1 bg-subtle" />
+                <span className="text-xs text-muted">or</span>
+                <span className="h-px flex-1 bg-subtle" />
+              </div>
+            </>
+          ) : (
+            // the same gap the Google button would have left
+            <div className="mt-7" />
+          )}
 
           {status === "sent" && sendsCode ? (
             <CodeForm

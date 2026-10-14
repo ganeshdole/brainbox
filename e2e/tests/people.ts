@@ -24,8 +24,12 @@ export async function person(
   testInfo: TestInfo,
   name: string,
   email: string,
+  /** Another dashboard than the config's, such as the one in front of the
+   *  backend from parts. */
+  baseURL?: string,
 ): Promise<Person> {
   const context = await browser.newContext({
+    ...(baseURL && { baseURL }),
     // Signed out, whatever the config's default browser state.
     storageState: { cookies: [], origins: [] },
     recordVideo: { dir: testInfo.outputPath("videos", name.toLowerCase()), size: { width: 1280, height: 800 } },
@@ -88,13 +92,13 @@ export async function person(
 
 /** The newest sign-in code the console email driver logged for `email`, once
  *  one newer than `after` (a count of codes already sent) appears. */
-async function waitForCode(email: string, after: number): Promise<string> {
+async function waitForCode(email: string, after: number, log: string): Promise<string> {
   const pattern = new RegExp(
     `\\[email:console\\] to=${email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} subject="Your Brainbox sign-in code"\\n[\\s\\S]*?Your code: (\\d{6})`,
     "g",
   );
   for (let tries = 0; tries < 100; tries++) {
-    const codes = [...(await readFile(BACKEND_LOG, "utf8")).matchAll(pattern)].map((m) => m[1]);
+    const codes = [...(await readFile(log, "utf8")).matchAll(pattern)].map((m) => m[1]);
     const code = codes.length > after ? codes[codes.length - 1] : undefined;
     if (code) return code;
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -103,19 +107,20 @@ async function waitForCode(email: string, after: number): Promise<string> {
 }
 
 /** How many codes have been emailed to `email` so far. */
-export async function codesSent(email: string): Promise<number> {
-  const log = await readFile(BACKEND_LOG, "utf8").catch(() => "");
-  return log.split(`[email:console] to=${email} subject="Your Brainbox sign-in code"`).length - 1;
+export async function codesSent(email: string, log = BACKEND_LOG): Promise<number> {
+  const text = await readFile(log, "utf8").catch(() => "");
+  return text.split(`[email:console] to=${email} subject="Your Brainbox sign-in code"`).length - 1;
 }
 
-/** Signs in on the login page the browser is on, with an emailed code. */
-export async function signIn(who: Person): Promise<void> {
+/** Signs in on the login page the browser is on, with an emailed code, read
+ *  from the log of the backend that sent it. */
+export async function signIn(who: Person, log = BACKEND_LOG): Promise<void> {
   const { page } = who;
   await expect(page.getByRole("heading", { name: "Welcome to Brainbox" })).toBeVisible();
-  const before = await codesSent(who.email);
+  const before = await codesSent(who.email, log);
   await page.getByPlaceholder("you@company.com").fill(who.email);
   await page.getByRole("button", { name: "Email me a sign-in code" }).click();
-  const code = await waitForCode(who.email, before);
+  const code = await waitForCode(who.email, before, log);
   await page.getByPlaceholder("123456").fill(code);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).not.toHaveURL(/\/login/);

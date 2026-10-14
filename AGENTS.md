@@ -59,7 +59,10 @@ test` - but the full `verify` is the gate.
 (`brainbox_e2e_<checkout folder>`, dropped and recreated every run by
 `backend/scripts/reset-e2e-db.ts`), and records a video of every person a test
 signs in into `e2e/test-results/`. A test that needs data the UI can't create
-seeds it after the reset (`backend/scripts/seed-e2e-*.ts`). It is not part of
+seeds it after the reset (`backend/scripts/seed-e2e-*.ts`). A second backend,
+built from parts with only some store modules
+(`backend/scripts/e2e-parts-backend.ts`), runs beside the first with its own
+dashboard, for `tests/parts.spec.ts`. It is not part of
 `verify`. Run it with `pnpm -F @ganeshdole/brainbox-e2e e2e` (once per machine: `pnpm -F @ganeshdole/brainbox-e2e exec playwright install
 chromium`); `SLOW_MO=500` slows it down enough to follow the video.
 

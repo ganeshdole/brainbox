@@ -8,6 +8,7 @@ import { api, isAuthRedirect } from "../lib/api";
 import { importanceLabel, issueTitle, pageLabel } from "../lib/issue";
 import { applyTriage, closeReasonLabel, describeEvent } from "../lib/triage";
 import { timeAgo } from "../lib/utils";
+import { useModules } from "../lib/modules";
 import { CopyButton } from "./CopyButton";
 import { Eyebrow } from "./Eyebrow";
 import { IssueDeliveries } from "./IssueDeliveries";
@@ -143,14 +144,18 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
   const [events, setEvents] = useState<IssueEvent[]>([]);
   const [triage, setTriage] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
 
+  const { has } = useModules();
+  const triageOn = has("triage");
+
   const loadActivity = useCallback(() => {
+    if (!triageOn) return;
     api
       .getIssueActivity(issueId)
       .then(setEvents)
       .catch(() => {
         /* the log is secondary; the issue itself still renders */
       });
-  }, [issueId]);
+  }, [issueId, triageOn]);
 
   useEffect(loadActivity, [loadActivity]);
 
@@ -285,25 +290,29 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
             <ExternalLink className="h-3 w-3 shrink-0" />
           </a>
         </div>
-        <TriageBar
-          issue={issue}
-          busy={triage.busy}
-          error={triage.error}
-          onChange={(patch) => void changeTriage(patch)}
-        />
-        {issue.kind === "feature" && (
+        {triageOn && (
+          <TriageBar
+            issue={issue}
+            busy={triage.busy}
+            error={triage.error}
+            onChange={(patch) => void changeTriage(patch)}
+          />
+        )}
+        {issue.kind === "feature" && has("features") && (
           <IssueFeature
             issue={issue}
             projectId={projectId}
             onChange={(next) => setIssue({ ...issue, featureId: next.featureId })}
           />
         )}
-        <IssueDeliveries
-          issueId={issue.id}
-          projectId={projectId}
-          deliveries={issue.deliveries ?? []}
-          onChange={(deliveries) => setIssue({ ...issue, deliveries })}
-        />
+        {has("integrations") && (
+          <IssueDeliveries
+            issueId={issue.id}
+            projectId={projectId}
+            deliveries={issue.deliveries ?? []}
+            onChange={(deliveries) => setIssue({ ...issue, deliveries })}
+          />
+        )}
       </header>
 
       <div className="mt-6 grid gap-8 border-t border-default p-4 pt-6 sm:p-6 lg:grid-cols-[minmax(0,1.75fr)_minmax(260px,1fr)]">

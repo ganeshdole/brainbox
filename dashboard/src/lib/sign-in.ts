@@ -40,14 +40,15 @@ export function codeSignInUrl(email: string, code: string, callbackUrl: string):
   return `${API_URL}/api/auth/callback/magic-link?${query}`;
 }
 
-/** How this deployment signs in by email. Falls back to "link", which is what
- *  a backend that predates the setting does. */
-export async function fetchEmailSignInMode(): Promise<EmailSignInMode> {
+/** How this deployment signs people in: what a sign-in email carries, and
+ *  whether Google is offered. Falls back to what a backend that predates the
+ *  settings does: links, and Google. */
+export async function fetchSignInOptions(): Promise<{ email: EmailSignInMode; google: boolean }> {
   try {
-    const { email } = await api.getSignInOptions();
-    return MODES.find((mode) => mode === email) ?? "link";
+    const { email, google } = await api.getSignInOptions();
+    return { email: MODES.find((mode) => mode === email) ?? "link", google: google !== false };
   } catch {
-    return "link";
+    return { email: "link", google: true };
   }
 }
 

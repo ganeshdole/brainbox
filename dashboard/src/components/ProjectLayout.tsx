@@ -5,6 +5,7 @@ import type { Project } from "@ganeshdole/brainbox-shared";
 
 import { api, isAuthRedirect } from "../lib/api";
 import { logout } from "../lib/logout";
+import { useModules } from "../lib/modules";
 import { ALL_PROJECTS, LAST_PROJECT_KEY, type ProjectOutletContext } from "../lib/useProject";
 import { cn } from "../lib/utils";
 import { ProjectSwitcher } from "./ProjectSwitcher";
@@ -67,6 +68,7 @@ export function ProjectLayout() {
   const location = useLocation();
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { has } = useModules();
 
   useEffect(() => {
     let cancelled = false;
@@ -135,8 +137,8 @@ export function ProjectLayout() {
   const isTeam = location.pathname.endsWith("/team");
   const isFeatures = location.pathname.startsWith(`${base}/features`);
   const isReports = !isSettings && !isTeam && !isFeatures;
-  // Feature requests count under Features, not Reports.
-  const bugCount = (p: Project) => (p.issueCount ?? 0) - (p.featureRequestCount ?? 0);
+  // Feature requests count under Features, not Reports, when there is one.
+  const bugCount = (p: Project) => (p.issueCount ?? 0) - (has("features") ? (p.featureRequestCount ?? 0) : 0);
   const reportCount = project ? bugCount(project) : projects.reduce((n, p) => n + bugCount(p), 0);
   const context: ProjectOutletContext = {
     project: project ?? null,
@@ -169,7 +171,7 @@ export function ProjectLayout() {
             label="Reports"
             count={reportCount}
           />
-          {project && (
+          {project && has("features") && (
             <NavItem
               to={`${base}/features`}
               active={isFeatures}
@@ -181,7 +183,9 @@ export function ProjectLayout() {
           {project && (
             <NavItem to={`${base}/settings`} active={isSettings} icon={<Settings />} label="Settings" />
           )}
-          {project && <NavItem to={`${base}/team`} active={isTeam} icon={<Users />} label="Team" />}
+          {project && has("teams") && (
+            <NavItem to={`${base}/team`} active={isTeam} icon={<Users />} label="Team" />
+          )}
         </nav>
         <div className="mt-auto border-t border-default p-2">
           <UserMenu />
@@ -196,13 +200,13 @@ export function ProjectLayout() {
             </div>
             <nav className="flex shrink-0 gap-1">
               <MobileTab to={base} active={isReports} label="Reports" />
-              {project && (
+              {project && has("features") && (
                 <MobileTab to={`${base}/features`} active={isFeatures} label="Features" />
               )}
               {project && (
                 <MobileTab to={`${base}/settings`} active={isSettings} label="Settings" />
               )}
-              {project && <MobileTab to={`${base}/team`} active={isTeam} label="Team" />}
+              {project && has("teams") && <MobileTab to={`${base}/team`} active={isTeam} label="Team" />}
             </nav>
             <button
               type="button"

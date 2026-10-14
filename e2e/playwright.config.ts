@@ -3,7 +3,20 @@ import { dirname } from "node:path";
 
 import { defineConfig, devices } from "@playwright/test";
 
-import { API_URL, BACKEND_LOG, DASHBOARD_PORT, DASHBOARD_URL, FAKE_ADO_PORT, FAKE_ADO_URL, backendEnv } from "./env.ts";
+import {
+  API_URL,
+  BACKEND_LOG,
+  DASHBOARD_PORT,
+  DASHBOARD_URL,
+  FAKE_ADO_PORT,
+  FAKE_ADO_URL,
+  PARTS_API_URL,
+  PARTS_BACKEND_LOG,
+  PARTS_DASHBOARD_PORT,
+  PARTS_DASHBOARD_URL,
+  backendEnv,
+  partsBackendEnv,
+} from "./env.ts";
 
 // The real backend and dashboard over Postgres. The backend's database is
 // recreated on every run (backend/scripts/reset-e2e-db.ts), which also proves
@@ -55,6 +68,24 @@ export default defineConfig({
       cwd: "../dashboard",
       url: DASHBOARD_URL,
       env: { VITE_API_URL: API_URL },
+      reuseExistingServer: false,
+      timeout: 60_000,
+    },
+    // A backend built from parts over the same database (tests/parts.spec.ts),
+    // and a dashboard of its own in front of it.
+    {
+      command: `pnpm exec tsx scripts/e2e-parts-backend.ts > "${PARTS_BACKEND_LOG}" 2>&1`,
+      cwd: "../backend",
+      url: `${PARTS_API_URL}/health`,
+      env: partsBackendEnv,
+      reuseExistingServer: false,
+      timeout: 60_000,
+    },
+    {
+      command: `pnpm exec vite --port ${PARTS_DASHBOARD_PORT} --strictPort`,
+      cwd: "../dashboard",
+      url: PARTS_DASHBOARD_URL,
+      env: { VITE_API_URL: PARTS_API_URL },
       reuseExistingServer: false,
       timeout: 60_000,
     },
