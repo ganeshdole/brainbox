@@ -1,43 +1,65 @@
 import { Button } from "@/components/ui/button"
+import { openWidget } from "@/lib/widget-loader"
+import { CONTAINER } from "./section-head"
+import { Shot } from "./shot"
 
 export function Hero() {
   return (
-    <section id="top" className="bg-noise glow-top relative overflow-hidden">
-      <div className="bg-grid pointer-events-none absolute inset-0 z-0 [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_25%,transparent_75%)]" />
-
-      <div className="relative z-10 mx-auto max-w-6xl px-6 pt-20 pb-24 text-center md:pt-24 md:pb-32">
-        <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-default bg-white/[0.03] px-3.5 py-1.5 font-mono text-xs text-default">
-          <span className="relative flex size-1.5">
-            <span className="absolute inline-flex size-full animate-ping rounded-full bg-white/70" />
-            <span className="relative inline-flex size-1.5 rounded-full bg-white" />
-          </span>
-          In-app feedback, auto-filed as tickets
-        </span>
-
-        <h1 className="text-gradient mx-auto max-w-4xl text-balance text-[2.6rem] font-semibold leading-[1.06] tracking-[-0.03em] sm:text-6xl md:text-[5.2rem] md:leading-[0.98]">
-          Stop triaging feedback.
+    <section id="top" className="pb-20 md:pb-24">
+      <div className={`${CONTAINER} pt-16 md:pt-28`}>
+        <h1 className="text-[40px] leading-[1.06] font-[560] tracking-[-0.03em] text-emphasis sm:text-[52px] md:text-[64px] md:leading-[1.04]">
+          <span className="text-gray-9">&ldquo;It&rsquo;s broken&rdquo;</span> isn&rsquo;t a bug report.
           <br />
-          Start shipping fixes.
+          This is.
         </h1>
 
-        <p className="mx-auto mt-6 max-w-xl text-pretty text-lg leading-relaxed text-default">
-          Brainbox is a tiny widget for your app. A user taps, points at what broke, and talks.
-          A ready-to-work ticket lands in Linear, GitHub, or Slack. The hours you spend decoding
-          &ldquo;it&rsquo;s broken&rdquo; messages go back into building.
+        <p className="mt-6 max-w-[520px] text-pretty text-[17px] leading-[1.55] text-gray-10">
+          Brainbox is a tiny widget in your app. Users point at what broke and say what happened.
+          You get a ticket you can start on, in GitHub or Azure DevOps.
         </p>
 
-        <div className="mt-9 flex flex-col items-center gap-3">
-          {/* The try-it arrow measures this button to find where to start. */}
-          <Button asChild size="lg" className="h-12 px-8 text-base">
-            <a href="#pricing" data-hero-cta>
-              Get started
-            </a>
+        <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
+          <Button asChild className="rounded-lg px-[18px]">
+            <a href="#pricing">Get started</a>
           </Button>
-          <span className="font-mono text-xs text-gray-11/80">
+          <Button variant="link" className="px-0" onClick={openWidget}>
+            Try it on this page &rarr;
+          </Button>
+          <span className="w-full text-[13px] text-gray-10 sm:w-auto sm:border-l sm:border-default sm:pl-6">
             From $29/mo &middot; 60-day money-back guarantee
           </span>
         </div>
+      </div>
 
+      <div className={`${CONTAINER} mt-14 md:mt-16`}>
+        <div className="overflow-hidden rounded-xl border border-default bg-background md:[mask-image:linear-gradient(to_bottom,#000_86%,transparent)]">
+          <Shot
+            name="report"
+            className="hidden md:block"
+            sizes="(min-width: 1200px) 1120px, calc(100vw - 80px)"
+            width={1120}
+            height={648}
+            alt="A report in the Brainbox dashboard: “I tap Pay and nothing happens. Tried twice, the button doesn't even show a spinner.” Below it, the Pay $128.00 button the user pointed at and a screenshot of the checkout page. Beside it, the page URL, browser and viewport, and the TypeError the page logged when Pay was tapped."
+          />
+
+          {/* Phones get the two parts that matter at a readable size, not the whole page shrunk. */}
+          <div className="divide-y divide-default md:hidden">
+            <Shot
+              name="report-phone-title"
+              sizes="calc(100vw - 40px)"
+              width={360}
+              height={230}
+              alt="A report in the Brainbox dashboard: “I tap Pay and nothing happens. Tried twice, the button doesn't even show a spinner.” Filed from shop.acme.example/checkout, status New."
+            />
+            <Shot
+              name="report-phone-console"
+              sizes="calc(100vw - 40px)"
+              width={360}
+              height={160}
+              alt="The console error captured with it: TypeError: Cannot read properties of undefined (reading 'confirmCardPayment')."
+            />
+          </div>
+        </div>
       </div>
     </section>
   )

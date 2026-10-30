@@ -24,9 +24,6 @@ const DEMO_ENDPOINT = "https://app.brainbox.sh/ingest";
 const WIDGET_SRC = "https://app.brainbox.sh/widget.js";
 
 declare global {
-  interface WindowEventMap {
-    "brainbox:submitted": CustomEvent<{ id?: unknown }>;
-  }
   interface Window {
     // Optional (unlike the widget's own declaration): the script loads async,
     // so callers must guard with `window.Brainbox?.open()`.
@@ -58,9 +55,8 @@ export function loadWidget(config: WidgetConfig): void {
 /**
  * Run `cb` once the widget has installed its API on `window`.
  *
- * The script tag is injected async and off a different origin, so anything that
- * POINTS AT the launcher - the "try it yourself" cue - has to wait for it or it
- * spends the slow-connection case aiming at a button that isn't there. Polls
+ * The script tag is injected async and off a different origin, so a visitor can
+ * click "Try it on this page" before it has arrived. Polls
  * rather than listening: the widget publishes `window.Brainbox` and fires no
  * ready event, and the script's own `load` doesn't guarantee it has mounted.
  *
@@ -88,17 +84,10 @@ export function onWidgetReady(
   return () => clearInterval(timer);
 }
 
-/** Open the widget the way its launcher would. No-op until the script lands. */
+/**
+ * Open the widget the way its launcher would: now, or as soon as the script
+ * lands if the visitor clicked first. Nothing happens if it never loads.
+ */
 export function openWidget(): void {
-  window.Brainbox?.open();
-}
-
-/** Listen for successful widget submissions. Returns the cleanup function. */
-export function onWidgetSubmitted(cb: (id: string) => void): () => void {
-  const handler = (event: CustomEvent<{ id?: unknown }>) => {
-    const id = event.detail === null ? undefined : event.detail.id;
-    if (typeof id === "string") cb(id);
-  };
-  window.addEventListener("brainbox:submitted", handler);
-  return () => window.removeEventListener("brainbox:submitted", handler);
+  onWidgetReady(() => window.Brainbox?.open());
 }

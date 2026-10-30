@@ -1,69 +1,127 @@
-import type { ReactNode } from "react"
-import { SectionHead } from "./section-head"
+import { Section, SectionHead } from "./section-head"
+import { Shot } from "./shot"
 
-const LinearIcon = (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="size-7" aria-hidden>
-    <path d="M2.9 13.4a9.1 9.1 0 0 0 7.7 7.7L2.9 13.4zM2.05 9.9 14.1 21.95a9.05 9.05 0 0 0 2.5-.86L2.9 7.4a9 9 0 0 0-.85 2.5zM4 5.6 18.4 20a9.1 9.1 0 0 0 1.6-1.6L5.6 4A9.1 9.1 0 0 0 4 5.6zM7.4 2.9 21.1 16.6c.4-.8.7-1.6.86-2.5L9.9 2.05c-.9.16-1.7.45-2.5.85zM12.9 2.06l8.04 8.04A9.1 9.1 0 0 0 12.9 2.06z" />
-  </svg>
-)
-
-const GithubIcon = (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="size-7" aria-hidden>
-    <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.57.1.78-.25.78-.55v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.43-2.7 5.41-5.27 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.66.79.55A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z" />
-  </svg>
-)
-
-const SlackIcon = (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="size-7" aria-hidden>
-    <path d="M5.5 14.5A2 2 0 1 1 3.5 12.5h2zM6.5 14.5a2 2 0 0 1 4 0v5a2 2 0 1 1-4 0z" />
-    <path d="M9.5 5.5a2 2 0 1 1 2-2v2zM9.5 6.5a2 2 0 0 1 0 4h-5a2 2 0 1 1 0-4z" />
-    <path d="M18.5 9.5a2 2 0 1 1 2 2h-2zM17.5 9.5a2 2 0 0 1-4 0v-5a2 2 0 1 1 4 0z" />
-    <path d="M14.5 18.5a2 2 0 1 1-2 2v-2zM14.5 17.5a2 2 0 0 1 0-4h5a2 2 0 1 1 0 4z" />
-  </svg>
-)
-
-const GmailIcon = (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="size-7" aria-hidden>
-    <path d="M3 6.5 12 13l9-6.5V18a1.5 1.5 0 0 1-1.5 1.5H18V9.8l-6 4.3-6-4.3v9.7H4.5A1.5 1.5 0 0 1 3 18z" />
-  </svg>
-)
-
-const integrations: { name: string; sub: string; icon: ReactNode }[] = [
-  { name: "Linear", sub: "Issues", icon: LinearIcon },
-  { name: "GitHub", sub: "Issues", icon: GithubIcon },
-  { name: "Slack", sub: "Messages", icon: SlackIcon },
-  { name: "Gmail", sub: "Email", icon: GmailIcon },
+const destinations = [
+  {
+    name: "GitHub Issues",
+    body: "Installed as the Brainbox GitHub App on your org or account. Pick the repo and the labels, and pause it whenever you like.",
+  },
+  {
+    name: "Azure DevOps",
+    body: "Pick the project, the board and the iteration, and a work item type for bugs and another for feature requests.",
+  },
 ]
+
+// The issue renderTicket() in @ganeshdole/brainbox-integrations files for the
+// report in the hero, shown the way GitHub renders its Markdown. The links point
+// at the customer's own Brainbox, so here they are only styled as links.
+const ISSUE = {
+  title: "I tap Pay and nothing happens. Tried twice, the button doesn't even sho…",
+  text: "I tap Pay and nothing happens. Tried twice, the button doesn't even show a spinner.",
+  rows: [
+    ["Page", "Checkout · Acme Store", "link"],
+    ["Viewport", "1440 × 900 @2x"],
+    [
+      "Browser",
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
+    ],
+    ["Locale", "en-GB, Asia/Calcutta"],
+    ["User", "anonymous"],
+    ["Element", "button#pay", "code"],
+    ["Reported", "2026-10-30T19:54:56.392884+00:00"],
+  ],
+  consoleError: `TypeError: Cannot read properties of undefined (reading 'confirmCardPayment')
+    at HTMLButtonElement.<anonymous> (http://shop.acme.example/checkout:50:84)`,
+  links: ["Open in Brainbox", "Full screenshot"],
+}
+
+function IssuePreview() {
+  return (
+    <figure className="min-w-0 self-start overflow-hidden rounded-xl border border-default bg-subtle">
+      <figcaption className="border-b border-default px-5 py-3 font-mono text-[11px] tracking-[0.12em] text-gray-10 uppercase">
+        The GitHub issue it files
+      </figcaption>
+      <div className="p-5 md:p-6">
+        <h3 className="text-[19px] leading-[1.35] font-[560] tracking-[-0.01em] text-emphasis">{ISSUE.title}</h3>
+
+        <div className="mt-5 border-t border-default pt-5 text-[14px] leading-[1.6] text-default">
+          <Shot
+            name="issue-crop"
+            sizes="384px"
+            width={384}
+            height={72}
+            alt="Highlighted region: the Pay $128.00 button, boxed in red."
+            className="max-w-[384px] overflow-hidden rounded-md"
+          />
+          <p className="mt-4">{ISSUE.text}</p>
+
+          <table className="mt-4 w-full border-collapse text-[13px]">
+            <tbody>
+              {ISSUE.rows.map(([label, value, kind]) => (
+                <tr key={label} className="border border-default">
+                  <th scope="row" className="w-24 border-r border-default px-3 py-1.5 text-left align-top font-[560] text-emphasis">
+                    {label}
+                  </th>
+                  <td className="px-3 py-1.5 break-words text-default">
+                    {kind === "link" ? (
+                      <span className="text-link">{value}</span>
+                    ) : kind === "code" ? (
+                      <code className="rounded bg-interactive-hover px-1.5 py-0.5 font-mono text-[12px]">{value}</code>
+                    ) : (
+                      value
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <details open className="mt-4">
+            <summary className="cursor-pointer text-emphasis">1 console error</summary>
+            <pre className="mt-2 overflow-x-auto rounded-md bg-interactive p-3 font-mono text-[12px] leading-[1.6] text-default max-sm:break-all max-sm:whitespace-pre-wrap">
+              <code>{ISSUE.consoleError}</code>
+            </pre>
+          </details>
+
+          <p className="mt-4">
+            {ISSUE.links.map((label, i) => (
+              <span key={label}>
+                {i > 0 && <span className="text-gray-10"> &middot; </span>}
+                <span className="text-link">{label}</span>
+              </span>
+            ))}
+          </p>
+        </div>
+      </div>
+    </figure>
+  )
+}
 
 export function Integrations() {
   return (
-    <section id="integrations" className="mx-auto max-w-6xl px-6 py-24 md:py-32">
-      <SectionHead
-        label="Integrations"
-        title="Lands where your team works."
-        desc="One ticket, routed to the tools you already use. No copy-paste, no context switching."
-      />
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {integrations.map((it) => (
-          <div
-            key={it.name}
-            className="border-sheen flex flex-col items-center gap-4 rounded-2xl px-6 py-8 text-center transition-colors duration-200 hover:border-white/15"
-          >
-            <div className="inline-flex size-14 items-center justify-center rounded-2xl border border-default bg-white/[0.03] text-emphasis">
-              {it.icon}
-            </div>
-            <div>
-              <h3 className="text-base font-semibold tracking-tight text-emphasis">{it.name}</h3>
-              <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.1em] text-default">
-                {it.sub}
-              </p>
-            </div>
-          </div>
-        ))}
+    <Section id="integrations">
+      <div className="grid gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
+        <div>
+          <SectionHead
+            title="Filed where you already work."
+            desc="Connect once for the whole team. Every new report is filed on its own, with the screenshot, their words and the console errors in the body."
+          />
+          <dl className="mt-10">
+            {destinations.map((d) => (
+              <div key={d.name} className="border-t border-default py-6">
+                <dt className="text-[15px] font-[560] text-emphasis">{d.name}</dt>
+                <dd className="mt-1.5 text-[15px] leading-[1.55] text-gray-10">{d.body}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="border-t border-default pt-6 text-[15px] leading-[1.55] text-gray-10">
+            Every report also lands in the Brainbox inbox, where your team sets status and
+            priority. A delivery that fails shows why, and you can send it again.
+          </p>
+        </div>
+
+        <IssuePreview />
       </div>
-      <p className="mt-8 text-center font-mono text-sm text-default">
-        …and <span className="text-emphasis">any tool</span> via webhooks &amp; API.
-      </p>
-    </section>
+    </Section>
   )
 }

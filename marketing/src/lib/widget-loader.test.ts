@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   loadWidget,
   onWidgetReady,
-  onWidgetSubmitted,
   openWidget,
   resolveWidgetConfig,
 } from "./widget-loader.ts";
@@ -75,7 +74,7 @@ describe("onWidgetReady", () => {
     vi.advanceTimersByTime(150);
     expect(cb).toHaveBeenCalledOnce();
 
-    // The poll must stop, or a cue that hides itself would be re-shown.
+    // The poll must stop, or one click would open the widget again and again.
     vi.advanceTimersByTime(5_000);
     expect(cb).toHaveBeenCalledOnce();
   });
@@ -113,34 +112,14 @@ describe("openWidget", () => {
     expect(open).toHaveBeenCalledOnce();
   });
 
-  it("is a no-op before the script lands, rather than throwing at the visitor", () => {
+  it("opens it on arrival when the visitor clicks before the script lands", () => {
+    vi.useFakeTimers();
     expect(() => openWidget()).not.toThrow();
-  });
-});
 
-describe("onWidgetSubmitted", () => {
-  it("invokes the callback with the submitted issue id", () => {
-    const cb = vi.fn();
-    const cleanup = onWidgetSubmitted(cb);
-    window.dispatchEvent(new CustomEvent("brainbox:submitted", { detail: { id: "abc" } }));
-    cleanup();
-    expect(cb).toHaveBeenCalledExactlyOnceWith("abc");
-  });
+    const open = vi.fn();
+    window.Brainbox = { open, close: vi.fn() };
+    vi.advanceTimersByTime(150);
 
-  it("stops listening after cleanup", () => {
-    const cb = vi.fn();
-    const cleanup = onWidgetSubmitted(cb);
-    cleanup();
-    window.dispatchEvent(new CustomEvent("brainbox:submitted", { detail: { id: "abc" } }));
-    expect(cb).not.toHaveBeenCalled();
-  });
-
-  it("ignores malformed events without an id", () => {
-    const cb = vi.fn();
-    const cleanup = onWidgetSubmitted(cb);
-    window.dispatchEvent(new CustomEvent("brainbox:submitted"));
-    window.dispatchEvent(new CustomEvent("brainbox:submitted", { detail: { id: 7 } }));
-    cleanup();
-    expect(cb).not.toHaveBeenCalled();
+    expect(open).toHaveBeenCalledOnce();
   });
 });
