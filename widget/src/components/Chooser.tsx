@@ -76,7 +76,7 @@ export function Chooser({
       )}
 
       <a
-        href="https://www.brainbox.sh?ref=widget"
+        href="https://brainbox.ganeshdole.com?ref=widget"
         target="_blank"
         rel="noopener noreferrer"
         className="mt-3 block text-center text-xs text-muted hover:text-emphasis"

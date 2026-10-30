@@ -111,7 +111,7 @@ export const env = {
   // cross-origin from this API). Comma-separated; parsed into an allowlist.
   MARKETING_ORIGINS: (
     process.env.MARKETING_ORIGIN ??
-    "https://brainbox.sh,https://www.brainbox.sh,http://localhost:5173,http://localhost:4173"
+    "https://brainbox.ganeshdole.com,http://localhost:5173,http://localhost:4173"
   )
     .split(",")
     .map((o) => o.trim())

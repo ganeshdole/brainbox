@@ -14,14 +14,14 @@ export interface WidgetEnv {
 // they ship in every customer's HTML. Env vars override for local testing
 // against a seeded backend (pk_test_local / http://localhost:8787/ingest).
 const DEMO_PROJECT_KEY = "pk_oAbjipcitHOfqopWviwemeh9";
-const DEMO_ENDPOINT = "https://app.brainbox.sh/ingest";
+const DEMO_ENDPOINT = "https://app.brainbox.ganeshdole.com/ingest";
 
 // The same URL customers paste (dashboard/src/lib/snippet.ts). Loading it
 // cross-origin rather than bundling a copy into public/ means the landing page
 // dogfoods the real install path and picks up widget releases from the box
 // deploy - no marketing rebuild needed. Override to /widget.js to develop
 // against a locally built bundle (`pnpm dev` copies one into public/).
-const WIDGET_SRC = "https://app.brainbox.sh/widget.js";
+const WIDGET_SRC = "https://app.brainbox.ganeshdole.com/widget.js";
 
 declare global {
   interface WindowEventMap {

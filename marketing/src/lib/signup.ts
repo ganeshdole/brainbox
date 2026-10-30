@@ -5,7 +5,7 @@ import type { BillingPeriod, Plan } from "./pricing"
 
 // Where the dashboard lives. Overridable for local work against a dev
 // dashboard; defaults to production so a plain `vite build` is always correct.
-const DASHBOARD_URL = import.meta.env.VITE_DASHBOARD_URL ?? "https://app.brainbox.sh"
+const DASHBOARD_URL = import.meta.env.VITE_DASHBOARD_URL ?? "https://app.brainbox.ganeshdole.com"
 
 /** The dashboard root - for "Sign in", which has no plan attached. */
 export function dashboardUrl(): string {

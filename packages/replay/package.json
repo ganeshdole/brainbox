@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "description": "Play back a Brainbox session recording in React: the widget's rrweb log with its voice note lined up, themeable with plain CSS.",
   "license": "SEE LICENSE IN LICENSE",
-  "homepage": "https://www.brainbox.sh",
+  "homepage": "https://brainbox.ganeshdole.com",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ganeshdole/brainbox.git",

@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "description": "Send a Brainbox report to GitHub issues or Azure DevOps work items. A Destination takes a Ticket and returns where it landed; fetch and WebCrypto only.",
   "license": "SEE LICENSE IN LICENSE",
-  "homepage": "https://www.brainbox.sh",
+  "homepage": "https://brainbox.ganeshdole.com",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ganeshdole/brainbox.git",

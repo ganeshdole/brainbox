@@ -39,7 +39,7 @@ console.log(`  stylesheets     ${size.styleSheets}`);
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// The widget script loads async from app.brainbox.sh - driving it before it
+// The widget script loads async from app.brainbox.ganeshdole.com - driving it before it
 // mounts measures nothing.
 await page.waitForFunction(
   () => !!document.getElementById("brainbox-widget")?.shadowRoot?.querySelector("button"),

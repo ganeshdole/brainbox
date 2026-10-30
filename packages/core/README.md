@@ -33,7 +33,7 @@ import { createBrainbox, brainboxTransport } from "@ganeshdole/brainbox-core";
 
 const brainbox = createBrainbox({
   // Brainbox Cloud, or your own backend (see Transport below)
-  transport: brainboxTransport({ endpoint: "https://app.brainbox.sh/ingest", projectKey: "pk_..." }),
+  transport: brainboxTransport({ endpoint: "https://app.brainbox.ganeshdole.com/ingest", projectKey: "pk_..." }),
   identity: { id: user.id, email: user.email },
   onSubmitted: ({ id }) => console.log("filed", id),
 });

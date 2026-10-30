@@ -6,7 +6,7 @@
 # (`openssl rand -hex 24`), or set DATABASE_URL yourself with it percent-encoded.
 # Local dev keeps using backend/docker-compose.yml (Postgres only).
 #
-# The frontends bake their URLs in at build time and default to brainbox.sh
+# The frontends bake their URLs in at build time and default to brainbox.ganeshdole.com
 # (dashboard/.env.production, marketing's built-in defaults). On any other
 # host, set the VITE_* build args below in the root .env too, e.g.
 #   VITE_API_URL=https://app.example.com            (dashboard -> API)

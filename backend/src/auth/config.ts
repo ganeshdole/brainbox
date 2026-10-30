@@ -129,7 +129,7 @@ function authConfig(deps: Deps, auth: ResolvedAuth, basePath: string | undefined
 
       // Auth.js's default drops any callbackUrl whose origin differs from the
       // API's, falling back to the API root. In production the dashboard and
-      // the API share app.brainbox.sh so it never showed; locally (5173 vs
+      // the API share one host so it never showed; locally (5173 vs
       // 8787) it dumps every sign-in and sign-out on the bare API, and it would
       // break the moment the API moves to its own subdomain. Allow the
       // dashboard explicitly, and keep the default's caution for anything else.

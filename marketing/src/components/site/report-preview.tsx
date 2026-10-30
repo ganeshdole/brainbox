@@ -64,7 +64,7 @@ export function ReportPreview() {
             <span className="size-2.5 rounded-full bg-white/15" />
           </span>
           <span className="mx-auto truncate font-mono text-[11px] text-default">
-            app.brainbox.sh/reports
+            app.brainbox.ganeshdole.com/reports
           </span>
         </div>
 

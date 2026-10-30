@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "description": "React bindings for @ganeshdole/brainbox-core: a provider that owns one Brainbox instance and hooks that read it. No UI.",
   "license": "SEE LICENSE IN LICENSE",
-  "homepage": "https://www.brainbox.sh",
+  "homepage": "https://brainbox.ganeshdole.com",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ganeshdole/brainbox.git",
