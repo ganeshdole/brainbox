@@ -9,9 +9,9 @@ Three ways in, one UI.
 For a page with no build step. Paste before `</body>`:
 
 ```html
-<script src="https://app.brainbox.sh/widget.js"
+<script src="https://app.brainbox.ganeshdole.com/widget.js"
         data-project="pk_..."
-        data-endpoint="https://app.brainbox.sh/ingest"></script>
+        data-endpoint="https://app.brainbox.ganeshdole.com/ingest"></script>
 ```
 
 | Attribute | Values | Default |

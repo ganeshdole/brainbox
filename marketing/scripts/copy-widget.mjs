@@ -1,4 +1,4 @@
-// Dev only (`pnpm dev`) - production loads https://app.brainbox.sh/widget.js,
+// Dev only (`pnpm dev`) - production loads https://app.brainbox.ganeshdole.com/widget.js,
 // the same tag customers paste, so the build no longer needs a bundled copy.
 // This puts a locally built widget at /widget.js so you can iterate on it by
 // setting VITE_DEMO_WIDGET_SRC=/widget.js. If you rebuild the widget

@@ -17,11 +17,11 @@ describe("resolveWidgetConfig", () => {
   it("falls back to the demo project and prod ingest endpoint", () => {
     const config = resolveWidgetConfig({});
     expect(config.project).toMatch(/^pk_/);
-    expect(config.endpoint).toBe("https://app.brainbox.sh/ingest");
+    expect(config.endpoint).toBe("https://app.brainbox.ganeshdole.com/ingest");
   });
 
   it("defaults to the same widget URL customers are given, not a bundled copy", () => {
-    expect(resolveWidgetConfig({}).src).toBe("https://app.brainbox.sh/widget.js");
+    expect(resolveWidgetConfig({}).src).toBe("https://app.brainbox.ganeshdole.com/widget.js");
   });
 
   it("lets env values override the defaults", () => {

@@ -54,7 +54,7 @@ export function earlyAccessReservedEmail(): RenderedEmail {
             </tr>
           </table>
           <p style="max-width:480px;margin:20px auto 0 auto;font-size:12px;line-height:1.5;color:#6b6b6b;">
-            You received this because you reserved early access at brainbox.sh. If that wasn&rsquo;t you, you can ignore this email.
+            You received this because you reserved early access at brainbox.ganeshdole.com. If that wasn&rsquo;t you, you can ignore this email.
           </p>
         </td>
       </tr>

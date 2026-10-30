@@ -4,7 +4,7 @@ import { checkoutUrl, dashboardUrl } from "./signup"
 
 // VITE_DASHBOARD_URL is unset under test, so these assert the production
 // default - which is the value a plain `vite build` ships.
-const DASHBOARD = "https://app.brainbox.sh"
+const DASHBOARD = "https://app.brainbox.ganeshdole.com"
 
 describe("dashboardUrl", () => {
   it("points at the dashboard root", () => {
