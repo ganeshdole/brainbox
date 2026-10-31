@@ -213,6 +213,15 @@ describe("sign-in", () => {
     const both = build({});
     expect(await options(both)).toEqual({ email: "both", google: true });
     expect(await providers(both)).toEqual(["google", "magic-link"]);
+
+    const googleOnly = build({ auth: { ...fromEnv().auth, emailMode: "off" } });
+    expect(await options(googleOnly)).toEqual({ email: "off", google: true });
+    expect(await providers(googleOnly)).toEqual(["google"]);
+  });
+
+  it("refuses email sign-in off without Google, which would let no one in", () => {
+    const { google: _google, ...withoutGoogle } = fromEnv().auth ?? {};
+    expect(() => build({ auth: { ...withoutGoogle, emailMode: "off" } })).toThrow(/needs Google/);
   });
 });
 

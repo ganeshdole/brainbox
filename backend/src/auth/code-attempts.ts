@@ -39,7 +39,7 @@ export function withCodeAttemptLimit(
   mode: EmailSignInMode,
 ): Adapter {
   const { useVerificationToken } = adapter;
-  if (mode === "link" || !useVerificationToken) return adapter;
+  if (mode === "link" || mode === "off" || !useVerificationToken) return adapter;
   return {
     ...adapter,
     async createVerificationToken(token) {

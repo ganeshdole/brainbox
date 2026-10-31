@@ -43,6 +43,11 @@ describe("fetchSignInOptions", () => {
     await expect(fetchSignInOptions()).resolves.toEqual({ email: "code", google: false });
   });
 
+  it("reads a Google-only deployment, with email sign-in off", async () => {
+    respond({ email: "off", google: true });
+    await expect(fetchSignInOptions()).resolves.toEqual({ email: "off", google: true });
+  });
+
   it("offers Google unless the backend says it has none", async () => {
     respond({ email: "both" });
     await expect(fetchSignInOptions()).resolves.toEqual({ email: "both", google: true });
