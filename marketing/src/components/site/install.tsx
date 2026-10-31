@@ -3,9 +3,9 @@ import { Section, SectionHead } from "./section-head"
 
 // The tag the dashboard hands out (dashboard/src/lib/snippet.ts), with a placeholder key.
 const SNIPPET = `<script
-  src="https://app.brainbox.ganeshdole.com/widget.js"
+  src="https://app.brainbox.sh/widget.js"
   data-project="pk_your_project_key"
-  data-endpoint="https://app.brainbox.ganeshdole.com/ingest"
+  data-endpoint="https://app.brainbox.sh/ingest"
 ></script>`
 
 const facts = [
