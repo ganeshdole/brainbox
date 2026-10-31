@@ -44,6 +44,7 @@ Everything else is in `backend/src/env.ts`.
 | Sign-in with Google | `GOOGLE_ID`, `GOOGLE_SECRET` (without both, sign-in is by email only) |
 | Sign-in by email | `EMAIL_DRIVER=resend`, `RESEND_API_KEY`, `EMAIL_FROM` |
 | A code instead of a link | `AUTH_EMAIL_MODE=code`, or `both` for a code and a link in one email (default `link`) |
+| Sign-in with Google only | `AUTH_EMAIL_MODE=off`, with `GOOGLE_ID` and `GOOGLE_SECRET` (the server refuses to start without them) |
 | Only your company signs in | `AUTH_ALLOWED_EMAIL_DOMAINS=acme.com` (comma-separated; unset lets anyone in) |
 | GitHub destinations | `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_WEBHOOK_SECRET` |
 | Azure DevOps destinations | `INTEGRATIONS_ENCRYPTION_KEY` (below) |

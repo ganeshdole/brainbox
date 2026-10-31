@@ -3,7 +3,7 @@ import type { EmailSignInMode } from "@ganeshdole/brainbox-shared";
 import { api } from "./api";
 import { API_URL } from "./authConfig";
 
-const MODES: readonly EmailSignInMode[] = ["link", "code", "both"];
+const MODES: readonly EmailSignInMode[] = ["link", "code", "both", "off"];
 
 /** Remembers a code sign-in while the code round-trips through the API, so a
  *  wrong code brings the person back to the code step, still headed where

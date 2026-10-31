@@ -19,6 +19,19 @@ describe("INTEGRATIONS_ENCRYPTION_KEY", () => {
   });
 });
 
+describe("AUTH_EMAIL_MODE=off", () => {
+  it("boots with Google, the one way left to sign in", async () => {
+    const env = await loadEnv({ AUTH_EMAIL_MODE: "off", GOOGLE_ID: "id", GOOGLE_SECRET: "secret" });
+    expect(env.AUTH_EMAIL_MODE).toBe("off");
+  });
+
+  it("refuses to boot without Google, which would let no one in", async () => {
+    await expect(loadEnv({ AUTH_EMAIL_MODE: "off", GOOGLE_ID: "id", GOOGLE_SECRET: "" })).rejects.toThrow(
+      /GOOGLE_ID and GOOGLE_SECRET/,
+    );
+  });
+});
+
 describe("STORAGE_DRIVER=s3", () => {
   it("boots with both keys", async () => {
     const env = await loadEnv({ ...S3, S3_ACCESS_KEY_ID: "id", S3_SECRET_ACCESS_KEY: "secret" });
