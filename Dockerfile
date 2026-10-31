@@ -53,5 +53,7 @@ CMD ["node", "dist/index.js"]
 FROM caddy:2.10-alpine AS web
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /app/dashboard/dist /srv/app
-COPY --from=build /app/widget/dist/widget.js /srv/app/widget.js
+# The script tag's two files: widget.js loads widget-capture.js from beside
+# itself the first time someone captures (widget/src/lib/load-capture.ts).
+COPY --from=build /app/widget/dist/widget.js /app/widget/dist/widget-capture.js /srv/app/
 COPY --from=build /app/marketing/dist /srv/www
