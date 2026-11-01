@@ -92,11 +92,12 @@ export function fillTemplate(
 }
 
 /**
- * Where a page's HTML goes in dist/: "/" → index.html, "/a/b" → a/b.html.
- * Vercel's `cleanUrls` (vercel.json) serves a/b.html at /a/b.
+ * Where a page's HTML goes in dist/: "/" → index.html, "/a/b" → a/b/index.html,
+ * which Vercel serves at /a/b. (Not `cleanUrls` with a/b.html: that maps the
+ * root index.html to /index and leaves / a 404.)
  */
 export function outputFile(path: string): string {
-  return path === "/" ? "index.html" : `${path.slice(1)}.html`
+  return path === "/" ? "index.html" : `${path.slice(1)}/index.html`
 }
 
 export function sitemapXml(pages: readonly Pick<PageMeta, "path" | "lastmod">[]): string {
