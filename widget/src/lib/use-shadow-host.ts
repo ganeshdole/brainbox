@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { WidgetTheme } from "@ganeshdole/brainbox-shared";
+import { keepOnPage } from "./keep-on-page.ts";
 import { createShadowHost, type ShadowHost } from "./shadow-host.ts";
 import { applyTheme } from "./theme.ts";
 
@@ -21,7 +22,12 @@ export function useShadowHost(
   useEffect(() => {
     if (!host) return;
     document.body.appendChild(host.element);
-    return () => host.element.remove();
+    // a host app that swaps <body> on navigation must not take it with it
+    const release = keepOnPage(host.element);
+    return () => {
+      release();
+      host.element.remove();
+    };
   }, [host]);
 
   useEffect(() => {
