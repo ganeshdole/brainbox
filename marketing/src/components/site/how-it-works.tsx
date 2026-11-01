@@ -1,58 +1,57 @@
-import { Camera, Crop, MousePointerClick, Send } from "lucide-react"
-import { SectionHead } from "./section-head"
+import { Section, SectionHead } from "./section-head"
+import { Shot } from "./shot"
 
 const steps = [
   {
-    n: "01",
-    icon: MousePointerClick,
-    title: "Click the widget",
-    body: "The user taps the floating Brainbox button in the corner of your app.",
+    title: "Open the widget",
+    body: "From the button in the corner, or from your own. They can screenshot the page, record it, or suggest a feature.",
   },
   {
-    n: "02",
-    icon: Crop,
-    title: "Highlight & talk",
-    body: "They circle the broken area on screen and describe the issue with their voice.",
+    title: "Point at what broke",
+    body: "A box, an arrow, a pen line or a note, drawn on a frozen copy of the page.",
   },
   {
-    n: "03",
-    icon: Camera,
-    title: "Brainbox captures",
-    body: "Screenshot, page URL, browser data and full user context, collected automatically.",
-  },
-  {
-    n: "04",
-    icon: Send,
-    title: "The ticket ships",
-    body: "A structured ticket lands in Linear, GitHub, Slack or Gmail, instantly.",
+    title: "Say what happened",
+    body: "Talk it through, or type it if they would rather. Then send.",
   },
 ]
 
 export function HowItWorks() {
   return (
-    <section id="how" className="mx-auto max-w-6xl px-6 py-24 md:py-32">
+    <Section id="how">
       <SectionHead
-        label="How it works"
-        title="From a tap to a ticket in four steps."
-        desc="No setup for your users. No forms, no friction. Just point, talk, and ship."
+        title="Your users point at it and say what happened."
+        desc="No account, no browser extension. The widget runs inside your app, in its own Shadow DOM, so your styles and ours never meet."
       />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {steps.map((s) => (
-          <div
-            key={s.n}
-            className="border-sheen rounded-2xl p-6 transition-colors duration-200 hover:border-white/15"
-          >
-            <div className="font-mono text-xs text-gray-11/60">{s.n}</div>
-            <div className="mt-5 inline-flex size-11 items-center justify-center rounded-xl border border-default bg-white/[0.03]">
-              <s.icon className="size-5 text-emphasis" />
-            </div>
-            <h3 className="mt-4 text-base font-semibold tracking-tight text-emphasis">
-              {s.title}
-            </h3>
-            <p className="mt-2 text-sm leading-relaxed text-default">{s.body}</p>
-          </div>
-        ))}
+
+      <div className="mt-12 overflow-hidden rounded-xl border border-default">
+        <Shot
+          name="widget-mark"
+          className="hidden md:block"
+          sizes="(min-width: 1200px) 1120px, calc(100vw - 80px)"
+          width={1120}
+          height={709}
+          alt="A checkout page with the Brainbox widget open. The page is frozen, a red box is drawn around the Pay $128.00 button, and a toolbar at the bottom offers select, box, arrow, pen, text, colour, undo and Next."
+        />
+        <Shot
+          name="widget-mark-phone"
+          className="md:hidden"
+          sizes="calc(100vw - 40px)"
+          width={360}
+          height={182}
+          alt="A red box drawn around a checkout page's Pay button, with the Brainbox mark-up toolbar below it."
+        />
       </div>
-    </section>
+
+      <ol className="mt-10 grid gap-8 md:grid-cols-3 md:gap-10">
+        {steps.map((s, i) => (
+          <li key={s.title}>
+            <span className="font-mono text-[13px] text-gray-9">{i + 1}</span>
+            <h3 className="mt-2 text-[17px] font-[560] tracking-[-0.01em] text-emphasis">{s.title}</h3>
+            <p className="mt-1.5 text-[15px] leading-[1.55] text-gray-10">{s.body}</p>
+          </li>
+        ))}
+      </ol>
+    </Section>
   )
 }

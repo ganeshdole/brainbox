@@ -1,14 +1,14 @@
 import { useEffect } from "react"
 import { Nav } from "@/components/site/nav"
 import { Hero } from "@/components/site/hero"
-import { Marquee } from "@/components/site/marquee"
-import { ReportPreview } from "@/components/site/report-preview"
 import { HowItWorks } from "@/components/site/how-it-works"
+import { WhatsIncluded } from "@/components/site/whats-included"
 import { Integrations } from "@/components/site/integrations"
+import { FeatureRequests } from "@/components/site/feature-requests"
+import { Install } from "@/components/site/install"
 import { Pricing } from "@/components/site/pricing"
-import { FinalCta } from "@/components/site/final-cta"
+import { Faq } from "@/components/site/faq"
 import { Footer } from "@/components/site/footer"
-import { TryItCue } from "@/components/site/try-it-cue"
 import { loadWidget, resolveWidgetConfig } from "@/lib/widget-loader"
 
 export default function App() {
@@ -22,15 +22,15 @@ export default function App() {
       <Nav />
       <main>
         <Hero />
-        <Marquee />
-        <ReportPreview />
         <HowItWorks />
+        <WhatsIncluded />
         <Integrations />
+        <FeatureRequests />
+        <Install />
         <Pricing />
-        <FinalCta />
+        <Faq />
       </main>
       <Footer />
-      <TryItCue />
     </div>
   )
 }

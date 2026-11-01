@@ -34,7 +34,7 @@ export const PRO: Plan = {
     "Unlimited projects, seats & pageviews",
     "Voice notes, screen recording & session replay",
     "Screenshot with the broken area highlighted",
-    "Linear, GitHub & Slack - included as they ship",
+    "GitHub Issues & Azure DevOps",
     "12 months of history",
   ],
   featured: false,
@@ -50,7 +50,6 @@ export const BUSINESS: Plan = {
   features: [
     "Everything in Pro",
     "Unlimited history",
-    "API access & webhooks",
     "Priority support queue",
     "Onboarding call with the founder",
   ],

@@ -9,21 +9,16 @@
    BRAINBOX - Resend design system
    Real two-layer tokens: Radix primitives (primitives.css) +
    semantic layer (tokens.css). Dark-first marketing surface
-   (html.dark). This file holds only theme scalars + the brand
-   signature utilities (gradient, sheen, glass, noise, grid).
+   (html.dark). This file holds only theme scalars and the one
+   effect the page uses (glass, on the sticky nav).
    ============================================================ */
 
 @theme inline {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: "Commit Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* radii - lg/xl/2xl/3xl match Tailwind defaults (Resend's scale); add 4xl */
-  --radius-4xl: 2rem;
-
   /* shadows */
   --shadow-button: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 2px rgba(0, 0, 0, 0.6);
-  --shadow-3xl: 0 16px 48px -12px rgba(0, 0, 0, 0.6);
-  --shadow-4xl: 0 32px 80px -16px rgba(0, 0, 0, 0.7);
 }
 
 @layer base {
@@ -57,68 +52,8 @@
   }
 }
 
-/* ============ Resend signatures ============ */
-
-/* heading gradient: linear-gradient(97deg, #fff 30%, rgba(255,255,255,.5)) */
-.text-gradient {
-  background: linear-gradient(97deg, #ffffff 30%, rgba(255, 255, 255, 0.5) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-/* hairline border with the brand vertical sheen */
-.border-sheen {
-  position: relative;
-  border: 1px solid transparent;
-  background:
-    linear-gradient(var(--bg-elevated), var(--bg-elevated)) padding-box,
-    linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.04) 100%) border-box;
-}
-
-/* glass blur (nav, floating chrome) */
+/* glass blur (the sticky nav) */
 .glass {
   backdrop-filter: saturate(140%) blur(25px);
   -webkit-backdrop-filter: saturate(140%) blur(25px);
-}
-
-/* atmospheric noise tooth, Resend hero texture, inlined to avoid a network dep */
-.bg-noise::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0.4;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
-}
-
-/* soft top-of-page glow */
-.glow-top::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(900px 480px at 50% -10%, rgba(255, 255, 255, 0.09), transparent 70%),
-    radial-gradient(600px 420px at 85% 0%, rgba(255, 255, 255, 0.04), transparent 60%);
-}
-
-/* canvas grid (subtle dotted/line surface like Resend interface scenes) */
-.bg-grid {
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
-  background-size: 56px 56px;
-}
-
-/* marquee */
-@keyframes marquee-x {
-  to {
-    transform: translateX(-50%);
-  }
-}
-.animate-marquee {
-  animation: marquee-x var(--marquee-dur, 40s) linear infinite;
 }
