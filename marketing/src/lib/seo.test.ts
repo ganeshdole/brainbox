@@ -66,7 +66,7 @@ describe("fillTemplate", () => {
 describe("paths", () => {
   it("maps a page to its file in dist/", () => {
     expect(outputFile("/")).toBe("index.html")
-    expect(outputFile("/install/nextjs")).toBe("install/nextjs.html")
+    expect(outputFile("/install/nextjs")).toBe("install/nextjs/index.html")
   })
 
   it("gives the home page a trailing slash and nothing else one", () => {
