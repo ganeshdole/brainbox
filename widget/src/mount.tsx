@@ -8,6 +8,7 @@ import {
 import { BrainboxProvider } from "@ganeshdole/brainbox-react";
 import type { TriggerMode, WidgetTheme } from "@ganeshdole/brainbox-shared";
 import type { Position } from "./lib/position.ts";
+import { keepOnPage } from "./lib/keep-on-page.ts";
 import { widgetStore, type StartMode } from "./lib/widget-store.ts";
 import type { WidgetComponents } from "./slots.ts";
 import { BrainboxWidget } from "./widget.tsx";
@@ -56,6 +57,7 @@ export function mount({
   const anchor = document.createElement("div");
   anchor.setAttribute("data-brainbox-root", "");
   document.body.appendChild(anchor);
+  const release = keepOnPage(anchor);
   const root = createRoot(anchor);
   root.render(
     <BrainboxProvider brainbox={brainbox}>
@@ -76,6 +78,7 @@ export function mount({
     identify: brainbox.identify,
     setFields: brainbox.setFields,
     destroy() {
+      release();
       root.unmount();
       anchor.remove();
       brainbox.destroy();

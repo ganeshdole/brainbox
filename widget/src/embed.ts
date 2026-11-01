@@ -58,7 +58,16 @@ declare global {
     Brainbox: typeof api;
   }
 }
-window.Brainbox = api;
+// Turbo Drive, Livewire's wire:navigate and htmx run the scripts in each new
+// <body> they swap in, so a tag before </body> runs again on every navigation.
+// The first run owns the page; the widget it mounted is kept on the new body
+// (lib/keep-on-page.ts), so a second would be a duplicate.
+const LOADED = Symbol.for("brainbox.widget.loaded");
+const firstRun = !Reflect.has(window, LOADED);
+if (firstRun) {
+  Reflect.set(window, LOADED, true);
+  window.Brainbox = api;
+}
 
 function findScript(): HTMLScriptElement | null {
   return (
@@ -110,8 +119,7 @@ function boot() {
   });
 }
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", boot);
-} else {
-  boot();
+if (firstRun) {
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
 }

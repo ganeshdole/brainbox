@@ -3,17 +3,17 @@ import { dashboardUrl } from "@/lib/signup"
 import { CONTAINER } from "./section-head"
 
 const links = [
-  { href: "#how", label: "How it works" },
-  { href: "#integrations", label: "Integrations" },
-  { href: "#pricing", label: "Pricing" },
-  { href: "#faq", label: "FAQ" },
+  { href: "/#how", label: "How it works" },
+  { href: "/#integrations", label: "Integrations" },
+  { href: "/#pricing", label: "Pricing" },
+  { href: "/#faq", label: "FAQ" },
 ]
 
 export function Nav() {
   return (
     <header className="glass sticky top-0 z-50 border-b border-default bg-[color-mix(in_srgb,var(--bg-background)_80%,transparent)]">
       <div className={`${CONTAINER} grid h-16 grid-cols-[1fr_auto] items-center md:grid-cols-[1fr_auto_1fr]`}>
-        <a href="#top" className="flex items-center gap-2 justify-self-start">
+        <a href="/#top" className="flex items-center gap-2 justify-self-start">
           <img
             src="/assets/brainbox-logo.png"
             alt=""
@@ -37,7 +37,7 @@ export function Nav() {
             Sign in
           </a>
           <Button asChild size="sm">
-            <a href="#pricing">Get started</a>
+            <a href="/#pricing">Get started</a>
           </Button>
         </div>
       </div>

@@ -9,18 +9,18 @@ const columns = [
   {
     title: "Product",
     links: [
-      { label: "How it works", href: "#how" },
-      { label: "What's in a report", href: "#report" },
-      { label: "Integrations", href: "#integrations" },
-      { label: "Feature requests", href: "#features" },
-      { label: "Pricing", href: "#pricing" },
-      { label: "FAQ", href: "#faq" },
+      { label: "How it works", href: "/#how" },
+      { label: "What's in a report", href: "/#report" },
+      { label: "Integrations", href: "/#integrations" },
+      { label: "Feature requests", href: "/#features" },
+      { label: "Pricing", href: "/#pricing" },
+      { label: "FAQ", href: "/#faq" },
     ],
   },
   {
     title: "Developers",
     links: [
-      { label: "Install", href: "#install" },
+      { label: "Install", href: "/#install" },
       { label: "Widget on npm", href: "https://www.npmjs.com/package/@ganeshdole/brainbox-widget" },
       { label: "React bindings", href: "https://www.npmjs.com/package/@ganeshdole/brainbox-react" },
       { label: "Self-hosting guide", href: `${GITHUB_URL}/blob/main/docs/self-hosting.md` },
@@ -28,9 +28,18 @@ const columns = [
     ],
   },
   {
+    title: "Resources",
+    links: [
+      { label: "Install guides", href: "/install" },
+      { label: "Integrations", href: "/integrations" },
+      { label: "Compare", href: "/alternatives" },
+      { label: "Templates", href: "/templates" },
+    ],
+  },
+  {
     title: "Account",
     links: [
-      { label: "Get started", href: "#pricing" },
+      { label: "Get started", href: "/#pricing" },
       { label: "Sign in", href: dashboardUrl() },
     ],
   },
@@ -54,7 +63,7 @@ export function Footer() {
               happened, and it lands in our inbox.
             </p>
             <Button asChild className="mt-8 rounded-lg px-[18px]">
-              <a href="#pricing">Get started</a>
+              <a href="/#pricing">Get started</a>
             </Button>
           </div>
 
@@ -75,7 +84,7 @@ export function Footer() {
 
         <div className="flex flex-col gap-12 border-t border-default py-14 md:flex-row md:justify-between">
           <div>
-            <a href="#top" className="flex w-fit items-center gap-2">
+            <a href="/#top" className="flex w-fit items-center gap-2">
               <img
                 src="/assets/brainbox-logo.png"
                 alt=""
@@ -90,7 +99,7 @@ export function Footer() {
             </p>
           </div>
 
-          <nav aria-label="Footer" className="grid grid-cols-2 gap-x-12 gap-y-10 sm:grid-cols-3">
+          <nav aria-label="Footer" className="grid grid-cols-2 gap-x-12 gap-y-10 sm:grid-cols-4">
             {columns.map((col) => (
               <div key={col.title} className="min-w-[140px]">
                 <h3 className="text-[13px] font-medium text-emphasis">{col.title}</h3>

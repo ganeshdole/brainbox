@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'dist-ssr']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -23,6 +23,14 @@ export default defineConfig([
       // that let AI-written code silently defeat strict mode.
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-non-null-assertion": "error",
+    },
+  },
+  {
+    // The build's server entry is never hot-reloaded; it exports what
+    // scripts/prerender.mjs needs alongside render().
+    files: ["src/entry-server.tsx"],
+    rules: {
+      "react-refresh/only-export-components": "off",
     },
   },
   {

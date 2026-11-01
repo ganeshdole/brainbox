@@ -30,6 +30,16 @@ The tag publishes `window.Brainbox` with `open()`, `start(mode)`, `close()`,
 (your app's own details for every report; see the React package README), and fires a `brainbox:submitted` event on `window`
 (`event.detail.id`) after each report.
 
+### Apps that swap `<body>`
+
+Turbo Drive, Livewire's `wire:navigate`, htmx's `hx-boost` and Astro's
+`<ClientRouter />` navigate by replacing `<body>` (or its children) and run
+the scripts in the new one. The widget moves its elements into each new body,
+with whatever the user had open, and a second run of the tag does nothing, so
+the page keeps one widget. Its elements carry `data-turbo-temporary`, so Turbo
+leaves them out of the snapshots it caches. `mount()` does the same; call
+`destroy()` to take it off the page for good.
+
 ### Your own buttons
 
 Mark any element on the page with `data-brainbox` and a click on it opens the
