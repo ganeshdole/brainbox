@@ -29,9 +29,10 @@ export interface AppOptions {
 
 /** Signing in to the dashboard (Auth.js). Needs a store with `auth`. */
 export interface AuthOptions {
-  /** Google sign-in; left out, it isn't offered. Email sign-in always is. */
+  /** Google sign-in; left out, it isn't offered. */
   google?: { clientId: string; clientSecret: string };
-  /** What a sign-in email carries: a link, a 6-digit code, or both. Default "link". */
+  /** What a sign-in email carries: a link, a 6-digit code, or both. Default
+   *  "link". "off" offers no email sign-in, so it needs `google`. */
   emailMode?: EmailSignInMode;
   /** Only addresses on these domains, plus anyone a Team invites, may sign
    *  in. Empty lets anyone in, which a store without `teams` refuses. */
@@ -119,10 +120,14 @@ export function resolveDeps(deps: AppDeps): Deps {
         "A store without the teams module shows every project to everyone who signs in: set auth.allowedEmailDomains",
       );
     }
+    const emailMode = deps.auth.emailMode ?? "link";
+    if (emailMode === "off" && !deps.auth.google) {
+      throw new Error("Sign-in with email off (emailMode \"off\") needs Google: set auth.google");
+    }
     auth = {
       store: store.auth,
       google: deps.auth.google ?? null,
-      emailMode: deps.auth.emailMode ?? "link",
+      emailMode,
       allowedEmailDomains,
     };
   }

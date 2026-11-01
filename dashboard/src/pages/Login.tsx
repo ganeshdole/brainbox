@@ -93,6 +93,8 @@ export function Login() {
       ? (ERROR_MESSAGES[errorCode] ?? "Something went wrong signing in. Try again.")
       : null;
   const sendsCode = mode !== "link";
+  // Google-only deployment (AUTH_EMAIL_MODE=off): no email form, no "or".
+  const emailOff = mode === "off";
 
   // Where to land after signing in. ProtectedRoute stashes the page that
   // bounced us here, so a deep link - notably /claim?token=... after a purchase
@@ -174,18 +176,20 @@ export function Login() {
                 Continue with Google
               </Button>
 
-              <div className="my-6 flex items-center gap-3">
-                <span className="h-px flex-1 bg-subtle" />
-                <span className="text-xs text-muted">or</span>
-                <span className="h-px flex-1 bg-subtle" />
-              </div>
+              {!emailOff && (
+                <div className="my-6 flex items-center gap-3">
+                  <span className="h-px flex-1 bg-subtle" />
+                  <span className="text-xs text-muted">or</span>
+                  <span className="h-px flex-1 bg-subtle" />
+                </div>
+              )}
             </>
           ) : (
             // the same gap the Google button would have left
             <div className="mt-7" />
           )}
 
-          {status === "sent" && sendsCode ? (
+          {emailOff ? null : status === "sent" && sendsCode ? (
             <CodeForm
               email={email}
               alsoLink={mode === "both"}
@@ -253,10 +257,12 @@ export function Login() {
           )}
         </div>
 
-        <p className="mt-4 text-center text-xs text-muted">
-          No password to remember. We&rsquo;ll email you a {sendsCode ? "code" : "link"} that signs
-          you in.
-        </p>
+        {!emailOff && (
+          <p className="mt-4 text-center text-xs text-muted">
+            No password to remember. We&rsquo;ll email you a {sendsCode ? "code" : "link"} that signs
+            you in.
+          </p>
+        )}
       </div>
     </div>
   );

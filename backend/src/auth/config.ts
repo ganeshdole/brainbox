@@ -113,10 +113,10 @@ function authConfig(deps: Deps, auth: ResolvedAuth, basePath: string | undefined
     },
 
     // Google only where it has a client: without one, its button would start a
-    // sign-in that cannot finish.
+    // sign-in that cannot finish. Email unless it is turned off.
     providers: [
       ...(auth.google ? [google(auth.google)] : []),
-      magicLink(deps, auth),
+      ...(auth.emailMode !== "off" ? [magicLink(deps, auth)] : []),
     ],
 
     callbacks: {

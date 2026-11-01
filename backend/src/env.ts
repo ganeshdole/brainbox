@@ -43,6 +43,13 @@ if (INTEGRATIONS_ENCRYPTION_KEY && !isEncryptionKey(INTEGRATIONS_ENCRYPTION_KEY)
   throw new Error("INTEGRATIONS_ENCRYPTION_KEY must be 32 bytes, base64 (openssl rand -base64 32)");
 }
 
+// Email sign-in off leaves Google as the only way in, so it needs a client:
+// without one the server would boot to a login page no one can get past.
+const AUTH_EMAIL_MODE = oneOf("AUTH_EMAIL_MODE", ["link", "code", "both", "off"], "link");
+if (AUTH_EMAIL_MODE === "off" && !(process.env.GOOGLE_ID && process.env.GOOGLE_SECRET)) {
+  throw new Error("AUTH_EMAIL_MODE=off turns email sign-in off: set GOOGLE_ID and GOOGLE_SECRET for Google sign-in");
+}
+
 // AUTH_SECRET and the chosen store's settings are infra and must be present to
 // boot. GOOGLE_* are optional so the server can boot for inspection before the
 // OAuth client exists; Google sign-in obviously won't work until they're set.
@@ -88,8 +95,9 @@ export const env = {
 
   // How email sign-in works: "link" emails a one-time sign-in link, "code"
   // emails a 6-digit code typed into the dashboard (link scanners in mail
-  // filters cannot use it up), "both" sends both in one email.
-  AUTH_EMAIL_MODE: oneOf("AUTH_EMAIL_MODE", ["link", "code", "both"], "link"),
+  // filters cannot use it up), "both" sends both in one email. "off" offers no
+  // email sign-in at all, only Google (which then needs GOOGLE_ID/SECRET).
+  AUTH_EMAIL_MODE,
 
   // Who may sign in, for a deployment that is one company's own. Unset:
   // anyone. Set (comma-separated, e.g. "acme.com,acme.io"): addresses on these
