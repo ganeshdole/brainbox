@@ -39,7 +39,10 @@ Ten surfaces, one workspace package each:
   a Node server or on Azure Functions. `createApp(deps)` builds it from parts,
   for a backend of your own (ADR 0010). Uses `@ganeshdole/brainbox-server` for
   `/ingest` and `@ganeshdole/brainbox-integrations` to deliver.
-- `marketing/` - the landing page (`brainbox-landing`). React + Vite.
+- `marketing/` - the landing page (`brainbox-landing`). React + Vite, every page
+  in `src/pages.tsx` prerendered to its own HTML at build, with a sitemap, so
+  render code must not touch `window` or `document` (effects may). Guides,
+  integrations, comparisons and templates are data in `src/content/`.
 - `packages/shared/` - cross-surface types (`@ganeshdole/brainbox-shared`). Pure types, no
   runtime.
 

@@ -286,6 +286,9 @@ importers:
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.6.0(jiti@2.7.0))
+      '@ganeshdole/brainbox-integrations':
+        specifier: workspace:*
+        version: link:../packages/integrations
       '@ganeshdole/brainbox-widget':
         specifier: workspace:*
         version: link:../widget

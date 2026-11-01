@@ -1,3 +1,4 @@
+import { FRAMEWORK_GUIDES } from "@/content/frameworks"
 import { GITHUB_URL } from "@/lib/links"
 import { Section, SectionHead } from "./section-head"
 
@@ -61,9 +62,23 @@ export function Install() {
           title="One script tag."
           desc="Paste it before </body> and the widget is live. Your project key is in the dashboard."
         />
-        <pre className="min-w-0 self-start overflow-x-auto rounded-xl border border-default bg-subtle p-5 font-mono text-[13px] leading-[1.7] text-default max-sm:break-all max-sm:whitespace-pre-wrap">
-          <code>{SNIPPET}</code>
-        </pre>
+        <div className="min-w-0 self-start">
+          <pre className="overflow-x-auto rounded-xl border border-default bg-subtle p-5 font-mono text-[13px] leading-[1.7] text-default max-sm:break-all max-sm:whitespace-pre-wrap">
+            <code>{SNIPPET}</code>
+          </pre>
+          <p className="mt-4 text-[14px] text-gray-10">
+            Step by step for{" "}
+            {FRAMEWORK_GUIDES.map((g, i) => (
+              <span key={g.path}>
+                {i > 0 && ", "}
+                <a href={g.path} className="text-emphasis underline-offset-4 hover:underline">
+                  {g.name}
+                </a>
+              </span>
+            ))}
+            .
+          </p>
+        </div>
       </div>
 
       <dl className="mt-12 grid gap-x-10 sm:grid-cols-2 lg:grid-cols-4">

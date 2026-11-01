@@ -20,7 +20,7 @@ export function Hero() {
 
         <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
           <Button asChild className="rounded-lg px-[18px]">
-            <a href="#pricing">Get started</a>
+            <a href="/#pricing">Get started</a>
           </Button>
           <Button variant="link" className="px-0" onClick={openWidget}>
             Try it on this page &rarr;
