@@ -5,8 +5,18 @@
 /** The marketing site's one canonical origin. www and the old domains 308 here. */
 export const SITE_URL = "https://brainbox.sh"
 
+/**
+ * The first 8 hex digits of public/og.png's SHA-256. It goes in the image URL so
+ * a new picture gets a new URL: WhatsApp, Slack and Facebook keep an image by its
+ * URL, failed fetches included. seo.test.ts fails until this matches the file.
+ */
+export const OG_IMAGE_VERSION = "c291fe9e"
+
 /** The picture link previews show (public/og.png, 1200 × 630). */
-export const OG_IMAGE = `${SITE_URL}/og.png`
+export const OG_IMAGE = `${SITE_URL}/og.png?v=${OG_IMAGE_VERSION}`
+
+/** What the preview picture says, for readers that can't see it. */
+export const OG_IMAGE_ALT = "Brainbox: \u201cIt\u2019s broken\u201d isn\u2019t a bug report. This is."
 
 export interface PageMeta {
   /** Root-relative, no trailing slash except the home page's "/". */
@@ -55,6 +65,7 @@ export function headTags(page: PageMeta, { indexable = true } = {}): string {
   const title = escapeHtml(page.title)
   const description = escapeHtml(page.description)
   const url = escapeHtml(absoluteUrl(page.path))
+  const imageAlt = escapeHtml(OG_IMAGE_ALT)
   const tags = [
     `<title>${title}</title>`,
     `<meta name="description" content="${description}" />`,
@@ -65,9 +76,16 @@ export function headTags(page: PageMeta, { indexable = true } = {}): string {
     `<meta property="og:description" content="${description}" />`,
     `<meta property="og:url" content="${url}" />`,
     `<meta property="og:image" content="${OG_IMAGE}" />`,
+    `<meta property="og:image:secure_url" content="${OG_IMAGE}" />`,
+    `<meta property="og:image:type" content="image/png" />`,
     `<meta property="og:image:width" content="1200" />`,
     `<meta property="og:image:height" content="630" />`,
+    `<meta property="og:image:alt" content="${imageAlt}" />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
+    `<meta name="twitter:title" content="${title}" />`,
+    `<meta name="twitter:description" content="${description}" />`,
+    `<meta name="twitter:image" content="${OG_IMAGE}" />`,
+    `<meta name="twitter:image:alt" content="${imageAlt}" />`,
     ...(page.jsonLd ?? []).map((data) => `<script type="application/ld+json">${scriptJson(data)}</script>`),
   ]
   return tags.join("\n    ")
