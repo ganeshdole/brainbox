@@ -23,7 +23,7 @@ export function Hero() {
             <a href="/#pricing">Get started</a>
           </Button>
           <Button variant="link" className="px-0" onClick={openWidget}>
-            Try it on this page &rarr;
+            Try it on this page
           </Button>
           <span className="w-full text-[13px] text-gray-10 sm:w-auto sm:border-l sm:border-default sm:pl-6">
             From $29/mo &middot; 60-day money-back guarantee
