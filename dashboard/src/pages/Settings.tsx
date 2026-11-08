@@ -185,7 +185,7 @@ export function Settings() {
               <Section label="Domains" hint="Only these sites can send feedback.">
                 <div className="rounded-xl border border-default bg-elevated px-4 py-3.5">
                   <DomainsEditor
-                    key={project.id}
+                    key={`domains:${project.id}`}
                     projectId={project.id}
                     origins={project.allowedOrigins}
                     onChange={(allowedOrigins) => setProject({ ...project, allowedOrigins })}
@@ -197,14 +197,15 @@ export function Settings() {
                 <Section label="Destinations" hint="Where every new report is filed, as soon as it arrives.">
                   <div className="space-y-2.5">
                     {/* keyed: one project's loaded state, notice or half-filled
-                        form must not carry over to the next */}
+                        form must not carry over to the next. Distinct per
+                        sibling, or React sees duplicate keys. */}
                     <GithubDestination
-                      key={project.id}
+                      key={`github:${project.id}`}
                       projectId={project.id}
                       teamId={project.team.id}
                     />
                     <AzureDevopsDestination
-                      key={project.id}
+                      key={`azure:${project.id}`}
                       projectId={project.id}
                       teamId={project.team.id}
                     />
@@ -214,7 +215,7 @@ export function Settings() {
 
               <Section label="Danger zone" hint="This can't be undone.">
                 <DangerZone
-                  key={project.id}
+                  key={`danger:${project.id}`}
                   project={project}
                   projects={projects}
                   onDeleted={removeProject}

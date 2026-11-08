@@ -54,6 +54,17 @@ describe("billing page", () => {
     expect(autoStartDue(page)).toBeNull();
   });
 
+  it("comes back from checkout via Back as the picker, without starting again", () => {
+    const page = run(
+      initialBilling("annual", "pro"),
+      { type: "loaded", state: unpaid },
+      { type: "start", plan: "pro", auto: true },
+      { type: "restored" },
+    );
+    expect(page.checkout).toEqual({ kind: "idle", error: null });
+    expect(autoStartDue(page)).toBeNull();
+  });
+
   it("starts one checkout at a time", () => {
     const starting = run(
       initialBilling("annual", "pro"),

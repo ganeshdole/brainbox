@@ -805,6 +805,29 @@ function billingTests(get: () => StoreWith<"auth" | "billing">) {
     expect(await store.billing.subscriptionFor(user.id)).toMatchObject({ dodoSubscriptionId: b, status: "active" });
   });
 
+  it("orders a new subscription's first events however they race", async () => {
+    const store = get();
+    const at = (s: number) => new Date(Date.now() + s * 1000);
+    // Several at once: the race is where neither event finds a row yet.
+    const users = await Promise.all([1, 2, 3, 4, 5].map(() => newUser(store)));
+    await Promise.all(
+      users.flatMap((user) => {
+        const dodoSubscriptionId = `sub-${unique()}`;
+        const create = { userId: user.id, dodoCustomerId: "cus", dodoProductId: "pdt", plan: "pro" as const, period: "monthly" as const };
+        return (["on_hold", "active"] as const).map((status, i) =>
+          store.billing.applySubscriptionEvent({
+            eventId: `evt-${unique()}`,
+            eventType: `subscription.${status}`,
+            change: { dodoSubscriptionId, status, currentPeriodEnd: null, sentAt: at(i * 10), create },
+          }),
+        );
+      }),
+    );
+    for (const user of users) {
+      expect((await store.billing.subscriptionFor(user.id))?.status).toBe("active");
+    }
+  });
+
   it("applies a plan change, and keeps the period end an event leaves out", async () => {
     const store = get();
     const user = await newUser(store);

@@ -5,6 +5,7 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 
 import { api, isAuthRedirect } from "../lib/api";
 import { ALL_MODULES, ModulesContext, modulesFrom } from "../lib/modules";
+import { signedInLoginTarget } from "../lib/sign-in";
 import { Spinner } from "./ui/spinner";
 
 function Loading() {
@@ -30,14 +31,16 @@ export function ProtectedRoute() {
 }
 
 /** /login for someone already signed in: on to where they were headed (or
- *  home) instead of a sign-in form they don't need. */
+ *  home) instead of a sign-in form they don't need - unless it is showing an
+ *  Auth.js error (see `signedInLoginTarget`). */
 export function GuestOnly({ children }: { children: React.ReactNode }) {
   const { status } = useSession();
   const location = useLocation();
   if (status === "loading") return <Loading />;
   if (status === "authenticated") {
     const from = (location.state as { from?: { pathname: string; search: string } } | null)?.from;
-    return <Navigate to={from ? `${from.pathname}${from.search}` : "/"} replace />;
+    const to = signedInLoginTarget(location.search, from);
+    if (to !== null) return <Navigate to={to} replace />;
   }
   return children;
 }

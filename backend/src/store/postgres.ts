@@ -1,5 +1,5 @@
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
-import { and, asc, count, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 
 import type { DB } from "../db/connect.ts";
 import {
@@ -543,6 +543,12 @@ export function createPostgresStore(db: DB): FullStore {
           if (!(await claimEvent(tx, eventId, eventType))) return false;
           if (!change) return true;
 
+          // Events for one Account take turns, even before it has a row for
+          // FOR UPDATE to lock: two first events would otherwise both insert.
+          const userId = "userId" in change.create ? change.create.userId : null;
+          if (userId !== null) {
+            await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`subscription:${userId}`}, 0))`);
+          }
           // The row this subscription has, else the Account's row (one per
           // Account), locked so two events for it take turns.
           const [bySubscription] = await tx
@@ -550,7 +556,6 @@ export function createPostgresStore(db: DB): FullStore {
             .from(subscriptions)
             .where(eq(subscriptions.dodoSubscriptionId, change.dodoSubscriptionId))
             .for("update");
-          const userId = "userId" in change.create ? change.create.userId : null;
           const [byUser] =
             bySubscription || userId === null
               ? []
@@ -565,13 +570,40 @@ export function createPostgresStore(db: DB): FullStore {
               .where(eq(subscriptions.id, existing.id));
           } else if (write.kind === "create") {
             const v = write.values;
+            const incoming = sql`excluded.status`;
+            const sameSubscription = sql`${subscriptions.dodoSubscriptionId} = excluded.dodo_subscription_id`;
+            const notOlder = or(
+              isNull(subscriptions.lastEventAt),
+              sql`${subscriptions.lastEventAt} <= excluded.last_event_at`,
+            );
+            const replaceable = or(
+              // A payment takes the place of an unpaid other subscription.
+              and(sql`${incoming} = 'active'`, ne(subscriptions.status, "active"), sql`not ${sameSubscription}`),
+              and(
+                notOlder,
+                or(
+                  sameSubscription,
+                  and(
+                    sql`${incoming} not in ('cancelled', 'expired')`,
+                    or(ne(subscriptions.status, "active"), sql`${incoming} = 'active'`),
+                  ),
+                ),
+              ),
+            );
             await tx
               .insert(subscriptions)
               .values(v)
-              // An Account re-subscribing already has a row: the rule said
-              // this subscription takes its place.
+              // The Account's row, which the rule said this subscription takes
+              // the place of. Only an event with a userId gets here, so the
+              // Account's lock is held and the row is the one the rule saw.
+              // The rule is restated in the statement anyway, against the row
+              // as the statement finds it, so the write stays safe without the
+              // lock: nothing older than it, no ending of a subscription that
+              // isn't its own, no unpaid subscription in place of an active
+              // one (planSubscriptionWrite).
               .onConflictDoUpdate({
                 target: subscriptions.userId,
+                setWhere: replaceable,
                 set: {
                   dodoSubscriptionId: v.dodoSubscriptionId,
                   dodoCustomerId: v.dodoCustomerId,

@@ -14,7 +14,9 @@ import {
   organizationOf,
   parseOrganization,
   patExternalId,
+  reportUnreadableToken,
   sealToken,
+  UNREADABLE_TOKEN,
 } from "../integrations/azure-devops.ts";
 import { projectAccess, teamAccess } from "../lib/access.ts";
 import { toConnection } from "../lib/serialize.ts";
@@ -36,12 +38,12 @@ const patSchema = z.object({
 
 const ADO_UNAVAILABLE = "Azure DevOps is not configured on this deployment";
 const ADO_REJECTED = "Azure DevOps rejected the token. Connect Azure DevOps again with a new one.";
-const ADO_UNREADABLE = "Brainbox can't read the stored Azure DevOps token. Connect Azure DevOps again.";
 
 /**
  * An Azure DevOps connection the caller administers, with a catalog that
  * calls Azure DevOps as it; otherwise the response to send. A connection
- * whose token was rejected answers 409 until it is connected again.
+ * whose token was rejected answers 409 until it is connected again; one whose
+ * token can't be opened answers 409 until the key is fixed or it is.
  */
 async function azureDevopsConnection(
   c: Context<AppEnv>,
@@ -64,9 +66,9 @@ async function azureDevopsConnection(
     auth = await authFor(ado, conn);
   } catch (err) {
     if (!(err instanceof UnreadableCredentialsError)) throw err;
-    console.error(`[integrations] the token of connection ${conn.id} can't be read:`, err.message);
-    await markRejected();
-    return c.json({ error: ADO_UNREADABLE, code: "needs_reauth" }, 409);
+    // Not marked: restoring the right key has to be enough to heal it.
+    reportUnreadableToken(conn, err);
+    return c.json({ error: UNREADABLE_TOKEN, code: "credentials_unreadable" }, 409);
   }
   return { catalog: catalogFor(ado, auth), organization: organizationOf(conn), markRejected };
 }

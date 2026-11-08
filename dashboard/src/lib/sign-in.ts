@@ -85,3 +85,19 @@ function isPendingSignIn(value: unknown): value is PendingSignIn {
     typeof value.callbackUrl === "string"
   );
 }
+
+/**
+ * Where /login sends someone already signed in, or null to show the page.
+ * Shown when it carries an Auth.js `?error=`: that is the only place the error
+ * is explained, and sending them home would drop it. The page itself never
+ * navigates on its own, so that can't loop. Otherwise on to where they were
+ * headed - never back to /login, which would bounce forever - or home.
+ */
+export function signedInLoginTarget(
+  search: string,
+  from: { pathname: string; search: string } | undefined,
+): string | null {
+  if (new URLSearchParams(search).has("error")) return null;
+  if (!from || from.pathname === "/login") return "/";
+  return `${from.pathname}${from.search}`;
+}

@@ -14,6 +14,7 @@ import {
   takePendingSignIn,
 } from "../lib/sign-in";
 import { initialLogin, loginReducer } from "../lib/login";
+import { usePageRestore } from "../lib/use-page-restore";
 
 /**
  * Auth.js error codes, in our words.
@@ -84,6 +85,7 @@ export function Login() {
     initialLogin,
   );
   const { mode, google, step } = state;
+  usePageRestore(() => dispatch({ type: "restored" }));
 
   useEffect(() => {
     let cancelled = false;

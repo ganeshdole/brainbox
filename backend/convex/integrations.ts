@@ -181,8 +181,10 @@ export const listDeliveries = serverQuery({
  * lease. Never one that was sent, nor one still in flight.
  */
 export const claimDelivery = serverMutation({
-  args: { issueId: v.string(), destinationId: v.string(), provider, retry: v.boolean(), now: v.number() },
-  handler: async (ctx, { issueId, destinationId, provider, retry, now }) => {
+  // `now` is optional so a backend older than it keeps working while the two
+  // are deployed at different times.
+  args: { issueId: v.string(), destinationId: v.string(), provider, retry: v.boolean(), now: v.optional(v.number()) },
+  handler: async (ctx, { issueId, destinationId, provider, retry, now = Date.now() }) => {
     const existing = await ctx.db
       .query("deliveries")
       .withIndex("by_issue_destination", (q) => q.eq("issueId", issueId).eq("destinationId", destinationId))
@@ -220,11 +222,12 @@ export const claimDelivery = serverMutation({
 
 /** Record the outcome of the attempt numbered `attempts`, only while it is
  *  still the delivery's own and pending; null otherwise. A failure keeps any
- *  earlier link. */
+ *  earlier link. Without `attempts` (a backend older than it, while the two
+ *  are deployed at different times) only "still pending" is checked. */
 export const finishDelivery = serverMutation({
   args: {
     id: v.string(),
-    attempts: v.number(),
+    attempts: v.optional(v.number()),
     outcome: v.union(
       v.object({ ok: v.literal(true), externalId: v.string(), url: v.string() }),
       v.object({ ok: v.literal(false), error: v.string() }),
@@ -235,7 +238,8 @@ export const finishDelivery = serverMutation({
       .query("deliveries")
       .withIndex("with_id", (q) => q.eq("id", id))
       .unique();
-    if (!row || row.status !== "pending" || row.attempts !== attempts) return null;
+    if (!row || row.status !== "pending") return null;
+    if (attempts !== undefined && row.attempts !== attempts) return null;
     await ctx.db.patch(row._id, {
       status: outcome.ok ? "sent" : "failed",
       ...(outcome.ok && { externalId: outcome.externalId, externalUrl: outcome.url }),

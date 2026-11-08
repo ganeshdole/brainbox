@@ -33,5 +33,13 @@ describe("widget.js after a tag with no config", () => {
     act(() => document.querySelector<HTMLElement>("#trigger span")?.click());
     expect(open).toHaveBeenCalledTimes(1);
     expect(document.querySelectorAll("#brainbox-widget")).toHaveLength(1);
+
+    // A host handler on its own trigger that stops the click going further
+    // (a menu that closes itself) still opens feedback.
+    document
+      .querySelector("#trigger")
+      ?.addEventListener("click", (event) => event.stopPropagation());
+    act(() => document.querySelector<HTMLElement>("#trigger span")?.click());
+    expect(open).toHaveBeenCalledTimes(2);
   });
 });

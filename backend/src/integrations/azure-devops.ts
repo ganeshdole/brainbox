@@ -131,15 +131,35 @@ function shapeOf(item: AzureDevopsWorkItemConfig, team: string): AzureDevopsWork
   };
 }
 
+/**
+ * What to say when a stored token can't be opened. Most likely the deployment's
+ * INTEGRATIONS_ENCRYPTION_KEY isn't the one the token was sealed with, which
+ * restoring the key fixes, so the connection is NOT marked as needing a new
+ * token: that would outlive the key being put back.
+ */
+export const UNREADABLE_TOKEN =
+  "Brainbox can't read the stored Azure DevOps token: INTEGRATIONS_ENCRYPTION_KEY is not the key it was saved with. " +
+  "Restore that key, or connect Azure DevOps again in Settings.";
+
+/** Logs, loudly, a token that can't be opened: an operator has to act. */
+export function reportUnreadableToken(conn: Pick<ConnectionRecord, "id">, err: unknown): void {
+  console.error(
+    `[integrations] CANNOT READ the token of Azure DevOps connection ${conn.id}. ` +
+      "Check INTEGRATIONS_ENCRYPTION_KEY: it must be the key the token was sealed with.",
+    err instanceof Error ? err.message : err,
+  );
+}
+
 export type PreparedDestination =
   | { ok: true; config: AzureDevopsDestinationConfig }
-  | { ok: false; rejected: boolean; status: 422 | 502; error: string };
+  | { ok: false; rejected: false; unreadable: true; status: 409; error: string }
+  | { ok: false; rejected: boolean; unreadable?: false; status: 422 | 502; error: string };
 
 /**
  * What the dashboard picked, completed with what only Azure DevOps knows
  * (where each type's report goes, whether it has a Priority) and proved by a
- * dry-run create of each kind. `rejected`: the token no longer works, or
- * can't be read at all.
+ * dry-run create of each kind. `rejected`: the token no longer works.
+ * `unreadable`: the stored token can't be opened (`UNREADABLE_TOKEN`).
  */
 export async function prepareDestination(
   settings: AzureDevopsSettings,
@@ -151,7 +171,8 @@ export async function prepareDestination(
     auth = await authFor(settings, conn);
   } catch (err) {
     if (!(err instanceof UnreadableCredentialsError)) throw err;
-    return { ok: false, rejected: true, status: 502, error: err.message };
+    reportUnreadableToken(conn, err);
+    return { ok: false, rejected: false, unreadable: true, status: 409, error: UNREADABLE_TOKEN };
   }
   const organization = organizationOf(conn);
   let types: [AzureDevopsWorkItemTypeInfo, AzureDevopsWorkItemTypeInfo];

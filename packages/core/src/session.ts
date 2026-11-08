@@ -73,6 +73,10 @@ export interface SessionRecording {
   setMicMuted: (muted: boolean) => void;
 }
 
+/** The longest `stop()` waits for the voice track before sending the session
+ *  without it. */
+const MIC_STOP_TIMEOUT_MS = 5_000;
+
 /** rrweb DOM recording works wherever MutationObserver exists (universal). */
 export function canSessionRecord(): boolean {
   return typeof MutationObserver === "function";
@@ -171,7 +175,14 @@ export function startSessionRecording({
     (await recorder)?.();
     // don't block the upload on a permission dialog the user never answered
     await Promise.race([micReady, new Promise((r) => setTimeout(r, 150))]);
-    const audio = mic ? await mic.stop() : null;
+    // Bounded too: a voice track that never hands over must not leave the UI
+    // stuck finishing the recording. The session goes out without it.
+    const audio = mic
+      ? await Promise.race([
+          mic.stop().catch(() => null),
+          new Promise<null>((r) => setTimeout(() => r(null), MIC_STOP_TIMEOUT_MS)),
+        ])
+      : null;
     const offset = audio ? micOffsetMs(startedAt, micStartedAt) : null;
     const payload =
       offset === null ? { v: 1, events } : { v: 1, events, audioOffsetMs: offset };

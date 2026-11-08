@@ -9,8 +9,10 @@ import {
   installResult,
   iterationInput,
   parseLabels,
+  isDeliveryInFlight,
   pickConnectionId,
 } from "./integrations";
+import { ApiError } from "./api";
 
 const base: Delivery = {
   id: "d1",
@@ -125,5 +127,18 @@ describe("pickConnectionId", () => {
 
   it("is empty with nothing connected", () => {
     expect(pickConnectionId("a", [], "a")).toBe("");
+  });
+});
+
+describe("isDeliveryInFlight", () => {
+  it("knows the backend's in-flight refusal", () => {
+    const busy = new ApiError("This report is already being sent.", 409, { code: "delivery_in_flight" });
+    expect(isDeliveryInFlight(busy)).toBe(true);
+  });
+
+  it("is false for other errors", () => {
+    expect(isDeliveryInFlight(new ApiError("Conflict", 409, {}))).toBe(false);
+    expect(isDeliveryInFlight(new ApiError("Nope", 400, { code: "delivery_in_flight" }))).toBe(false);
+    expect(isDeliveryInFlight(new Error("offline"))).toBe(false);
   });
 });

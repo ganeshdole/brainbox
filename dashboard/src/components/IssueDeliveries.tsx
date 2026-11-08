@@ -5,7 +5,7 @@ import type { Delivery } from "@ganeshdole/brainbox-shared";
 import { api, isAuthRedirect } from "../lib/api";
 import type { IntegrationProvider } from "@ganeshdole/brainbox-shared";
 
-import { deliveryLabel, PROVIDER_NAME } from "../lib/integrations";
+import { deliveryLabel, isDeliveryInFlight, PROVIDER_NAME } from "../lib/integrations";
 import { ProviderMark } from "./ProviderMark";
 import { Button } from "./ui/button";
 
@@ -25,6 +25,8 @@ export function IssueDeliveries({
   const [providers, setProviders] = useState<IntegrationProvider[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Not an error: a send already running, explained in the backend's words.
+  const [notice, setNotice] = useState<string | null>(null);
   // Without the destinations there is no Send button; say why rather than
   // leaving the row silently empty.
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -47,10 +49,23 @@ export function IssueDeliveries({
   async function send(provider?: IntegrationProvider) {
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       onChange(await api.sendIssue(issueId, provider));
     } catch (e) {
-      if (!isAuthRedirect(e)) setError((e as Error).message);
+      if (isAuthRedirect(e)) return;
+      if (isDeliveryInFlight(e)) {
+        setNotice((e as Error).message);
+        // Fetch the pending delivery so it shows, which also starts the
+        // pane's poll until it lands.
+        try {
+          onChange((await api.getIssue(issueId)).deliveries ?? []);
+        } catch {
+          /* the notice already says what's happening */
+        }
+      } else {
+        setError((e as Error).message);
+      }
     } finally {
       setBusy(false);
     }
@@ -94,6 +109,7 @@ export function IssueDeliveries({
         </Button>
       )}
       {error && <span className="text-error">{error}</span>}
+      {notice && <span className="text-muted">{notice}</span>}
       {loadError && <span className="text-error">{loadError}</span>}
     </div>
   );

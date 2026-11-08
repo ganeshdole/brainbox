@@ -37,7 +37,9 @@ export type LoginAction =
   | { type: "sendFailed"; refusal: string | null }
   | { type: "changeEmail" }
   | { type: "google" }
-  | { type: "googleFailed" };
+  | { type: "googleFailed" }
+  /** Back from Google into the page the browser kept, still mid-click. */
+  | { type: "restored" };
 
 export function initialLogin(opts: {
   retrying: boolean;
@@ -80,6 +82,7 @@ export function loginReducer(state: LoginState, action: LoginAction): LoginState
       if (state.googleBusy) return state;
       return { ...state, googleBusy: true, banner: false };
     case "googleFailed":
+    case "restored":
       return { ...state, googleBusy: false };
   }
 }

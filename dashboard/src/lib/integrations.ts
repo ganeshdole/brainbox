@@ -6,6 +6,8 @@ import type {
   IntegrationProvider,
 } from "@ganeshdole/brainbox-shared";
 
+import { ApiError } from "./api";
+
 export type DeliveryTone = "ok" | "error" | "muted";
 
 export interface DeliveryLabel {
@@ -107,4 +109,11 @@ export function iterationInput(
   if (kind === "current") return { kind: "current" };
   if (kind === "fixed") return fixedPath ? { kind: "fixed", path: fixedPath } : null;
   return { kind: "backlog", path: backlogIteration };
+}
+
+/** The backend's 409 for a Send while this report's delivery is already
+ *  running (another tab, a retry, the ingest itself). Not a failure: the
+ *  delivery is pending, and the issue should be fetched again to show it. */
+export function isDeliveryInFlight(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 409 && err.body.code === "delivery_in_flight";
 }

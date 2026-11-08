@@ -531,6 +531,27 @@ describe("Draft submit", () => {
     expect(sent[0]?.session).toBeDefined();
   });
 
+  it("stays sent when the host's onSubmitted throws", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    const throwing = createBrainbox({
+      transport,
+      onSubmitted: () => {
+        throw new Error("analytics down");
+      },
+    });
+    try {
+      const draft = throwing.draft();
+      await expect(draft.submit({ text: "x" })).resolves.toEqual({ id: "issue-1" });
+      expect(quiet).toHaveBeenCalledWith("[brainbox] onSubmitted threw", expect.any(Error));
+      // a retry would be a duplicate: the report already went out
+      await expect(draft.submit({ text: "x" })).rejects.toThrow("already sent");
+      expect(send).toHaveBeenCalledTimes(1);
+    } finally {
+      throwing.destroy();
+      quiet.mockRestore();
+    }
+  });
+
   it("reports a successful submit to the instance", async () => {
     const onSubmitted = vi.fn();
     const withHook = createBrainbox({ transport, onSubmitted });

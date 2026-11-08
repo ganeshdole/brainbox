@@ -32,7 +32,10 @@ export type BillingAction =
   | { type: "period"; period: BillingPeriod }
   | { type: "start"; plan: PlanId; auto: boolean }
   | { type: "startFailed"; error: string }
-  | { type: "skipAuto" };
+  | { type: "skipAuto" }
+  /** Back from checkout into a page the browser kept: it still shows the
+   *  checkout as starting. Picker again, and no second auto-start. */
+  | { type: "restored" };
 
 export function initialBilling(period: BillingPeriod, pendingAuto: PlanId | null): BillingPage {
   return { load: { kind: "loading", attempt: 0 }, period, pendingAuto, checkout: { kind: "idle", error: null } };
@@ -64,6 +67,8 @@ export function billingReducer(page: BillingPage, action: BillingAction): Billin
       return { ...page, pendingAuto: null, checkout: { kind: "idle", error: action.error } };
     case "skipAuto":
       return { ...page, pendingAuto: null };
+    case "restored":
+      return { ...page, pendingAuto: null, checkout: { kind: "idle", error: null } };
   }
 }
 

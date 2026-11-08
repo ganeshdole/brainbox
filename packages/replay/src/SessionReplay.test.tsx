@@ -90,4 +90,31 @@ describe("SessionReplay", () => {
     expect(replayers.created).toBe(1);
     expect(play()?.disabled).toBe(false);
   });
+
+  it("plays a url whose earlier load failed, once it loads", async () => {
+    let aFails = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url === "/a.json" && aFails ? new Response("", { status: 503 }) : new Response(log),
+      ),
+    );
+    const player = () => container.querySelector<HTMLElement>(".bb-replay");
+
+    act(() => root.render(<SessionReplay url="/a.json" vw={800} vh={600} />));
+    await settle();
+    expect(error()).toBe("Session fetch failed (503)");
+    expect(player()?.hidden).toBe(true);
+
+    act(() => root.render(<SessionReplay url="/b.json" vw={800} vh={600} />));
+    await settle();
+    aFails = false;
+    act(() => root.render(<SessionReplay url="/a.json" vw={800} vh={600} />));
+    // not the old failure while it loads again
+    expect(error()).toBeNull();
+    await settle();
+    expect(error()).toBeNull();
+    expect(player()?.hidden).toBe(false);
+    expect(play()?.disabled).toBe(false);
+  });
 });

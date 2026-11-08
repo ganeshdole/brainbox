@@ -106,15 +106,30 @@ function boot() {
 
   // "mount" mode: the host opens feedback from its own element. Delegated,
   // like data-brainbox below, so an element rendered later or a <body> a
-  // Turbo-style navigation swapped in still opens it.
+  // Turbo-style navigation swapped in still opens it. In the capture phase:
+  // the host's own handler on that element (a menu item that calls
+  // stopPropagation, say) runs after this, so it can't swallow the click
+  // before it reaches the document.
   const mountSelector = config.trigger === "manual" ? config.mount : undefined;
+  const isMountTrigger = (target: EventTarget | null) =>
+    !!mountSelector && target instanceof Element && safeClosest(target, mountSelector) !== null;
+  if (mountSelector) {
+    document.addEventListener(
+      "click",
+      (event) => {
+        if (isMountTrigger(event.target)) api.open();
+      },
+      true,
+    );
+  }
 
   // Any element marked data-brainbox is a trigger, e.g.
   // <button data-brainbox="feature">Request a feature</button>. Delegated, so
   // elements a single-page app renders later work too.
   document.addEventListener("click", (event) => {
     if (!(event.target instanceof Element)) return;
-    if (mountSelector && safeClosest(event.target, mountSelector)) return api.open();
+    // already opened by the capture listener above
+    if (isMountTrigger(event.target)) return;
     const el = event.target.closest("[data-brainbox]");
     if (!(el instanceof HTMLElement)) return;
     const action = triggerAction(el.dataset.brainbox);

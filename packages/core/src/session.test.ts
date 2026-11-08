@@ -20,6 +20,8 @@ const startSessionRecording = (options: SessionRecordingOptions = {}) =>
   startWith({ loader, ...options });
 
 const startAudio = vi.hoisted(() => vi.fn());
+/** Set to make the mic's stop() never settle. */
+const micStop = vi.hoisted(() => ({ hangs: false }));
 
 const track = () => ({ enabled: true, stop: vi.fn() });
 const tracks = [track()];
@@ -29,7 +31,7 @@ vi.mock("./audio.ts", () => ({
     startAudio();
     return Promise.resolve({
       stream: { getAudioTracks: () => tracks, getTracks: () => tracks },
-      stop: () => Promise.resolve(new Blob()),
+      stop: () => (micStop.hangs ? new Promise<Blob>(() => {}) : Promise.resolve(new Blob())),
     });
   },
 }));
@@ -201,6 +203,23 @@ describe("loading rrweb", () => {
 });
 
 describe("stop", () => {
+  it("sends the session without voice rather than wait forever on the mic", async () => {
+    vi.useFakeTimers();
+    micStop.hangs = true;
+    try {
+      const rec = startSessionRecording();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(rec.micActive()).toBe(true);
+      const stopped = rec.stop();
+      await vi.advanceTimersByTimeAsync(5_000);
+      const { audio } = await stopped;
+      expect(audio).toBeNull();
+    } finally {
+      micStop.hangs = false;
+      vi.useRealTimers();
+    }
+  });
+
   it("hands every caller the one result, stopping the recorder and the mic once", async () => {
     stopRecorder.mockClear();
     const rec = startSessionRecording();

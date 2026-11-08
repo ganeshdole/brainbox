@@ -6,6 +6,7 @@ import { Button } from "../components/ui/button";
 import { Spinner } from "../components/ui/spinner";
 import { api, isAuthRedirect } from "../lib/api";
 import { autoStartDue, billingReducer, initialBilling, type BillingAction } from "../lib/billing";
+import { usePageRestore } from "../lib/use-page-restore";
 import {
   OVERAGE_CENTS_PER_TICKET,
   PLAN_OPTIONS,
@@ -95,6 +96,8 @@ export function Billing() {
   }, []);
   // Once per visit, whatever re-renders or remounts come after.
   const autoFired = useRef(false);
+  // Back from Dodo into the cached page: it was left mid-checkout.
+  usePageRestore(() => dispatch({ type: "restored" }));
 
   const attempt = page.load.kind === "ready" ? null : page.load.attempt;
   useEffect(() => {

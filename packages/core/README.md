@@ -75,6 +75,15 @@ gets the same promise. The duration cap (`maxMs`, default 60 s) runs from
 `startRecording()`, so it matches a clock the UI starts there. A Stop that
 beats rrweb's load attaches no session.
 
+> **New required fields.** `Recording.ready` (a promise that settles once the
+> page is being recorded, and rejects if rrweb could not be loaded) and
+> `SessionCapture.events` (how many rrweb events the log holds) are required
+> on these exported types. Code that only reads them needs no change; code
+> that builds a `Recording` or a `SessionCapture` by hand, such as a test
+> double or a wrapper around `startSessionRecording`, has to add them:
+> `ready: Promise.resolve()` and the event count (0 means nothing was
+> recorded, and the draft attaches no session).
+
 `DraftState` is what a UI renders from: `screenshotUrl`, `screenshotPending`,
 `screenshotFailed`, `hasSession`, `hasVoice`. It is a new object on every
 change, so `useSyncExternalStore` and friends can compare by reference.

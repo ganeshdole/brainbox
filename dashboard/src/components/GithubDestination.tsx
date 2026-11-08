@@ -9,6 +9,7 @@ import type {
 
 import { api, isAuthRedirect } from "../lib/api";
 import { installResult, parseLabels, pickConnectionId } from "../lib/integrations";
+import { usePageRestore } from "../lib/use-page-restore";
 import { GithubMark } from "./GithubMark";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -36,6 +37,8 @@ export function GithubDestination({ projectId, teamId }: { projectId: string; te
   const [error, setError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
+  // Back from GitHub into the cached page: it was left mid-connect.
+  usePageRestore(() => setConnecting(false));
   const [reload, setReload] = useState(0);
 
   useEffect(() => {

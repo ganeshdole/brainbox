@@ -72,6 +72,14 @@ export function SessionReplay({
   const load = `${url}\n${audioUrl ?? ""}\n${vw}x${vh}\n${credentials}`;
   const [failure, setFailure] = useState<{ load: string; message: string } | null>(null);
   const [readyFor, setReadyFor] = useState<string | null>(null);
+  // A new recording forgets the last one's outcome, including a failure of
+  // this same url from an earlier visit: it is about to be loaded again.
+  const [shown, setShown] = useState(load);
+  if (shown !== load) {
+    setShown(load);
+    setFailure(null);
+    setReadyFor(null);
+  }
   const error = failure?.load === load ? failure.message : null;
   const ready = readyFor === load;
   const [playing, setPlaying] = useState(false);
@@ -140,6 +148,7 @@ export function SessionReplay({
         replayer.on("finish", () => setPlaying(false));
         window.addEventListener("resize", applyScale);
         cleanup = () => window.removeEventListener("resize", applyScale);
+        setFailure(null);
         setReadyFor(load);
       } catch (e) {
         if (!cancelled) {

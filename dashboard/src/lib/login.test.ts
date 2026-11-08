@@ -63,5 +63,7 @@ describe("loginReducer", () => {
     expect(google.googleBusy).toBe(true);
     expect(loginReducer(google, { type: "google" })).toBe(google);
     expect(loginReducer(google, { type: "googleFailed" }).googleBusy).toBe(false);
+    // Back from Google's page, restored from the back/forward cache
+    expect(loginReducer(google, { type: "restored" }).googleBusy).toBe(false);
   });
 });

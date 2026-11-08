@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "../src/app.ts";
+import { resolveDeps } from "../src/deps.ts";
+import { fromEnv } from "../src/from-env.ts";
 import { patExternalId, sealToken } from "../src/integrations/azure-devops.ts";
 import { deliverIssue, sendTicket, testTicket } from "../src/integrations/dispatch.ts";
 import { getStore } from "../src/store/index.ts";
@@ -424,11 +426,12 @@ describe("sending a test report", () => {
 });
 
 describe("a stored token that can't be read", () => {
-  // The encryption key was changed since the token was sealed: every stored
-  // token is unreadable, and only connecting again seals a readable one.
-  async function unreadable(userId: string) {
+  // The deployment's encryption key isn't the one the token was sealed with
+  // (a bad deploy, say). Nothing is marked: putting the right key back heals
+  // every connection without anyone reconnecting.
+  const otherKey = Buffer.alloc(32, 9).toString("base64");
+  async function sealedWithOtherKey(userId: string) {
     const identity = { teamId: await teamOf(userId), provider: "azure-devops" as const, externalId: patExternalId("acme") };
-    const otherKey = Buffer.alloc(32, 9).toString("base64");
     return getStore().integrations.saveConnection({
       ...identity,
       label: "acme",
@@ -437,45 +440,57 @@ describe("a stored token that can't be read", () => {
     });
   }
 
-  it("marks the connection on a lookup, and answers 409 rather than 500", async () => {
+  it("answers a lookup with 409 rather than 500, logs it, and marks nothing", async () => {
     const ado = fakeAzureDevops();
     const { me, headers } = await setup();
-    const conn = await unreadable(me.id);
+    const conn = await sealedWithOtherKey(me.id);
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const res = await app.request(`/api/integrations/connections/${conn.id}/projects`, { headers });
     expect(res.status).toBe(409);
-    expect(await res.json()).toMatchObject({ code: "needs_reauth" });
-    expect((await getStore().integrations.getConnection(conn.id))?.status).toBe("needs_reauth");
+    expect(await res.json()).toMatchObject({ code: "credentials_unreadable", error: expect.stringContaining("INTEGRATIONS_ENCRYPTION_KEY") });
+    expect((await getStore().integrations.getConnection(conn.id))?.status).toBe("active");
     expect(ado.calls).toHaveLength(0);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("CANNOT READ"), expect.anything());
     error.mockRestore();
   });
 
-  it("marks the connection when saving a destination through it", async () => {
+  it("answers saving a destination through it with 409, and marks nothing", async () => {
     fakeAzureDevops();
     const { me, project, headers } = await setup();
-    const conn = await unreadable(me.id);
+    const conn = await sealedWithOtherKey(me.id);
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const res = await app.request(`/api/projects/${project.id}/destinations/azure-devops`, {
       method: "PUT",
       headers,
       body: JSON.stringify({ connectionId: conn.id, config: INPUT }),
     });
     expect(res.status).toBe(409);
-    expect((await getStore().integrations.getConnection(conn.id))?.status).toBe("needs_reauth");
+    expect(await res.json()).toMatchObject({ code: "credentials_unreadable" });
+    expect((await getStore().integrations.getConnection(conn.id))?.status).toBe("active");
+    error.mockRestore();
   });
 
-  it("marks the connection when delivering through it", async () => {
+  it("fails a delivery naming the key, and delivers once the key is right again", async () => {
     const ado = fakeAzureDevops();
     const { me, project } = await setup();
-    const conn = await unreadable(me.id);
+    const conn = await sealedWithOtherKey(me.id);
     await makeAzureDevopsDestination(project.id, conn.id);
     const issue = await makeIssue(project.id, { screenshotKey: null });
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const [failed] = await deliverIssue(testDeps, issue.id);
-    expect(failed).toMatchObject({ status: "failed", error: expect.stringContaining("Connect Azure DevOps again") });
-    expect((await getStore().integrations.getConnection(conn.id))?.status).toBe("needs_reauth");
+    expect(failed).toMatchObject({ status: "failed", error: expect.stringContaining("INTEGRATIONS_ENCRYPTION_KEY") });
+    expect((await getStore().integrations.getConnection(conn.id))?.status).toBe("active");
     expect(ado.calls).toHaveLength(0);
+
+    // The key the token was sealed with is back.
+    const restored = resolveDeps({
+      ...fromEnv(),
+      integrations: { azureDevops: { encryptionKey: otherKey, url: testDeps.integrations.azureDevops?.url } },
+    });
+    const [sent] = await deliverIssue(restored, issue.id, { force: true });
+    expect(sent).toMatchObject({ status: "sent" });
     error.mockRestore();
   });
 });

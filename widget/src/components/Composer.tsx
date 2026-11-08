@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ImageOff, Loader2, Pencil, Play, Send, X } from "./icons.tsx";
-import { VoiceNote } from "./VoiceNote.tsx";
+import { VoiceNote, type VoiceNotePhase } from "./VoiceNote.tsx";
 import { posClass, type Position } from "../lib/position.ts";
 
 /** The bug report's last step: the capture, and what the user says about it. */
@@ -42,9 +42,16 @@ export function Composer({
   const voiceDone = !!voiceCaptured;
   const [typing, setTyping] = useState(voiceDone);
 
-  // Held while a voice note is still recording: sending then would leave out
-  // what the user is in the middle of saying.
-  const [voiceBusy, setVoiceBusy] = useState(false);
+  // Held while a voice note is recording or handing over its clip: sending
+  // then would leave out what the user is in the middle of saying. Not while
+  // the mic prompt is up - that can wait forever - and Send then gives up on
+  // the prompt by remounting the voice note.
+  const [voicePhase, setVoicePhase] = useState<VoiceNotePhase>("idle");
+  const [voiceKey, setVoiceKey] = useState(0);
+  const voiceBusy = voicePhase === "recording" || voicePhase === "stopping";
+  const dropMicRequest = () => {
+    if (voicePhase === "requesting") setVoiceKey((k) => k + 1);
+  };
 
   const canSend =
     !voiceBusy && (!captureFailed || !!text.trim() || !!audio || voiceDone || !!sessionReady);
@@ -103,7 +110,9 @@ export function Composer({
           textarea sitting above it made the panel look inert and buried the mic.
           Typing is one click away for whoever wants it. */}
       <div className="overflow-hidden rounded-xl border border-default bg-background focus-within:border-interactive">
-        {!voiceDone && <VoiceNote onChange={setAudio} onRecordingChange={setVoiceBusy} />}
+        {!voiceDone && (
+          <VoiceNote key={voiceKey} onChange={setAudio} onPhaseChange={setVoicePhase} />
+        )}
         {typing && (
           <div className={voiceDone ? "" : "border-t border-subtle"}>
             <textarea
@@ -128,7 +137,10 @@ export function Composer({
       )}
 
       <button
-        onClick={() => onSubmit(text, audio)}
+        onClick={() => {
+          dropMicRequest();
+          onSubmit(text, audio);
+        }}
         disabled={!canSend}
         className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2 text-sm font-medium text-on-brand shadow-button hover:bg-brand-hover disabled:opacity-40"
       >

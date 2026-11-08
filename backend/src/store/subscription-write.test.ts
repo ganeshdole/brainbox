@@ -88,5 +88,20 @@ describe("planSubscriptionWrite", () => {
       });
       expect(planSubscriptionWrite(current, change({ status: "active" }))).toMatchObject({ kind: "create" });
     });
+
+    it("lets the new one's activation in even when the old one's dunning was stamped later", () => {
+      // Old subscription B went on hold after new subscription A activated,
+      // and that event arrived first.
+      const dunning = row({ dodoSubscriptionId: "sub_b", status: "on_hold", lastEventAt: at(20) });
+      expect(planSubscriptionWrite(dunning, change({ status: "active", sentAt: at(10) }))).toMatchObject({
+        kind: "create",
+        values: { dodoSubscriptionId: "sub_a", status: "active", lastEventAt: at(10) },
+      });
+      // Only a payment does that: an older pending one is still ignored.
+      expect(planSubscriptionWrite(dunning, change({ status: "pending", sentAt: at(10) }))).toEqual({ kind: "skip" });
+      // And it never displaces an active one regardless of time.
+      const paying = row({ dodoSubscriptionId: "sub_b", status: "active", lastEventAt: at(20) });
+      expect(planSubscriptionWrite(paying, change({ status: "active", sentAt: at(10) }))).toEqual({ kind: "skip" });
+    });
   });
 });

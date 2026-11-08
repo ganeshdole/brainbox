@@ -255,9 +255,7 @@ export function createDraft(ctx: DraftContext, { exclude }: DraftOptions = {}): 
     stillLive(r);
     // Past this point the report is out: there is no taking it back, so a
     // cancel that lands mid-request doesn't hide that it was sent.
-    const result = await ctx.transport.send(outgoing);
-    ctx.onSubmitted?.(result);
-    return result;
+    return ctx.transport.send(outgoing);
   };
 
   return {
@@ -364,7 +362,14 @@ export function createDraft(ctx: DraftContext, { exclude }: DraftOptions = {}): 
       submitting = r;
       try {
         const result = await send(input, r);
+        // Sent before anything else runs: a host hook that throws below must
+        // not make the report look unsent, or a retry would file it twice.
         if (run === r) sent = r;
+        try {
+          ctx.onSubmitted?.(result);
+        } catch (err) {
+          console.error("[brainbox] onSubmitted threw", err);
+        }
         return result;
       } finally {
         if (submitting === r) submitting = null;

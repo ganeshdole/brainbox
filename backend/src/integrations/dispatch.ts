@@ -7,6 +7,7 @@ import { toTicket } from "../lib/serialize.ts";
 import { readStored } from "../storage/types.ts";
 import { UnreadableCredentialsError } from "../store/credentials.ts";
 import type { ConnectionRecord, DeliveryRecord, DestinationRecord } from "../store/types.ts";
+import { reportUnreadableToken, UNREADABLE_TOKEN } from "./azure-devops.ts";
 import { PROVIDER_NAME } from "./registry.ts";
 
 /**
@@ -87,10 +88,11 @@ export async function deliverIssue(
 /**
  * One ticket to one destination. Never throws. A connection whose credentials
  * were rejected isn't called until someone connects it again; a rejection now
- * (a revoked or expired token, or one that can no longer be opened) marks it
- * so, unless the connection has been given new credentials since. GitHub App
- * installs mint their own tokens, so a 401 there is ours to fix, not the
- * Customer's.
+ * (a revoked or expired token) marks it so, unless the connection has been
+ * given new credentials since. A token that can't be opened fails the
+ * delivery but marks nothing: it is most likely the deployment's encryption
+ * key, and putting the right key back must be enough. GitHub App installs
+ * mint their own tokens, so a 401 there is ours to fix, not the Customer's.
  */
 export async function sendTicket(
   deps: Deps,
@@ -103,25 +105,22 @@ export async function sendTicket(
   if (conn.status === "needs_reauth") return { ok: false, status: 401, error: reconnect };
 
   let result: DeliveryResult;
-  let unreadable = false;
   try {
     result = await (await deps.integrations.destinationFor(dest, conn)).deliver(ticket);
   } catch (err) {
-    unreadable = err instanceof UnreadableCredentialsError;
+    if (err instanceof UnreadableCredentialsError) {
+      reportUnreadableToken(conn, err);
+      return { ok: false, error: UNREADABLE_TOKEN };
+    }
     result = { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
-  const rejected = unreadable || (!result.ok && result.status === 401 && conn.auth !== "app");
-  if (!rejected) return result;
+  if (result.ok || result.status !== 401 || conn.auth === "app") return result;
   try {
     await deps.store.integrations?.setConnectionStatus(conn.id, "needs_reauth", { credentials: conn.credentials });
   } catch (err) {
     console.error(`[integrations] could not mark connection ${conn.id} as needing a new token:`, err);
   }
-  return {
-    ok: false,
-    status: 401,
-    error: unreadable ? `Brainbox can't read the stored ${name} token. Connect ${name} again in Settings.` : reconnect,
-  };
+  return { ok: false, status: 401, error: reconnect };
 }
 
 /** What "Send a test report" sends: a made-up report, so the Customer sees

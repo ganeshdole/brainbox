@@ -12,20 +12,24 @@ const BARS = 32;
 /** Hard cap so a forgotten recording can't grow unbounded. */
 const MAX_SECS = 120;
 
-/** `requesting`: the mic permission prompt is up. `stopping`: the recorder
- *  is handing over the clip. Neither takes a click, so one tap can't start
- *  two recorders or stop one twice. */
-type Phase = "idle" | "requesting" | "recording" | "stopping" | "recorded";
+/** Where the voice note is. `requesting`: the mic permission prompt is up,
+ *  which can stay up for as long as the user ignores it; clicking the mic
+ *  again gives up on it. `stopping`: the recorder is handing over the clip
+ *  (bounded: core resolves it within a couple of seconds). */
+export type VoiceNotePhase = "idle" | "requesting" | "recording" | "stopping" | "recorded";
+type Phase = VoiceNotePhase;
 
 export interface VoiceNoteProps {
   /** The recorded clip once the user stops, or null when they delete it. */
   onChange: (b: Blob | null) => void;
   /** The idle label, asking for what the form's textarea asks for. */
   prompt?: string;
-  /** Whether a clip is on its way: true from the mic prompt until the clip
-   *  is handed over (or the attempt fails). A form holds Send while it is,
-   *  or the voice the user is still speaking would be left out. */
-  onRecordingChange?: (busy: boolean) => void;
+  /** Each change of phase. A form holds Send while `recording` or
+   *  `stopping`, or the voice the user is still speaking would be left out,
+   *  but not while `requesting`: a prompt the user never answers must not
+   *  trap what they typed. A form that sends while `requesting` remounts the
+   *  VoiceNote (a new `key`); the mic, if it is granted later, is let go. */
+  onPhaseChange?: (phase: VoiceNotePhase) => void;
 }
 
 /** Voice capture as the primary way to file a report: one big mic target, bars
@@ -34,7 +38,7 @@ export interface VoiceNoteProps {
 export function VoiceNote({
   onChange,
   prompt = "Say what went wrong",
-  onRecordingChange,
+  onPhaseChange,
 }: VoiceNoteProps) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -52,8 +56,11 @@ export function VoiceNote({
   /** Cleared on unmount, so a mic that comes up after the form has gone is
    *  let go at once instead of recording into nothing. */
   const mountedRef = useRef(true);
-  /** The permission prompt is up: set before the first await. */
-  const requestingRef = useRef(false);
+  /** The id of the mic request still wanted, 0 for none. Set before the
+   *  first await, so two clicks can't open two recorders; cleared when the
+   *  user gives up on the prompt, so a late grant is let go. */
+  const requestRef = useRef(0);
+  const requestSeq = useRef(0);
 
   // Live bands drive the bars while recording.
   const bands = useMultibandVolume(phase === "recording" ? stream : null, { bands: BARS });
@@ -77,18 +84,21 @@ export function VoiceNote({
   }, [onChange]);
 
   const start = async () => {
-    // A ref, not `phase`: two clicks can land before a render disables the
-    // button, and each would open a recorder of its own.
-    if (requestingRef.current || recRef.current) return;
-    requestingRef.current = true;
+    // A ref, not `phase`: two clicks can land before a render shows the
+    // request, and each would open a recorder of its own.
+    if (requestRef.current || recRef.current) return;
+    const id = ++requestSeq.current;
+    requestRef.current = id;
     setErr("");
     setPhase("requesting");
+    const wanted = () => mountedRef.current && requestRef.current === id;
     try {
       const rec = await startAudioRecording();
-      if (!mountedRef.current) {
+      if (!wanted()) {
         void rec.stop().catch(() => {});
         return;
       }
+      requestRef.current = 0;
       recRef.current = rec;
       envelopeRef.current = [];
       setStream(rec.stream);
@@ -97,12 +107,17 @@ export function VoiceNote({
       setPlayed(0);
       setPhase("recording");
     } catch {
-      if (!mountedRef.current) return;
+      if (!wanted()) return;
+      requestRef.current = 0;
       setErr("Mic blocked - allow microphone access, or type instead");
       setPhase("idle");
-    } finally {
-      requestingRef.current = false;
     }
+  };
+
+  /** Give up on a permission prompt the user hasn't answered. */
+  const cancelRequest = () => {
+    requestRef.current = 0;
+    setPhase("idle");
   };
 
   const discard = () => {
@@ -162,22 +177,21 @@ export function VoiceNote({
     };
   }, []);
 
-  // Tell the form whether a clip is still on its way. A ref, so a parent's
-  // inline arrow doesn't re-run this every render.
-  const onBusyRef = useRef(onRecordingChange);
+  // Tell the form where the voice note is. A ref, so a parent's inline
+  // arrow doesn't re-run this every render.
+  const onPhaseRef = useRef(onPhaseChange);
   useEffect(() => {
-    onBusyRef.current = onRecordingChange;
-  }, [onRecordingChange]);
-  const busy = phase === "requesting" || phase === "recording" || phase === "stopping";
+    onPhaseRef.current = onPhaseChange;
+  }, [onPhaseChange]);
   useEffect(() => {
-    onBusyRef.current?.(busy);
-  }, [busy]);
+    onPhaseRef.current?.(phase);
+  }, [phase]);
 
   const recorded = phase === "recorded";
   const live = phase === "recording" || phase === "stopping";
   const label =
     phase === "requesting"
-      ? "Waiting for the microphone"
+      ? "Waiting for the microphone - click to cancel"
       : recorded
         ? playing
           ? "Pause"
@@ -187,8 +201,16 @@ export function VoiceNote({
   return (
     <div className="flex items-center gap-3 px-3 py-2.5">
       <button
-        onClick={phase === "recording" ? () => void stop() : recorded ? togglePlay : start}
-        disabled={phase === "requesting" || phase === "stopping"}
+        onClick={
+          phase === "recording"
+            ? () => void stop()
+            : phase === "requesting"
+              ? cancelRequest
+              : recorded
+                ? togglePlay
+                : start
+        }
+        disabled={phase === "stopping"}
         aria-label={live ? "Stop recording" : label}
         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-60 ${
           live

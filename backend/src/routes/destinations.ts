@@ -110,6 +110,7 @@ export const destinationsRoute = new Hono<AppEnv>()
     if (conn.status === "needs_reauth") return c.json(REJECTED, 409);
     const prepared = await prepareDestination(ado, conn, input.config);
     if (!prepared.ok) {
+      if (prepared.unreadable) return c.json({ error: prepared.error, code: "credentials_unreadable" }, prepared.status);
       if (!prepared.rejected) return c.json({ error: prepared.error }, prepared.status);
       await integrations.setConnectionStatus(conn.id, "needs_reauth", { credentials: conn.credentials });
       return c.json(REJECTED, 409);

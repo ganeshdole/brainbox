@@ -42,6 +42,15 @@ export function planSubscriptionWrite(
   existing: CurrentSubscription | null,
   change: SubscriptionChange,
 ): SubscriptionWrite {
+  const another = existing !== null && existing.dodoSubscriptionId !== change.dodoSubscriptionId;
+  // A new subscription paying replaces one that isn't, whatever the clocks
+  // say: the old one's dunning events can be stamped after the new one's
+  // activation and arrive first, which must not keep the Account locked out.
+  if (another && change.status === "active" && existing.status !== "active") {
+    if ("error" in change.create) throw new Error(change.create.error);
+    return create(change, change.create);
+  }
+
   // Delivery order is not guaranteed and retries can arrive minutes late, so
   // a stale `cancelled` must not clobber a newer `active`. Compare when the
   // events were SENT, not when they arrived. The Account's row is ordered as a
@@ -83,10 +92,14 @@ export function planSubscriptionWrite(
       );
     }
   }
+  return create(change, change.create);
+}
+
+function create(change: SubscriptionChange, account: NewSubscription): SubscriptionWrite {
   return {
     kind: "create",
     values: {
-      ...change.create,
+      ...account,
       dodoSubscriptionId: change.dodoSubscriptionId,
       status: change.status,
       currentPeriodEnd: change.currentPeriodEnd,
