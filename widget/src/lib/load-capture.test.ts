@@ -43,8 +43,38 @@ describe("loadCapture", () => {
     injected()[0]!.dispatchEvent(new Event("error"));
     await expect(failed).rejects.toThrow(/widget-capture\.js/);
 
+    // the failed tag is gone, and a fresh one takes its place
+    expect(injected()).toHaveLength(0);
     void load("https://cdn.test/widget.js").catch(() => {});
-    expect(injected()).toHaveLength(2);
+    expect(injected()).toHaveLength(1);
+  });
+
+  it("gives up on a load that hangs, so the next capture can try again", async () => {
+    vi.resetModules();
+    vi.useFakeTimers();
+    try {
+      const { loadCapture: load } = await import("./load-capture.ts");
+      const hung = load("https://cdn.test/widget.js", 1_000);
+      const settled = expect(hung).rejects.toThrow("Timed out");
+      expect(injected()).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1_000);
+      await settled;
+      expect(injected()).toHaveLength(0);
+
+      void load("https://cdn.test/widget.js", 1_000).catch(() => {});
+      expect(injected()).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("takes out a tag that loaded but published nothing", async () => {
+    vi.resetModules();
+    const { loadCapture: load } = await import("./load-capture.ts");
+    const empty = load("https://cdn.test/widget.js");
+    injected()[0]!.dispatchEvent(new Event("load"));
+    await expect(empty).rejects.toThrow("published nothing");
+    expect(injected()).toHaveLength(0);
   });
 });
 

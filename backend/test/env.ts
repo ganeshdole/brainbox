@@ -69,7 +69,10 @@ export const testEnv: Record<string, string> = {
 
   // Billing. A fixed webhook secret so tests can sign payloads the route will
   // actually accept; standardwebhooks wants base64 after the whsec_ prefix.
-  // No DODO_API_KEY: tests must never be able to reach the payments API.
+  // A key and every product, or billing counts as unconfigured and the paywall
+  // is off (deps.ts). The key is no real one: no test goes past checkout's
+  // guards to the payments API, and Dodo would refuse it if one did.
+  DODO_API_KEY: "test-key-not-a-real-dodo-key",
   DODO_WEBHOOK_SECRET: "whsec_dGVzdC13ZWJob29rLXNlY3JldC1ub3QtZm9yLXByb2Q=",
   DODO_ENVIRONMENT: "test_mode",
   DODO_PRODUCT_PRO_MONTHLY: "pdt_test_pro_monthly",

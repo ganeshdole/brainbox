@@ -4,6 +4,7 @@ import type { CapturedMetadata } from "@ganeshdole/brainbox-shared";
 import type { Issue } from "@ganeshdole/brainbox-shared";
 
 import {
+  activeFilter,
   issueTitle,
   matchesIssue,
   newestFirst,
@@ -45,6 +46,14 @@ describe("visibleReports", () => {
     const keys = (list: Issue[]) => shownFilters(list).map((f) => f.key);
     expect(keys(issues)).toEqual(["all", "replay", "video", "errors"]);
     expect(keys([issue({ id: "4", projectId: "p1" })])).toEqual(["all"]);
+  });
+
+  it("drops back to All when the picked filter's pill isn't shown for this list", () => {
+    const plain = [issue({ id: "4", projectId: "p3" })];
+    expect(activeFilter("video", issues)).toBe("video");
+    expect(activeFilter("video", plain)).toBe("all");
+    // still loading: keep the pick until there is a list to judge it by
+    expect(activeFilter("video", null)).toBe("video");
   });
 
   it("tells a bug report from a feature request", () => {

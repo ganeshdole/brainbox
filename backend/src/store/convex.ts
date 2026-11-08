@@ -46,11 +46,11 @@ export function createConvexStore(convex: ConvexCaller): FullStore {
         const rows = await convex.query(api.teams.members, { teamId });
         return rows.map((row) => ({ ...row, createdAt: new Date(row.createdAt) }));
       },
-      async setRole(teamId, userId, role) {
-        return convex.mutation(api.teams.setRole, { teamId, userId, role });
+      async setRole(teamId, userId, role, actorId) {
+        return convex.mutation(api.teams.setRole, { teamId, userId, role, ...(actorId !== undefined && { actorId }) });
       },
-      async removeMember(teamId, userId) {
-        return convex.mutation(api.teams.removeMember, { teamId, userId });
+      async removeMember(teamId, userId, actorId) {
+        return convex.mutation(api.teams.removeMember, { teamId, userId, ...(actorId !== undefined && { actorId }) });
       },
       async createInvite({ expiresAt, ...input }) {
         return toInvite(await convex.mutation(api.teams.createInvite, { ...input, expiresAt: expiresAt.getTime() }));
@@ -167,8 +167,12 @@ export function createConvexStore(convex: ConvexCaller): FullStore {
       async saveConnection(input) {
         return toConnection(await convex.mutation(api.integrations.saveConnection, input));
       },
-      async setConnectionStatus(id, status) {
-        await convex.mutation(api.integrations.setConnectionStatus, { id, status });
+      async setConnectionStatus(id, status, expected) {
+        return convex.mutation(api.integrations.setConnectionStatus, {
+          id,
+          status,
+          ...(expected && { expectedCredentials: expected.credentials }),
+        });
       },
       async deleteConnection(id) {
         await convex.mutation(api.integrations.deleteConnection, { id });
@@ -192,11 +196,14 @@ export function createConvexStore(convex: ConvexCaller): FullStore {
       async listDeliveries(issueId) {
         return (await convex.query(api.integrations.listDeliveries, { issueId })).map(toDelivery);
       },
-      async claimDelivery(input) {
-        return maybe(await convex.mutation(api.integrations.claimDelivery, input), toDelivery);
+      async claimDelivery({ now, ...input }) {
+        return maybe(
+          await convex.mutation(api.integrations.claimDelivery, { ...input, now: now.getTime() }),
+          toDelivery,
+        );
       },
-      async finishDelivery(id, outcome) {
-        return maybe(await convex.mutation(api.integrations.finishDelivery, { id, outcome }), toDelivery);
+      async finishDelivery({ id, attempts }, outcome) {
+        return maybe(await convex.mutation(api.integrations.finishDelivery, { id, attempts, outcome }), toDelivery);
       },
       async applyGithubEvent(event) {
         return convex.mutation(api.webhooks.applyGithubEvent, event);

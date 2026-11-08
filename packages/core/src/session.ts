@@ -12,6 +12,9 @@ import {
 export interface SessionCapture {
   session: Blob;
   audio: Blob | null;
+  /** How many rrweb events the log holds. 0 when Stop beat rrweb's load, or
+   *  the load failed: the log is empty and there is nothing to replay. */
+  events: number;
 }
 
 /** rrweb `record()` options a host may add or override (`sampling`,
@@ -53,8 +56,13 @@ export interface SessionRecordingOptions extends RecordingOptions {
 
 /** A recording in progress. */
 export interface SessionRecording {
-  /** Finish: the gzipped rrweb event log and the narration, if any. */
+  /** Finish: the gzipped rrweb event log and the narration, if any. Safe to
+   *  call more than once: every call gets the same result. */
   stop: () => Promise<SessionCapture>;
+  /** Settles once rrweb is recording (or Stop beat it there), and rejects if
+   *  rrweb could not be loaded, so a UI can say so at once rather than at
+   *  Stop. Never left unhandled: ignoring it is fine. */
+  ready: Promise<void>;
   /** Whether the mic came up (the permission prompt can take a while). */
   micActive: () => boolean;
   /** Mute/unmute narration mid-recording. Implemented by disabling the audio
@@ -64,6 +72,10 @@ export interface SessionRecording {
    *  punch a hole in the timeline. */
   setMicMuted: (muted: boolean) => void;
 }
+
+/** The longest `stop()` waits for the voice track before sending the session
+ *  without it. */
+const MIC_STOP_TIMEOUT_MS = 5_000;
 
 /** rrweb DOM recording works wherever MutationObserver exists (universal). */
 export function canSessionRecord(): boolean {
@@ -87,7 +99,6 @@ export function startSessionRecording({
 }: SessionRecordingOptions = {}): SessionRecording {
   const events: unknown[] = [];
   let startedAt = 0;
-  let timer: ReturnType<typeof setTimeout> | undefined;
 
   let settling = false;
   const fire = () => {
@@ -96,14 +107,17 @@ export function startSessionRecording({
     onAutoStop();
   };
   let stopped = false;
-  // rrweb loads on first use (loader.ts). The session's clock, the mic and the
-  // duration cap all start with the recorder, not before it: the replay's
-  // timeline begins at rrweb's first event, and `audioOffsetMs` is measured
-  // against it. A Stop that beats the load never starts the recorder at all.
+  // The duration cap runs from the call, the moment the UI starts its clock,
+  // so the user never watches the clock pass the cap. Loading rrweb comes out
+  // of the recording's budget.
+  const timer = setTimeout(fire, maxMs);
+  // rrweb loads on first use (loader.ts). The session's clock and the mic
+  // start with the recorder, not before it: the replay's timeline begins at
+  // rrweb's first event, and `audioOffsetMs` is measured against it. A Stop
+  // that beats the load never starts the recorder at all.
   const recorder = loader.recorder().then(({ record }) => {
     if (stopped) return undefined;
     startedAt = Date.now();
-    timer = setTimeout(fire, maxMs);
     return record({
       recordCanvas: false,
       collectFonts: false,
@@ -149,24 +163,46 @@ export function startSessionRecording({
       /* denied or no mic - session recording continues without voice */
     });
 
+  const ready = recorder.then(() => {});
+  ready.catch(() => {
+    /* reported through `ready` itself, and again by stop() */
+  });
+
+  const finish = async (): Promise<SessionCapture> => {
+    clearTimeout(timer);
+    settling = true;
+    stopped = true;
+    (await recorder)?.();
+    // don't block the upload on a permission dialog the user never answered
+    await Promise.race([micReady, new Promise((r) => setTimeout(r, 150))]);
+    // Bounded too: a voice track that never hands over must not leave the UI
+    // stuck finishing the recording. The session goes out without it.
+    const audio = mic
+      ? await Promise.race([
+          mic.stop().catch(() => null),
+          new Promise<null>((r) => setTimeout(() => r(null), MIC_STOP_TIMEOUT_MS)),
+        ])
+      : null;
+    const offset = audio ? micOffsetMs(startedAt, micStartedAt) : null;
+    const payload =
+      offset === null ? { v: 1, events } : { v: 1, events, audioOffsetMs: offset };
+    return { session: await gzipJson(JSON.stringify(payload)), audio, events: events.length };
+  };
+  // A second Stop (the cap firing as the user clicks) gets the first one's
+  // result: the recorder and the mic only stop once, so a fresh attempt would
+  // wait forever on a MediaRecorder that never fires `stop` again.
+  let stopping: Promise<SessionCapture> | null = null;
+
   return {
+    ready,
     micActive: () => mic !== null,
     setMicMuted: (next: boolean) => {
       muted = next;
       applyMute();
     },
-    stop: async () => {
-      clearTimeout(timer);
-      settling = true;
-      stopped = true;
-      (await recorder)?.();
-      // don't block the upload on a permission dialog the user never answered
-      await Promise.race([micReady, new Promise((r) => setTimeout(r, 150))]);
-      const audio = mic ? await mic.stop() : null;
-      const offset = audio ? micOffsetMs(startedAt, micStartedAt) : null;
-      const payload =
-        offset === null ? { v: 1, events } : { v: 1, events, audioOffsetMs: offset };
-      return { session: await gzipJson(JSON.stringify(payload)), audio };
+    stop: () => {
+      stopping ??= finish();
+      return stopping;
     },
   };
 }

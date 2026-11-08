@@ -118,7 +118,9 @@ annotations, console errors, metadata and element helpers.
   `useBrainbox()` is `null`.
 - `identity` changes call `identify()`, and `fields` changes call
   `setFields()`, on the live instance. The `fields` prop owns the instance's
-  fields: dropping it clears them. `onSubmitted` and `beforeSend` may change
+  fields: dropping it clears them. Dropping `identity` after it was set (a
+  sign-out) clears the identity; a provider never given one leaves an
+  identity set with `useBrainbox()?.identify()` alone. `onSubmitted` and `beforeSend` may change
   freely. `privacy`, `consoleErrors`, `recording`, `screenshot` and `loader`
   (see the core README) are read when the instance is created.
   Only a new `transport` rebuilds the instance.

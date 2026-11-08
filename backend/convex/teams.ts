@@ -1,6 +1,7 @@
+import type { TeamRole } from "@ganeshdole/brainbox-shared";
 import { v } from "convex/values";
 
-import { leavesNoOwner } from "../src/store/team-rules.ts";
+import { leavesNoOwner, mayManage } from "../src/store/team-rules.ts";
 import type { DatabaseReader } from "./_generated/server";
 import { newestFirst, serverMutation, serverQuery, strip } from "./lib/server.ts";
 import { inviteRole, nullable, teamRole } from "./validators.ts";
@@ -113,11 +114,25 @@ export const members = serverQuery({
   },
 });
 
+/** Whether `actorId`, as they are now, may make this change (store/team-rules.ts). */
+async function actorMay(
+  db: DatabaseReader,
+  teamId: string,
+  { actorId, target, next }: { actorId: string | undefined; target: TeamRole; next?: TeamRole },
+): Promise<boolean> {
+  if (actorId === undefined) return true;
+  const actor = await findMember(db, teamId, actorId);
+  return actor !== null && mayManage(actor.role, target, next);
+}
+
 export const setRole = serverMutation({
-  args: { teamId: v.string(), userId: v.string(), role: teamRole },
-  handler: async (ctx, { teamId, userId, role }) => {
+  args: { teamId: v.string(), userId: v.string(), role: teamRole, actorId: v.optional(v.string()) },
+  handler: async (ctx, { teamId, userId, role, actorId }) => {
     const member = await findMember(ctx.db, teamId, userId);
     if (!member) return "not_found" as const;
+    if (!(await actorMay(ctx.db, teamId, { actorId, target: member.role, next: role }))) {
+      return "forbidden" as const;
+    }
     if (leavesNoOwner(await ownerCount(ctx.db, teamId), member.role, role)) return "last_owner" as const;
     await ctx.db.patch(member._id, { role });
     return "done" as const;
@@ -125,10 +140,11 @@ export const setRole = serverMutation({
 });
 
 export const removeMember = serverMutation({
-  args: { teamId: v.string(), userId: v.string() },
-  handler: async (ctx, { teamId, userId }) => {
+  args: { teamId: v.string(), userId: v.string(), actorId: v.optional(v.string()) },
+  handler: async (ctx, { teamId, userId, actorId }) => {
     const member = await findMember(ctx.db, teamId, userId);
     if (!member) return "not_found" as const;
+    if (!(await actorMay(ctx.db, teamId, { actorId, target: member.role }))) return "forbidden" as const;
     if (leavesNoOwner(await ownerCount(ctx.db, teamId), member.role, null)) return "last_owner" as const;
     await ctx.db.delete(member._id);
     return "done" as const;

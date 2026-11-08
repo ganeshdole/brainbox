@@ -187,6 +187,7 @@ export const env = {
     .filter(Boolean),
   // Kill switch for the paywall: "true" treats every Account as exempt, so
   // nobody is asked to pay. For running before payments are live; checkout
-  // and webhooks still work, they are just never required.
+  // and webhooks still work, they are just never required. Without
+  // DODO_API_KEY and every DODO_PRODUCT_* the paywall is off anyway (deps.ts).
   BILLING_DISABLED: process.env.BILLING_DISABLED === "true",
 } as const;

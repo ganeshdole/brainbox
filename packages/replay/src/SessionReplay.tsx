@@ -66,7 +66,22 @@ export function SessionReplay({
   const replayerRef = useRef<Replayer | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const audioOffsetRef = useRef(0);
-  const [error, setError] = useState<string | null>(null);
+  // One load per recording. What a load found (it failed, or the replayer is
+  // up) is kept with the recording it belongs to, so handing over another
+  // `url` starts clean instead of staying stuck on the last one's error.
+  const load = `${url}\n${audioUrl ?? ""}\n${vw}x${vh}\n${credentials}`;
+  const [failure, setFailure] = useState<{ load: string; message: string } | null>(null);
+  const [readyFor, setReadyFor] = useState<string | null>(null);
+  // A new recording forgets the last one's outcome, including a failure of
+  // this same url from an earlier visit: it is about to be loaded again.
+  const [shown, setShown] = useState(load);
+  if (shown !== load) {
+    setShown(load);
+    setFailure(null);
+    setReadyFor(null);
+  }
+  const error = failure?.load === load ? failure.message : null;
+  const ready = readyFor === load;
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
   const [time, setTime] = useState(0);
@@ -98,7 +113,7 @@ export function SessionReplay({
         audioOffsetRef.current = audioOffsetMs;
         if (cancelled) return;
         if (events.length < 2) {
-          setError("Recording too short to replay");
+          setFailure({ load, message: "Recording too short to replay" });
           return;
         }
 
@@ -133,8 +148,12 @@ export function SessionReplay({
         replayer.on("finish", () => setPlaying(false));
         window.addEventListener("resize", applyScale);
         cleanup = () => window.removeEventListener("resize", applyScale);
+        setFailure(null);
+        setReadyFor(load);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Could not load recording");
+        if (!cancelled) {
+          setFailure({ load, message: e instanceof Error ? e.message : "Could not load recording" });
+        }
       }
     })();
 
@@ -151,7 +170,7 @@ export function SessionReplay({
       setPlaying(false);
       setTime(0);
     };
-  }, [url, audioUrl, vw, vh, credentials]);
+  }, [load, url, audioUrl, vw, vh, credentials]);
 
   // progress clock while playing; keeps the voice track glued to the replay
   useEffect(() => {
@@ -200,53 +219,58 @@ export function SessionReplay({
 
   const classes = className ? `bb-replay ${className}` : "bb-replay";
 
-  if (error) {
-    return <p className="bb-replay__error">{error}</p>;
-  }
-
+  // The player stays mounted, hidden, under an error: its frame is where the
+  // next `url` loads into.
   return (
-    <div className={classes}>
-      <div ref={frameRef} className="bb-replay__frame" />
-      <div className="bb-replay__bar">
-        <button
-          type="button"
-          onClick={toggle}
-          aria-label={playing ? "Pause" : "Play"}
-          className="bb-replay__btn bb-replay__btn--primary"
-        >
-          {playing ? <Pause size={14} /> : <Play size={14} />}
-        </button>
-        <input
-          type="range"
-          min={0}
-          max={Math.max(total, 1)}
-          value={Math.min(time, total)}
-          onChange={(e) => seek(Number(e.target.value))}
-          className="bb-replay__range"
-        />
-        <span className="bb-replay__clock">
-          {formatClock(time)} / {formatClock(total)}
-        </span>
-        {audioUrl && (
-          <>
-            <button
-              type="button"
-              onClick={() => {
-                const next = !muted;
-                setMuted(next);
-                if (audioRef.current) audioRef.current.muted = next;
-              }}
-              aria-label={muted ? "Unmute voice" : "Mute voice"}
-              className="bb-replay__btn"
-            >
-              {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-            </button>
-            <audio ref={audioRef} src={audioUrl} preload="auto" muted={muted}>
-              <track kind="captions" />
-            </audio>
-          </>
-        )}
+    <>
+      {error && <p className="bb-replay__error">{error}</p>}
+      <div className={classes} hidden={error !== null}>
+        <div ref={frameRef} className="bb-replay__frame" aria-busy={!ready} />
+        <div className="bb-replay__bar">
+          {/* Nothing to play until the replayer is up: a Play that flips to
+              Pause over a frame still loading would say it is playing. */}
+          <button
+            type="button"
+            onClick={toggle}
+            disabled={!ready}
+            aria-label={!ready ? "Loading recording" : playing ? "Pause" : "Play"}
+            className="bb-replay__btn bb-replay__btn--primary"
+          >
+            {playing ? <Pause size={14} /> : <Play size={14} />}
+          </button>
+          <input
+            type="range"
+            min={0}
+            max={Math.max(total, 1)}
+            value={Math.min(time, total)}
+            disabled={!ready}
+            onChange={(e) => seek(Number(e.target.value))}
+            className="bb-replay__range"
+          />
+          <span className="bb-replay__clock">
+            {formatClock(time)} / {formatClock(total)}
+          </span>
+          {audioUrl && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !muted;
+                  setMuted(next);
+                  if (audioRef.current) audioRef.current.muted = next;
+                }}
+                aria-label={muted ? "Unmute voice" : "Mute voice"}
+                className="bb-replay__btn"
+              >
+                {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              </button>
+              <audio ref={audioRef} src={audioUrl} preload="auto" muted={muted}>
+                <track kind="captions" />
+              </audio>
+            </>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

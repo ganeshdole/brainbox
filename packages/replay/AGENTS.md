@@ -27,6 +27,8 @@ classes: a host should not have to scan this package for class names.
 
 ## Tests
 
-Vitest under jsdom for the helpers. The component needs a real `Replayer`
-and a fetchable log, which the dashboard exercises by hand. Run:
+Vitest under jsdom for the helpers. `SessionReplay.test.tsx` covers the
+component's load states (loading, failed, the next `url`) over a stubbed
+`fetch` and a stand-in `Replayer`; actual playback needs a real one, which the
+dashboard exercises by hand. Run:
 `pnpm -F @ganeshdole/brainbox-replay test`.

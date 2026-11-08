@@ -2,17 +2,20 @@ import type { BackendModule, Me } from "@ganeshdole/brainbox-shared";
 import { Hono } from "hono";
 
 import type { Deps } from "../deps.ts";
+import { billingConfigured } from "../lib/dodo.ts";
 import type { AppEnv } from "../types.ts";
 
 /** The optional parts of this deployment the dashboard shows: those the
- *  store has, and billing only when it is switched on as well. */
+ *  store has, and billing only when Dodo is set up to take a payment. With
+ *  the paywall off but Dodo set up (e.g. testing checkout in Dodo's test
+ *  mode) the billing page stays; with Dodo unset there is nothing to buy. */
 export function dashboardModules({ store, billing }: Deps): BackendModule[] {
   const modules: BackendModule[] = [];
   if (store.teams) modules.push("teams");
   if (store.triage) modules.push("triage");
   if (store.features) modules.push("features");
   if (store.integrations) modules.push("integrations");
-  if (billing) modules.push("billing");
+  if (billing && billingConfigured(billing.dodo)) modules.push("billing");
   return modules;
 }
 

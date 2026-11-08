@@ -30,8 +30,8 @@ export const COMPANY_DOMAIN = "acme.test";
 
 /** The backend's output. The console email driver writes sign-in codes and
  *  invites here, which is how the tests read their email. */
-export const BACKEND_LOG = fileURLToPath(new URL("test-results/backend.log", import.meta.url));
-export const PARTS_BACKEND_LOG = fileURLToPath(new URL("test-results/parts-backend.log", import.meta.url));
+export const BACKEND_LOG = fileURLToPath(new URL("logs/backend.log", import.meta.url));
+export const PARTS_BACKEND_LOG = fileURLToPath(new URL("logs/parts-backend.log", import.meta.url));
 
 export const backendEnv: Record<string, string> = {
   DATABASE_DRIVER: "postgres",

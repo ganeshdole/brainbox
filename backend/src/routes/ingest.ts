@@ -135,11 +135,12 @@ ingest.post("/", async (c) => {
   // In the background: transcription must never delay or fail the submission.
   // Delivery waits for it so the ticket carries the transcript.
   const transcriptions: Promise<void>[] = [];
+  const timeoutMs = deps.options.transcriptionTimeoutMs;
   if (transcriber && audioBytes && willTranscribeAudio) {
-    transcriptions.push(transcribeAndStore(store, transcriber, issueId, audioBytes, "audio"));
+    transcriptions.push(transcribeAndStore(store, transcriber, issueId, audioBytes, "audio", timeoutMs));
   }
   if (transcriber && videoBytes && willTranscribeVideo) {
-    transcriptions.push(transcribeAndStore(store, transcriber, issueId, videoBytes, "video"));
+    transcriptions.push(transcribeAndStore(store, transcriber, issueId, videoBytes, "video", timeoutMs));
   }
   // Without the integrations module there is nowhere to deliver to.
   if (transcriptions.length > 0 || store.integrations) {
@@ -154,15 +155,21 @@ ingest.post("/", async (c) => {
   return c.json({ id: issueId }, 201);
 });
 
+/** Transcribes one recording and records the outcome. Never throws, and gives
+ *  up after `timeoutMs` (the transcript is then marked failed), so a provider
+ *  that hangs can't hold the ticket's delivery back for good. */
 async function transcribeAndStore(
   store: Store,
   transcriber: Transcriber,
   issueId: string,
   media: Uint8Array,
   kind: "audio" | "video",
+  timeoutMs: number,
 ): Promise<void> {
+  const signal = AbortSignal.timeout(timeoutMs);
   try {
-    const text = await transcriber.transcribe(media);
+    // Raced as well as passed on: a transcriber may not listen to the signal.
+    const text = await Promise.race([transcriber.transcribe(media, { signal }), aborted(signal)]);
     await store.issues.setTranscript(issueId, kind, { status: "done", text });
   } catch (err) {
     console.error(`[ingest] ${kind} transcription failed for issue ${issueId}:`, err);
@@ -172,4 +179,13 @@ async function transcribeAndStore(
         console.error(`[ingest] failed to mark transcription failed for ${issueId}:`, dbErr);
       });
   }
+}
+
+/** Rejects once `signal` aborts, with its reason. */
+function aborted(signal: AbortSignal): Promise<never> {
+  return new Promise((_, reject) => {
+    const fail = () => reject(signal.reason instanceof Error ? signal.reason : new Error("aborted"));
+    if (signal.aborted) fail();
+    else signal.addEventListener("abort", fail, { once: true });
+  });
 }

@@ -113,7 +113,9 @@ export const issueFeatureRoute = new Hono<AppEnv>().put("/:id/feature", async (c
 });
 
 /** Send an issue to its destinations now, and answer with every delivery of
- *  the issue, not just the ones sent now. Mounted with the integrations module. */
+ *  the issue, not just the ones sent now. 409 when nothing was sent because
+ *  each delivery asked for is already being sent (`claimDelivery`): a double
+ *  click, or two people at once. Mounted with the integrations module. */
 export const issueDeliveriesRoute = new Hono<AppEnv>().post("/:id/deliveries", async (c) => {
   const parsed = sendSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "Invalid body", issues: parsed.error.issues }, 400);
@@ -126,7 +128,12 @@ export const issueDeliveriesRoute = new Hono<AppEnv>().post("/:id/deliveries", a
   if (!targets.some((t) => !provider || t.destination.provider === provider)) {
     return c.json({ error: "No destination configured" }, 409);
   }
-  await deliverIssue(c.get("deps"), access.issue.id, { force: true, provider });
+  const attempted = await deliverIssue(c.get("deps"), access.issue.id, { force: true, provider });
   const deliveries = await integrations.listDeliveries(access.issue.id);
+  const asked = new Set(targets.filter((t) => !provider || t.destination.provider === provider).map((t) => t.destination.id));
+  const inFlight = deliveries.filter((d) => d.status === "pending" && d.destinationId !== null && asked.has(d.destinationId));
+  if (attempted.length === 0 && inFlight.length > 0) {
+    return c.json({ error: "This report is already being sent. Try again in a moment.", code: "delivery_in_flight" }, 409);
+  }
   return c.json(deliveries.map(toDelivery));
 });

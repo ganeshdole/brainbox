@@ -44,7 +44,7 @@ function Onboarding({ teams }: { teams: Team[] }) {
       });
       navigate(`/projects/${project.id}`, { replace: true });
     } catch (err) {
-      setError((err as Error).message);
+      if (!isAuthRedirect(err)) setError((err as Error).message);
       setBusy(false);
     }
   }

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Importance } from "@ganeshdole/brainbox-core";
 import { Camera, ImageOff, Loader2, Send, X } from "./icons.tsx";
-import { VoiceNote } from "./VoiceNote.tsx";
+import { VoiceNote, type VoiceNotePhase } from "./VoiceNote.tsx";
 import { posClass, type Position } from "../lib/position.ts";
 
 const IMPORTANCE: Array<{ value: Importance; label: string }> = [
@@ -26,7 +26,8 @@ export interface FeatureComposerProps {
   onRemoveScreenshot: () => void;
   /** Throw the request away and close. */
   onCancel: () => void;
-  /** Send it. A feature request needs text or a voice note. */
+  /** Send it. A feature request needs text or a voice note. Send is held
+   *  while a voice note is still recording. */
   onSubmit: (text: string, audio: Blob | null, importance: Importance | undefined) => void;
 }
 
@@ -46,7 +47,18 @@ export function FeatureComposer({
   const [audio, setAudio] = useState<Blob | null>(null);
   const [importance, setImportance] = useState<Importance | undefined>();
 
-  const canSend = !!text.trim() || !!audio;
+  // Held while a voice note is recording or handing over its clip: sending
+  // then would leave out what the user is in the middle of saying. Not while
+  // the mic prompt is up - that can wait forever - and Send then gives up on
+  // the prompt by remounting the voice note.
+  const [voicePhase, setVoicePhase] = useState<VoiceNotePhase>("idle");
+  const [voiceKey, setVoiceKey] = useState(0);
+  const voiceBusy = voicePhase === "recording" || voicePhase === "stopping";
+  const dropMicRequest = () => {
+    if (voicePhase === "requesting") setVoiceKey((k) => k + 1);
+  };
+
+  const canSend = !voiceBusy && (!!text.trim() || !!audio);
   const hasShot = !!screenshotUrl || !!capturePending;
 
   return (
@@ -71,7 +83,12 @@ export function FeatureComposer({
           className="h-24 w-full resize-none bg-transparent p-3 text-sm text-default outline-none placeholder:text-placeholder"
         />
         <div className="border-t border-subtle">
-          <VoiceNote onChange={setAudio} prompt="Or say it out loud" />
+          <VoiceNote
+            key={voiceKey}
+            onChange={setAudio}
+            prompt="Or say it out loud"
+            onPhaseChange={setVoicePhase}
+          />
         </div>
       </div>
 
@@ -127,7 +144,10 @@ export function FeatureComposer({
       )}
 
       <button
-        onClick={() => onSubmit(text, audio, importance)}
+        onClick={() => {
+          dropMicRequest();
+          onSubmit(text, audio, importance);
+        }}
         disabled={!canSend}
         className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2 text-sm font-medium text-on-brand shadow-button hover:bg-brand-hover disabled:opacity-40"
       >

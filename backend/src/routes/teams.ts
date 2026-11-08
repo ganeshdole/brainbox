@@ -6,7 +6,7 @@ import { z } from "zod";
 import { teamInviteEmail } from "../email/templates/team-invite.ts";
 import { teamAccess } from "../lib/access.ts";
 import { toTeam, toTeamInvite, toTeamMember } from "../lib/serialize.ts";
-import { INVITE_TTL_MS, inviteUrl, MAX_OPEN_INVITES, mayManage, normalizeEmail } from "../lib/teams.ts";
+import { INVITE_TTL_MS, inviteUrl, MAX_OPEN_INVITES, normalizeEmail } from "../lib/teams.ts";
 import { requireModule } from "../store/modules.ts";
 import type { MembershipChange } from "../store/types.ts";
 import type { AppEnv } from "../types.ts";
@@ -20,9 +20,10 @@ const inviteSchema = z.object({
 
 const LAST_OWNER = "A team needs at least one owner. Make someone else an owner first.";
 
-function changed(result: MembershipChange) {
+function changed(result: MembershipChange, forbidden: string) {
   if (result === "not_found") return { status: 404 as const, body: { error: "Not found" } };
   if (result === "last_owner") return { status: 409 as const, body: { error: LAST_OWNER } };
+  if (result === "forbidden") return { status: 403 as const, body: { error: forbidden } };
   return { status: 200 as const, body: { ok: true } };
 }
 
@@ -60,13 +61,10 @@ export const teamsRoute = new Hono<AppEnv>()
     if (!parsed.success) return c.json({ error: "Invalid body", issues: parsed.error.issues }, 400);
     const access = await teamAccess(c, c.req.param("id"), "admin");
     if (access instanceof Response) return access;
-    const { teams } = modules(c);
-    const target = await teams.membership(access.team.id, c.req.param("userId"));
-    if (!target) return c.json({ error: "Not found" }, 404);
-    if (!mayManage(access.role, target.role, parsed.data.role)) {
-      return c.json({ error: "Only the team's owners can change owners" }, 403);
-    }
-    const { status, body } = changed(await teams.setRole(access.team.id, target.userId, parsed.data.role));
+    // The store checks who may change whom (mayManage) with both roles as
+    // they are at the change, so a role changed a moment ago counts.
+    const result = await modules(c).teams.setRole(access.team.id, c.req.param("userId"), parsed.data.role, access.uid);
+    const { status, body } = changed(result, "Only the team's owners can change owners");
     return c.json(body, status);
   })
   // Removes someone, or with your own id, leaves the Team.
@@ -75,15 +73,8 @@ export const teamsRoute = new Hono<AppEnv>()
     const self = c.get("authUser").token?.sub === userId;
     const access = await teamAccess(c, c.req.param("id"), self ? "member" : "admin");
     if (access instanceof Response) return access;
-    const { teams } = modules(c);
-    if (!self) {
-      const target = await teams.membership(access.team.id, userId);
-      if (!target) return c.json({ error: "Not found" }, 404);
-      if (!mayManage(access.role, target.role)) {
-        return c.json({ error: "Only the team's owners can remove owners" }, 403);
-      }
-    }
-    const { status, body } = changed(await teams.removeMember(access.team.id, userId));
+    const result = await modules(c).teams.removeMember(access.team.id, userId, self ? undefined : access.uid);
+    const { status, body } = changed(result, "Only the team's owners can remove owners");
     return c.json(body, status);
   })
 

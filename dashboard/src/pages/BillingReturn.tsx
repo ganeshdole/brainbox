@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { Button } from "../components/ui/button";
@@ -25,24 +25,26 @@ export function BillingReturn() {
   // Derived at first render rather than set from inside the effect - the answer
   // is already known from the url, and setState in an effect body cascades.
   const [phase, setPhase] = useState<Phase>(() => (paymentFailed ? "failed" : "waiting"));
-  const cancelled = useRef(false);
 
   useEffect(() => {
     if (paymentFailed) return;
 
-    cancelled.current = false;
+    // Per run, not a ref: StrictMode runs this twice, and a shared flag reset
+    // by the second run revived the first run's loop, so two polled at once.
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const startedAt = Date.now();
 
     async function poll() {
-      if (cancelled.current) return;
+      if (cancelled) return;
       try {
         const state = await api.getBillingState();
-        if (cancelled.current) return;
+        if (cancelled) return;
         if (state.hasAccess) {
           setPhase("active");
           // Brief pause so the confirmation is readable rather than a flash.
-          setTimeout(() => {
-            if (!cancelled.current) navigate("/", { replace: true });
+          timer = setTimeout(() => {
+            if (!cancelled) navigate("/", { replace: true });
           }, 900);
           return;
         }
@@ -50,16 +52,18 @@ export function BillingReturn() {
         // Keep polling: a transient failure here is far more likely than a
         // genuinely missing subscription right after a successful payment.
       }
+      if (cancelled) return;
       if (Date.now() - startedAt > GIVE_UP_AFTER_MS) {
         setPhase("slow");
         return;
       }
-      setTimeout(() => void poll(), POLL_INTERVAL_MS);
+      timer = setTimeout(() => void poll(), POLL_INTERVAL_MS);
     }
 
     void poll();
     return () => {
-      cancelled.current = true;
+      cancelled = true;
+      clearTimeout(timer);
     };
   }, [navigate, paymentFailed]);
 

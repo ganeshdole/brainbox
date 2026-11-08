@@ -6,6 +6,8 @@ import type {
   IntegrationProvider,
 } from "@ganeshdole/brainbox-shared";
 
+import { ApiError } from "./api";
+
 export type DeliveryTone = "ok" | "error" | "muted";
 
 export interface DeliveryLabel {
@@ -35,6 +37,23 @@ export function deliveryLabel(d: Delivery): DeliveryLabel {
 export function installResult(search: URLSearchParams): "connected" | "error" | null {
   const v = search.get("github");
   return v === "connected" || v === "error" ? v : null;
+}
+
+/**
+ * The GitHub account the destination form is on: the one picked, while it is
+ * still connected. Once it is disconnected (or was never set), the account the
+ * saved destination uses, else the first one - never an id that is gone, which
+ * the form would go on saving against.
+ */
+export function pickConnectionId(
+  chosen: string,
+  connections: readonly { id: string }[],
+  savedConnectionId: string | undefined,
+): string {
+  const has = (id: string | undefined) => id !== undefined && connections.some((c) => c.id === id);
+  if (has(chosen)) return chosen;
+  if (has(savedConnectionId) && savedConnectionId !== undefined) return savedConnectionId;
+  return connections[0]?.id ?? "";
 }
 
 /** "bug, feedback ,," → ["bug", "feedback"], de-duplicated. */
@@ -90,4 +109,11 @@ export function iterationInput(
   if (kind === "current") return { kind: "current" };
   if (kind === "fixed") return fixedPath ? { kind: "fixed", path: fixedPath } : null;
   return { kind: "backlog", path: backlogIteration };
+}
+
+/** The backend's 409 for a Send while this report's delivery is already
+ *  running (another tab, a retry, the ingest itself). Not a failure: the
+ *  delivery is pending, and the issue should be fetched again to show it. */
+export function isDeliveryInFlight(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 409 && err.body.code === "delivery_in_flight";
 }

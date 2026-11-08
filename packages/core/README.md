@@ -48,17 +48,41 @@ draft.markUp(marks);                  // the marks' bounds become the region; ba
 await draft.submit({ text, audio });  // waits for the bake, then transport.send()
 draft.cancel();                       // drop everything; the draft can be used again
 
+brainbox.identify(null);              // sign-out: later reports carry no identity
 brainbox.destroy();                   // restores console.error, cancels live drafts
 ```
+
+A draft is one report, sent once: `submit()` rejects while a recording is
+running or stopping, while an earlier `submit()` is still in flight, and after
+one has succeeded, until `cancel()` starts the next report. A `cancel()` that
+lands before the transport is reached means nothing is sent. A failed submit
+leaves the draft as it was, to try again. After `destroy()`, `draft()` throws
+and the instance's other methods do nothing.
 
 A recording instead of a screenshot:
 
 ```ts
 const rec = draft.startRecording({ onAutoStop: () => void rec.stop() });
+rec.ready.catch(showError);           // rejects at once if rrweb could not be loaded
 rec.annotations.show(mark);           // drawn into the page, so it shows in the replay
 rec.setMicMuted(true);
 await rec.stop();                     // attaches the session and voice, takes a thumbnail
 ```
+
+One recording per draft at a time: `startRecording()` throws while one is
+running or stopping. `stop()` may be called more than once and every call
+gets the same promise. The duration cap (`maxMs`, default 60 s) runs from
+`startRecording()`, so it matches a clock the UI starts there. A Stop that
+beats rrweb's load attaches no session.
+
+> **New required fields.** `Recording.ready` (a promise that settles once the
+> page is being recorded, and rejects if rrweb could not be loaded) and
+> `SessionCapture.events` (how many rrweb events the log holds) are required
+> on these exported types. Code that only reads them needs no change; code
+> that builds a `Recording` or a `SessionCapture` by hand, such as a test
+> double or a wrapper around `startSessionRecording`, has to add them:
+> `ready: Promise.resolve()` and the event count (0 means nothing was
+> recorded, and the draft attaches no session).
 
 `DraftState` is what a UI renders from: `screenshotUrl`, `screenshotPending`,
 `screenshotFailed`, `hasSession`, `hasVoice`. It is a new object on every

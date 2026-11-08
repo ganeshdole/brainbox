@@ -1,9 +1,11 @@
+import type { Me } from "@ganeshdole/brainbox-shared";
 import { describe, expect, it } from "vitest";
 
 import { app } from "../src/app.ts";
 import { createApp } from "../src/create-app.ts";
 import { fromEnv } from "../src/from-env.ts";
 import { env } from "../src/env.ts";
+import type { DodoSettings } from "../src/lib/dodo.ts";
 import { authCookie, makeProject, makeUser, subscribeUser } from "./helpers.ts";
 
 /** An Account that has never paid - the state this whole file is about. */
@@ -202,7 +204,7 @@ describe("POST /api/billing/checkout", () => {
       headers: { cookie: await authCookie(me.id), "content-type": "application/json" },
       body: JSON.stringify({ plan: "enterprise", period: "monthly" }),
     });
-    expect([400, 503]).toContain(res.status);
+    expect(res.status).toBe(400);
   });
 
   it("refuses to double-bill an active subscriber", async () => {
@@ -213,7 +215,43 @@ describe("POST /api/billing/checkout", () => {
       headers: { cookie: await authCookie(me.id), "content-type": "application/json" },
       body: JSON.stringify({ plan: "pro", period: "monthly" }),
     });
-    // 409 when billing is configured; 503 when it is not (CI has no key).
-    expect([409, 503]).toContain(res.status);
+    expect(res.status).toBe(409);
+  });
+});
+
+describe("a deployment whose payments aren't set up", () => {
+  // Nobody could pay, so a paywall would lock everyone out: a self-hosted
+  // install that never set Dodo up has none.
+  function unconfigured(dodo: Partial<DodoSettings>) {
+    const deps = fromEnv();
+    return createApp({ ...deps, billing: { ...deps.billing!, dodo: { ...deps.billing!.dodo, ...dodo }, disabled: false } });
+  }
+
+  it("has no paywall without a Dodo key", async () => {
+    const me = await unpaidUser("selfhost@brainbox.test");
+    const cookie = await authCookie(me.id, "selfhost@brainbox.test");
+    const selfHosted = unconfigured({ apiKey: "" });
+    expect((await selfHosted.request("/api/projects", { headers: { cookie } })).status).toBe(200);
+    const meRes = await selfHosted.request("/api/me", { headers: { cookie } });
+    expect(((await meRes.json()) as Me).modules).not.toContain("billing");
+  });
+
+  it("has no paywall while a product is missing", async () => {
+    const me = await unpaidUser("selfhost@brainbox.test");
+    const deps = fromEnv();
+    const selfHosted = unconfigured({ products: { ...deps.billing!.dodo.products, "business:annual": "" } });
+    const res = await selfHosted.request("/api/projects", { headers: { cookie: await authCookie(me.id, "selfhost@brainbox.test") } });
+    expect(res.status).toBe(200);
+  });
+
+  it("keeps billing in the dashboard while the paywall is off but Dodo is set up", async () => {
+    // Checkout can still be tried (e.g. Dodo's test mode) with nobody made to pay.
+    const me = await unpaidUser();
+    const deps = fromEnv();
+    const free = createApp({ ...deps, billing: { ...deps.billing!, disabled: true } });
+    const cookie = await authCookie(me.id);
+    expect((await free.request("/api/projects", { headers: { cookie } })).status).toBe(200);
+    const meRes = await free.request("/api/me", { headers: { cookie } });
+    expect(((await meRes.json()) as Me).modules).toContain("billing");
   });
 });

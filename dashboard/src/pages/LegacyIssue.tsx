@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 
 import { Spinner } from "../components/ui/spinner";
-import { api } from "../lib/api";
+import { api, isAuthRedirect } from "../lib/api";
 
 /** Old `/issues/:id` links resolve the issue's project, then land in the inbox. */
 export function LegacyIssue() {
@@ -12,10 +12,18 @@ export function LegacyIssue() {
 
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
     api
       .getIssue(id)
-      .then((issue) => setTarget(`/projects/${issue.projectId}/issues/${issue.id}`))
-      .catch((e: Error) => setError(e.message));
+      .then((issue) => {
+        if (!cancelled) setTarget(`/projects/${issue.projectId}/issues/${issue.id}`);
+      })
+      .catch((e: Error) => {
+        if (!cancelled && !isAuthRedirect(e)) setError(e.message);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   if (target) return <Navigate to={target} replace />;

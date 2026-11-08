@@ -14,7 +14,13 @@ import type {
   DestinationInputs,
 } from "@ganeshdole/brainbox-shared";
 
-import { connectionContext, openCredentials, sealCredentials, type SealedCredentials } from "../store/credentials.ts";
+import {
+  connectionContext,
+  openCredentials,
+  sealCredentials,
+  UnreadableCredentialsError,
+  type SealedCredentials,
+} from "../store/credentials.ts";
 import type { ConnectionRecord } from "../store/types.ts";
 
 // The backend's side of Azure DevOps: a connection's token, sealed at rest,
@@ -80,9 +86,10 @@ export function sealToken(
   return sealCredentials(token, { key: settings.encryptionKey, context: connectionContext(conn) });
 }
 
-/** How to call Azure DevOps as this connection. Throws when it has no readable token. */
+/** How to call Azure DevOps as this connection. Throws
+ *  `UnreadableCredentialsError` when it has no readable token. */
 export async function authFor(settings: AzureDevopsSettings, conn: ConnectionRecord): Promise<AzureDevopsAuth> {
-  if (!conn.credentials) throw new Error("the connection has no token");
+  if (!conn.credentials) throw new UnreadableCredentialsError("the connection has no token");
   const pat = await openCredentials(conn.credentials, {
     key: settings.encryptionKey,
     context: connectionContext(conn),
@@ -124,21 +131,49 @@ function shapeOf(item: AzureDevopsWorkItemConfig, team: string): AzureDevopsWork
   };
 }
 
+/**
+ * What to say when a stored token can't be opened. Most likely the deployment's
+ * INTEGRATIONS_ENCRYPTION_KEY isn't the one the token was sealed with, which
+ * restoring the key fixes, so the connection is NOT marked as needing a new
+ * token: that would outlive the key being put back.
+ */
+export const UNREADABLE_TOKEN =
+  "Brainbox can't read the stored Azure DevOps token: INTEGRATIONS_ENCRYPTION_KEY is not the key it was saved with. " +
+  "Restore that key, or connect Azure DevOps again in Settings.";
+
+/** Logs, loudly, a token that can't be opened: an operator has to act. */
+export function reportUnreadableToken(conn: Pick<ConnectionRecord, "id">, err: unknown): void {
+  console.error(
+    `[integrations] CANNOT READ the token of Azure DevOps connection ${conn.id}. ` +
+      "Check INTEGRATIONS_ENCRYPTION_KEY: it must be the key the token was sealed with.",
+    err instanceof Error ? err.message : err,
+  );
+}
+
 export type PreparedDestination =
   | { ok: true; config: AzureDevopsDestinationConfig }
-  | { ok: false; rejected: boolean; status: 422 | 502; error: string };
+  | { ok: false; rejected: false; unreadable: true; status: 409; error: string }
+  | { ok: false; rejected: boolean; unreadable?: false; status: 422 | 502; error: string };
 
 /**
  * What the dashboard picked, completed with what only Azure DevOps knows
  * (where each type's report goes, whether it has a Priority) and proved by a
  * dry-run create of each kind. `rejected`: the token no longer works.
+ * `unreadable`: the stored token can't be opened (`UNREADABLE_TOKEN`).
  */
 export async function prepareDestination(
   settings: AzureDevopsSettings,
   conn: ConnectionRecord,
   input: DestinationInputs["azure-devops"],
 ): Promise<PreparedDestination> {
-  const auth = await authFor(settings, conn);
+  let auth: AzureDevopsAuth;
+  try {
+    auth = await authFor(settings, conn);
+  } catch (err) {
+    if (!(err instanceof UnreadableCredentialsError)) throw err;
+    reportUnreadableToken(conn, err);
+    return { ok: false, rejected: false, unreadable: true, status: 409, error: UNREADABLE_TOKEN };
+  }
   const organization = organizationOf(conn);
   let types: [AzureDevopsWorkItemTypeInfo, AzureDevopsWorkItemTypeInfo];
   try {

@@ -11,7 +11,7 @@ import { InstallSnippet } from "../components/InstallSnippet";
 import { FEATURE_BUTTON_SNIPPET } from "../lib/snippet";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { api } from "../lib/api";
+import { api, isAuthRedirect } from "../lib/api";
 import { canAdmin } from "../lib/team";
 import { LAST_PROJECT_KEY, useProject } from "../lib/useProject";
 import { useModules } from "../lib/modules";
@@ -61,7 +61,7 @@ function DangerZone({
       onDeleted(project.id);
       navigate(next ? `/projects/${next.id}` : "/", { replace: true });
     } catch (err) {
-      setError((err as Error).message);
+      if (!isAuthRedirect(err)) setError((err as Error).message);
       setBusy(false);
     }
   }
@@ -185,6 +185,7 @@ export function Settings() {
               <Section label="Domains" hint="Only these sites can send feedback.">
                 <div className="rounded-xl border border-default bg-elevated px-4 py-3.5">
                   <DomainsEditor
+                    key={`domains:${project.id}`}
                     projectId={project.id}
                     origins={project.allowedOrigins}
                     onChange={(allowedOrigins) => setProject({ ...project, allowedOrigins })}
@@ -195,14 +196,30 @@ export function Settings() {
               {has("integrations") && (
                 <Section label="Destinations" hint="Where every new report is filed, as soon as it arrives.">
                   <div className="space-y-2.5">
-                    <GithubDestination projectId={project.id} teamId={project.team.id} />
-                    <AzureDevopsDestination projectId={project.id} teamId={project.team.id} />
+                    {/* keyed: one project's loaded state, notice or half-filled
+                        form must not carry over to the next. Distinct per
+                        sibling, or React sees duplicate keys. */}
+                    <GithubDestination
+                      key={`github:${project.id}`}
+                      projectId={project.id}
+                      teamId={project.team.id}
+                    />
+                    <AzureDevopsDestination
+                      key={`azure:${project.id}`}
+                      projectId={project.id}
+                      teamId={project.team.id}
+                    />
                   </div>
                 </Section>
               )}
 
               <Section label="Danger zone" hint="This can't be undone.">
-                <DangerZone project={project} projects={projects} onDeleted={removeProject} />
+                <DangerZone
+                  key={`danger:${project.id}`}
+                  project={project}
+                  projects={projects}
+                  onDeleted={removeProject}
+                />
               </Section>
             </>
           ) : (

@@ -30,6 +30,14 @@ export function shownFilters(issues: Issue[]): typeof REPORT_FILTERS[number][] {
   return REPORT_FILTERS.filter((f) => f.key === "all" || issues.some(f.match));
 }
 
+/** The filter in force: the one picked, unless its pill isn't shown for this
+ *  list (another project with no recordings, say) - then All, rather than an
+ *  empty list filtered by a pill nobody can see to turn off. */
+export function activeFilter(picked: ReportFilterKey, issues: Issue[] | null): ReportFilterKey {
+  if (!issues) return picked;
+  return shownFilters(issues).some((f) => f.key === picked) ? picked : "all";
+}
+
 const IMPORTANCE_LABEL: Record<Importance, string> = {
   nice: "Nice to have",
   important: "Important",

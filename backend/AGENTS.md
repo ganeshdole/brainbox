@@ -101,7 +101,12 @@ Azure DevOps connections store a token, which `integrations/azure-devops.ts`
 seals with `INTEGRATIONS_ENCRYPTION_KEY` before `saveConnection` and opens
 when it needs it. Stores keep the `SealedCredentials` string as it is and
 never see the key; never hand a store plaintext. A 401 from a tool marks the
-connection `needs_reauth` (`sendTicket` in `dispatch.ts`). Tests stub Azure
+connection `needs_reauth` (`sendTicket` in `dispatch.ts`), passing the
+credentials that were used so a reconnect made meanwhile is left alone. A
+token that doesn't open (`UnreadableCredentialsError`, most likely a changed
+`INTEGRATIONS_ENCRYPTION_KEY`) marks nothing, so restoring the key heals it:
+deliveries fail naming the key, routes answer 409 `credentials_unreadable`,
+and it is logged as an error. Tests stub Azure
 DevOps with `test/azure-devops-fake.ts`; `scripts/fake-azure-devops.ts` is a
 fake to run against by hand and in `e2e/`.
 

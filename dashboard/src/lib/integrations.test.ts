@@ -9,7 +9,10 @@ import {
   installResult,
   iterationInput,
   parseLabels,
+  isDeliveryInFlight,
+  pickConnectionId,
 } from "./integrations";
+import { ApiError } from "./api";
 
 const base: Delivery = {
   id: "d1",
@@ -106,5 +109,36 @@ describe("iterationInput", () => {
 
   it("has nothing to save for Fixed until an iteration is chosen", () => {
     expect(iterationInput("fixed", "", "Web")).toBeNull();
+  });
+});
+
+describe("pickConnectionId", () => {
+  const two = [{ id: "a" }, { id: "b" }];
+
+  it("keeps the account picked while it is connected", () => {
+    expect(pickConnectionId("b", two, "a")).toBe("b");
+  });
+
+  it("moves off a disconnected account to the saved one, else the first", () => {
+    expect(pickConnectionId("gone", two, "b")).toBe("b");
+    expect(pickConnectionId("gone", two, "also-gone")).toBe("a");
+    expect(pickConnectionId("gone", two, undefined)).toBe("a");
+  });
+
+  it("is empty with nothing connected", () => {
+    expect(pickConnectionId("a", [], "a")).toBe("");
+  });
+});
+
+describe("isDeliveryInFlight", () => {
+  it("knows the backend's in-flight refusal", () => {
+    const busy = new ApiError("This report is already being sent.", 409, { code: "delivery_in_flight" });
+    expect(isDeliveryInFlight(busy)).toBe(true);
+  });
+
+  it("is false for other errors", () => {
+    expect(isDeliveryInFlight(new ApiError("Conflict", 409, {}))).toBe(false);
+    expect(isDeliveryInFlight(new ApiError("Nope", 400, { code: "delivery_in_flight" }))).toBe(false);
+    expect(isDeliveryInFlight(new Error("offline"))).toBe(false);
   });
 });

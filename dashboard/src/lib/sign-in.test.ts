@@ -6,6 +6,7 @@ import {
   fetchSignInOptions,
   isSignInCode,
   savePendingSignIn,
+  signedInLoginTarget,
   takePendingSignIn,
 } from "./sign-in.ts";
 
@@ -85,5 +86,21 @@ describe("pending code sign-in", () => {
   it("ignores anything it did not write", () => {
     sessionStorage.setItem("brainbox:pendingSignIn", "not json");
     expect(takePendingSignIn()).toBeNull();
+  });
+});
+
+describe("signedInLoginTarget", () => {
+  it("shows the page when it carries an Auth.js error", () => {
+    expect(signedInLoginTarget("?error=OAuthAccountNotLinked", undefined)).toBeNull();
+    expect(signedInLoginTarget("?error=Verification", { pathname: "/claim", search: "" })).toBeNull();
+  });
+
+  it("sends a signed-in visitor on to where they were headed, else home", () => {
+    expect(signedInLoginTarget("", { pathname: "/claim", search: "?token=t" })).toBe("/claim?token=t");
+    expect(signedInLoginTarget("", undefined)).toBe("/");
+  });
+
+  it("never sends them back to /login", () => {
+    expect(signedInLoginTarget("", { pathname: "/login", search: "" })).toBe("/");
   });
 });

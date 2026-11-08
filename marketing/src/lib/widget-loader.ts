@@ -61,11 +61,16 @@ export function loadWidget(config: WidgetConfig): void {
  * ready event, and the script's own `load` doesn't guarantee it has mounted.
  *
  * Gives up after `timeoutMs` without calling back - if the widget is blocked or
- * failed to load, the honest thing is to show nothing.
+ * failed to load, the honest thing is to show nothing. `onTimeout` hears about
+ * it, so a caller holding on to the wait can let it go.
  */
 export function onWidgetReady(
   cb: () => void,
-  { intervalMs = 150, timeoutMs = 10_000 } = {}
+  {
+    intervalMs = 150,
+    timeoutMs = 10_000,
+    onTimeout,
+  }: { intervalMs?: number; timeoutMs?: number; onTimeout?: () => void } = {}
 ): () => void {
   if (window.Brainbox) {
     cb();
@@ -79,15 +84,39 @@ export function onWidgetReady(
       cb();
     } else if (waited >= timeoutMs) {
       clearInterval(timer);
+      onTimeout?.();
     }
   }, intervalMs);
   return () => clearInterval(timer);
 }
 
+// The one wait for a click that came before the script. Further clicks join
+// it rather than each starting a poll of their own and each calling open().
+let pendingOpen: (() => void) | null = null;
+
 /**
  * Open the widget the way its launcher would: now, or as soon as the script
- * lands if the visitor clicked first. Nothing happens if it never loads.
+ * lands if the visitor clicked first. However many clicks came before it, it
+ * opens once. Nothing happens if it never loads.
  */
 export function openWidget(): void {
-  onWidgetReady(() => window.Brainbox?.open());
+  if (window.Brainbox) {
+    pendingOpen?.();
+    pendingOpen = null;
+    window.Brainbox.open();
+    return;
+  }
+  if (pendingOpen) return;
+  pendingOpen = onWidgetReady(
+    () => {
+      pendingOpen = null;
+      window.Brainbox?.open();
+    },
+    {
+      // let a later click try again rather than join a wait that has ended
+      onTimeout: () => {
+        pendingOpen = null;
+      },
+    }
+  );
 }

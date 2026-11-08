@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { app } from "../src/app.ts";
 import { createApp } from "../src/create-app.ts";
 import { fromEnv } from "../src/from-env.ts";
-import { stored, testDeps } from "./harness.ts";
+import { resetStore, stored, testDeps } from "./harness.ts";
+import { DELIVERY_LEASE_MS } from "../src/store/delivery-rules.ts";
+import { getStore } from "../src/store/index.ts";
 import { deliverIssue } from "../src/integrations/dispatch.ts";
 import { publicFileUrl } from "../src/lib/public-files.ts";
 import { getStorage } from "../src/storage/index.ts";
@@ -189,6 +191,40 @@ describe("delivery after ingest", () => {
     expect(body).toContain("> checkout crashes on submit");
   });
 
+  it("gives up on a transcription that hangs, marks it failed, and sends the ticket anyway", async () => {
+    const gh = fakeGithub();
+    const deps = fromEnv();
+    let signal: AbortSignal | undefined;
+    // Never settles, and ignores the signal it is given.
+    const hanging = createApp({
+      ...deps,
+      transcriber: {
+        transcribe: (_media, opts) => {
+          signal = opts?.signal;
+          return new Promise<string>(() => {});
+        },
+      },
+      options: { ...deps.options, transcriptionTimeoutMs: 50 },
+    });
+    const { project, conn } = await setup();
+    await makeDestination(project.id, conn.id);
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await hanging.request("/ingest", {
+      method: "POST",
+      body: ingestForm(project.key, (fd) =>
+        fd.append("audio", new File([new Uint8Array([1, 2])], "a.webm", { type: "audio/webm" })),
+      ),
+    });
+    const { id } = (await res.json()) as { id: string };
+    const [delivery] = await settled(id);
+    expect(delivery?.status).toBe("sent");
+    expect(gh.issueCalls()).toHaveLength(1);
+    expect((await getStore().issues.get(id))?.audioTranscriptStatus).toBe("failed");
+    expect(signal?.aborted).toBe(true);
+    error.mockRestore();
+  });
+
   it("does nothing for a project without a destination, or with it paused", async () => {
     const gh = fakeGithub();
     const { project, conn } = await setup();
@@ -239,6 +275,27 @@ describe("deliverIssue", () => {
     expect(gh.issueCalls()).toHaveLength(2);
   });
 
+  it("never throws when the store fails, and moves on to the next destination", async () => {
+    fakeGithub();
+    const { project, conn } = await setup();
+    await makeDestination(project.id, conn.id);
+    const issue = await makeIssue(project.id);
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const integrations = testDeps.store.integrations!;
+    const broken = {
+      ...testDeps,
+      store: { ...testDeps.store, integrations: { ...integrations, claimDelivery: () => Promise.reject(new Error("db down")) } },
+    };
+    await expect(deliverIssue(broken, issue.id)).resolves.toEqual([]);
+    const lookupFails = {
+      ...testDeps,
+      store: { ...testDeps.store, integrations: { ...integrations, deliveryTargets: () => Promise.reject(new Error("db down")) } },
+    };
+    await expect(deliverIssue(lookupFails, issue.id)).resolves.toEqual([]);
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+  });
+
   it("is idempotent without force", async () => {
     const gh = fakeGithub();
     const { project, conn } = await setup();
@@ -275,6 +332,42 @@ describe("issue delivery API", () => {
     expect(((await after.json()) as { deliveries: unknown[] }).deliveries).toMatchObject([
       { status: "sent", externalId: "1", attempts: 1 },
     ]);
+  });
+
+  it("409s a retry while the delivery is in flight, and sends one stuck past its lease", async () => {
+    const gh = fakeGithub();
+    const { me, project, conn } = await setup();
+    const dest = await makeDestination(project.id, conn.id);
+    const issue = await makeIssue(project.id);
+    const cookie = await authCookie(me.id);
+    const claim = { issueId: issue.id, destinationId: dest.id, provider: "github" as const, retry: false };
+
+    // The automatic send (or another click) has it right now.
+    await getStore().integrations.claimDelivery({ ...claim, now: new Date() });
+    const busy = await app.request(`/api/issues/${issue.id}/deliveries`, { method: "POST", headers: { cookie } });
+    expect(busy.status).toBe(409);
+    expect(await busy.json()).toMatchObject({ code: "delivery_in_flight" });
+    expect(gh.issueCalls()).toHaveLength(0);
+
+    // An attempt that died mid-send (a crash) leaves it pending: once its
+    // lease is up, a retry sends it.
+    await resetStore();
+    const again = await setup();
+    const stuckDest = await makeDestination(again.project.id, again.conn.id);
+    const stuck = await makeIssue(again.project.id);
+    await getStore().integrations.claimDelivery({
+      ...claim,
+      issueId: stuck.id,
+      destinationId: stuckDest.id,
+      now: new Date(Date.now() - DELIVERY_LEASE_MS - 1000),
+    });
+    const retried = await app.request(`/api/issues/${stuck.id}/deliveries`, {
+      method: "POST",
+      headers: { cookie: await authCookie(again.me.id) },
+    });
+    expect(retried.status).toBe(200);
+    expect(await retried.json()).toMatchObject([{ status: "sent", attempts: 2 }]);
+    expect(gh.issueCalls()).toHaveLength(1);
   });
 
   it("409s with no destination and 404s another user's issue", async () => {

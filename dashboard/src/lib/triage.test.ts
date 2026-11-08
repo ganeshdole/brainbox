@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Issue, IssueEvent } from "@ganeshdole/brainbox-shared";
 
-import { applyTriage, byPriority, defaultTab, describeEvent, TRIAGE_TABS } from "./triage";
+import { applyTriage, byPriority, defaultTab, describeEvent, revertTriage, TRIAGE_TABS } from "./triage";
 
 const issue = (over: Partial<Issue> & { id: string }): Issue => ({
   projectId: "p1",
@@ -76,6 +76,35 @@ describe("applyTriage", () => {
     expect(closed.closeReason).toBe("spam");
     expect(applyTriage(closed, { priority: "low" }).closeReason).toBe("spam");
     expect(applyTriage(closed, { status: "open" }).closeReason).toBeUndefined();
+  });
+});
+
+describe("revertTriage", () => {
+  it("puts back only the fields the patch touched", () => {
+    const before = issue({ id: "1", status: "new", priority: "low" });
+    const optimistic = applyTriage(before, { status: "resolved" });
+    // a delivery send landed while the PATCH was out
+    const meanwhile = { ...optimistic, deliveries: [], featureId: "f1" };
+    const back = revertTriage(meanwhile, before, { status: "resolved" });
+    expect(back.status).toBe("new");
+    expect(back.priority).toBe("low");
+    expect(back.deliveries).toEqual([]);
+    expect(back.featureId).toBe("f1");
+  });
+
+  it("leaves status alone when only priority was patched", () => {
+    const before = issue({ id: "1", status: "open", priority: "none" });
+    const current = { ...applyTriage(before, { priority: "urgent" }), status: "resolved" as const };
+    const back = revertTriage(current, before, { priority: "urgent" });
+    expect(back.priority).toBe("none");
+    expect(back.status).toBe("resolved");
+  });
+
+  it("restores the close reason a status change dropped", () => {
+    const before = issue({ id: "1", status: "closed", closeReason: "duplicate" });
+    const back = revertTriage(applyTriage(before, { status: "open" }), before, { status: "open" });
+    expect(back.status).toBe("closed");
+    expect(back.closeReason).toBe("duplicate");
   });
 });
 

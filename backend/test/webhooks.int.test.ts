@@ -163,6 +163,45 @@ describe("POST /webhooks/dodo - subscription lifecycle", () => {
   });
 });
 
+describe("POST /webhooks/dodo - changes to a subscription", () => {
+  it("applies a plan change", async () => {
+    const me = await makeUser(undefined, { subscribed: false });
+    await send(subscriptionActive(me.id, "sub_upgrade"), { sentAt: new Date(Date.now() - 60_000) });
+    const changed = subscriptionActive(me.id, "sub_upgrade");
+    changed.type = "subscription.plan_changed";
+    changed.data.product_id = testEnv.DODO_PRODUCT_BUSINESS_ANNUAL!;
+    expect((await send(changed)).status).toBe(200);
+
+    const [row] = await stored.subscriptions(me.id);
+    expect(row).toMatchObject({ plan: "business", period: "annual", dodoProductId: testEnv.DODO_PRODUCT_BUSINESS_ANNUAL });
+  });
+
+  it("keeps the period end when an event has no billing date", async () => {
+    const me = await makeUser(undefined, { subscribed: false });
+    await send(subscriptionActive(me.id, "sub_dated"), { sentAt: new Date(Date.now() - 60_000) });
+    await send({ type: "subscription.on_hold", data: { subscription_id: "sub_dated", status: "on_hold" } });
+
+    const [row] = await stored.subscriptions(me.id);
+    expect(row?.status).toBe("on_hold");
+    expect(row?.currentPeriodEnd).toEqual(new Date("2026-09-01T00:00:00Z"));
+  });
+
+  it("keeps a re-subscribed Account in when the old subscription's ending arrives late", async () => {
+    const me = await makeUser(undefined, { subscribed: false });
+    const minute = (m: number) => new Date(Date.now() + m * 60_000);
+    await send(subscriptionActive(me.id, "sub_old"), { sentAt: minute(-3) });
+    await send({ type: "subscription.cancelled", data: { subscription_id: "sub_old", status: "cancelled", metadata: { userId: me.id } } }, { sentAt: minute(-2) });
+    await send(subscriptionActive(me.id, "sub_new"), { sentAt: minute(-1) });
+    // Dodo retrying the old cancellation, then the old subscription expiring.
+    await send({ type: "subscription.cancelled", data: { subscription_id: "sub_old", status: "cancelled", metadata: { userId: me.id } } }, { sentAt: minute(-2) });
+    await send({ type: "subscription.expired", data: { subscription_id: "sub_old", status: "expired", metadata: { userId: me.id } } });
+
+    const rows = await stored.subscriptions(me.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ dodoSubscriptionId: "sub_new", status: "active" });
+  });
+});
+
 describe("POST /webhooks/dodo - out-of-order delivery", () => {
   // Dodo retries on its own schedule, so a cancellation sent before a renewal
   // can arrive after it. Applying blindly would revoke a paying customer.

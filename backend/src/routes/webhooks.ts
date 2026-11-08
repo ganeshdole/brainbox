@@ -164,8 +164,12 @@ function subscriptionChange(
   return {
     dodoSubscriptionId,
     status,
+    // Without one the stored date is kept (planSubscriptionWrite).
     currentPeriodEnd: data.next_billing_date ? new Date(data.next_billing_date) : null,
     sentAt,
+    // A plan change (subscription.plan_changed, or any event after one) names
+    // the new product; one we don't sell leaves the stored plan alone.
+    product: mapped ? { dodoProductId: productId, plan: mapped.plan, period: mapped.period } : null,
     create,
   };
 }

@@ -9,8 +9,10 @@ export interface Transcriber {
   /** The words spoken in `media`: an audio note (webm/mp4/mpeg/ogg/wav) or a
    *  screen recording's container (webm/mp4), whose audio track is the one to
    *  transcribe. Throws when it can't; the issue's transcript is then marked
-   *  failed. */
-  transcribe(media: Uint8Array): Promise<string>;
+   *  failed. `signal` aborts when the backend stops waiting
+   *  (`options.transcriptionTimeoutMs`); the transcript is marked failed then
+   *  too, whether or not the call stops. */
+  transcribe(media: Uint8Array, opts?: { signal?: AbortSignal }): Promise<string>;
 }
 
 export interface ProviderOptions {
@@ -23,8 +25,8 @@ export interface ProviderOptions {
  *  from the file signature, so raw bytes are enough. */
 export function aiSdkTranscriber(model: TranscriptionModel): Transcriber {
   return {
-    async transcribe(media) {
-      const { text } = await transcribe({ model, audio: media });
+    async transcribe(media, opts) {
+      const { text } = await transcribe({ model, audio: media, ...(opts?.signal && { abortSignal: opts.signal }) });
       return text;
     },
   };

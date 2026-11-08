@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import type { Feature, FeatureDetail, FeatureStatus, Issue } from "@ganeshdole/brainbox-shared";
@@ -7,7 +7,7 @@ import { Eyebrow } from "../components/Eyebrow";
 import { Button } from "../components/ui/button";
 import { Skeleton } from "../components/ui/skeleton";
 import { api, isAuthRedirect } from "../lib/api";
-import { byDemand, FEATURE_STATUSES } from "../lib/feature";
+import { byDemand, FEATURE_STATUSES, syncDraft } from "../lib/feature";
 import { importanceLabel } from "../lib/issue";
 import { cleanIdentity, highlightLine } from "../lib/reporter";
 import { useProject } from "../lib/useProject";
@@ -85,6 +85,9 @@ function FeatureView({ featureId, projectId }: { featureId: string; projectId: s
   const [description, setDescription] = useState("");
   const [mergeInto, setMergeInto] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // The saved title and description the drafts were last synced to, so a
+  // reload can tell an edited draft (kept) from an untouched one (updated).
+  const synced = useRef({ title: "", description: "" });
 
   const fetchAll = useCallback(
     () => Promise.all([api.getFeature(featureId), api.listFeatures(projectId)]),
@@ -92,9 +95,12 @@ function FeatureView({ featureId, projectId }: { featureId: string; projectId: s
   );
   const show = useCallback(
     ([detail, all]: [FeatureDetail, Feature[]]) => {
+      const before = synced.current;
+      const after = { title: detail.title, description: detail.description ?? "" };
+      synced.current = after;
       setFeature(detail);
-      setTitle(detail.title);
-      setDescription(detail.description ?? "");
+      setTitle((draft) => syncDraft(draft, before.title, after.title));
+      setDescription((draft) => syncDraft(draft, before.description, after.description));
       setOthers(byDemand(all.filter((f) => f.id !== featureId)));
     },
     [featureId],
@@ -230,7 +236,12 @@ function FeatureView({ featureId, projectId }: { featureId: string; projectId: s
               >
                 Save description
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => setDescription(feature.description ?? "")}>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                onClick={() => setDescription(feature.description ?? "")}
+              >
                 Cancel
               </Button>
             </div>
@@ -300,7 +311,7 @@ function FeatureView({ featureId, projectId }: { featureId: string; projectId: s
             </span>
             <div className="flex gap-2">
               {confirmDelete && (
-                <Button size="sm" variant="ghost" onClick={() => setConfirmDelete(false)}>
+                <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirmDelete(false)}>
                   Cancel
                 </Button>
               )}

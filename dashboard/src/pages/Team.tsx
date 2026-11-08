@@ -119,7 +119,11 @@ function InviteForm({ teamId, onInvited }: { teamId: string; onInvited: (created
         <Input
           type="email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            // "Invite emailed to …" was about the last address
+            setSent(null);
+          }}
           placeholder="teammate@company.com"
           disabled={busy}
           aria-label="Email address"
@@ -181,6 +185,7 @@ function TeamSettings({ team, onRenamed }: { team: ProjectTeam; onRenamed: (name
         if (cancelled) return;
         setMembers(nextMembers);
         setInvites(nextInvites);
+        setError(null);
       })
       .catch((e: Error) => {
         if (!cancelled && !isAuthRedirect(e)) setError(e.message);
@@ -192,13 +197,12 @@ function TeamSettings({ team, onRenamed }: { team: ProjectTeam; onRenamed: (name
 
   const myEmail = session?.user?.email?.toLowerCase();
 
-  async function run(key: string, action: () => Promise<unknown>, after?: () => void) {
+  async function run(key: string, action: () => Promise<unknown>) {
     setBusy(key);
     setActionError(null);
     try {
       await action();
-      if (after) after();
-      else setReload((n) => n + 1);
+      setReload((n) => n + 1);
     } catch (err) {
       if (!isAuthRedirect(err)) setActionError((err as Error).message);
     } finally {
@@ -206,13 +210,21 @@ function TeamSettings({ team, onRenamed }: { team: ProjectTeam; onRenamed: (name
     }
   }
 
-  function leave(userId: string) {
+  async function leave(userId: string) {
     if (!window.confirm(`Leave ${team.name}? You'll lose access to its projects.`)) return;
-    void run(`remove:${userId}`, () => api.removeMember(teamId, userId), () => {
+    setBusy(`remove:${userId}`);
+    setActionError(null);
+    try {
+      await api.removeMember(teamId, userId);
       localStorage.removeItem(LAST_PROJECT_KEY);
       // A full load, so the project list is fetched again without this Team.
+      // Stays busy: the buttons of a Team they've left mustn't come back
+      // while the page goes.
       window.location.assign("/");
-    });
+    } catch (err) {
+      if (!isAuthRedirect(err)) setActionError((err as Error).message);
+      setBusy(null);
+    }
   }
 
   return (
@@ -282,7 +294,7 @@ function TeamSettings({ team, onRenamed }: { team: ProjectTeam; onRenamed: (name
                         )}
                         {self ? (
                           !lastOwner && (
-                            <Button variant="ghost" size="sm" disabled={busy !== null} onClick={() => leave(m.userId)}>
+                            <Button variant="ghost" size="sm" disabled={busy !== null} onClick={() => void leave(m.userId)}>
                               Leave
                             </Button>
                           )

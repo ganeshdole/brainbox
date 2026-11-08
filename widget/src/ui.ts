@@ -14,7 +14,7 @@ export { RecordOverlay, type RecordOverlayProps } from "./components/RecordOverl
 export { Composer, type ComposerProps } from "./components/Composer.tsx";
 export { FeatureComposer, type FeatureComposerProps } from "./components/FeatureComposer.tsx";
 export { Result, type ResultProps } from "./components/Result.tsx";
-export { VoiceNote, type VoiceNoteProps } from "./components/VoiceNote.tsx";
+export { VoiceNote, type VoiceNotePhase, type VoiceNoteProps } from "./components/VoiceNote.tsx";
 export { BarRow, type BarRowProps } from "./components/BarVisualizer.tsx";
 export { useMultibandVolume, type MultibandOptions } from "./lib/use-multiband.ts";
 export type { WidgetComponents } from "./slots.ts";

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 
+import { mayReclaimDelivery } from "../src/store/delivery-rules.ts";
 import { newestFirst, removeConnection, removeDestination, serverMutation, serverQuery, strip } from "./lib/server.ts";
 import { connectionAuth, connectionStatus, destinationConfig, nullable, provider } from "./validators.ts";
 
@@ -62,14 +63,21 @@ export const saveConnection = serverMutation({
   },
 });
 
+/** With `expectedCredentials`, only while the connection still holds them:
+ *  a rejection of a token since replaced leaves the new one alone. True when
+ *  the connection was there to change. */
 export const setConnectionStatus = serverMutation({
-  args: { id: v.string(), status: connectionStatus },
-  handler: async (ctx, { id, status }) => {
+  args: { id: v.string(), status: connectionStatus, expectedCredentials: v.optional(nullable(v.string())) },
+  handler: async (ctx, { id, status, expectedCredentials }) => {
     const row = await ctx.db
       .query("connections")
       .withIndex("with_id", (q) => q.eq("id", id))
       .unique();
-    if (row) await ctx.db.patch(row._id, { status });
+    if (!row) return false;
+    // Connections from before Azure DevOps have no credentials field: none.
+    if (expectedCredentials !== undefined && (row.credentials ?? null) !== expectedCredentials) return false;
+    await ctx.db.patch(row._id, { status });
+    return true;
   },
 });
 
@@ -167,21 +175,30 @@ export const listDeliveries = serverQuery({
 });
 
 /**
- * Start one delivery as pending. Null when this (issue, destination) already
- * has one; with `retry` that one is reset to pending instead, unless it was
- * sent: a retry never files the same report twice.
+ * Start one attempt at a delivery: pending, counted, stamped `now`. Null when
+ * this (issue, destination) already has one; with `retry` that one is claimed
+ * again instead when mayReclaimDelivery allows it: failed, or pending past its
+ * lease. Never one that was sent, nor one still in flight.
  */
 export const claimDelivery = serverMutation({
-  args: { issueId: v.string(), destinationId: v.string(), provider, retry: v.boolean() },
-  handler: async (ctx, { issueId, destinationId, provider, retry }) => {
-    const now = Date.now();
+  // `now` is optional so a backend older than it keeps working while the two
+  // are deployed at different times.
+  args: { issueId: v.string(), destinationId: v.string(), provider, retry: v.boolean(), now: v.optional(v.number()) },
+  handler: async (ctx, { issueId, destinationId, provider, retry, now = Date.now() }) => {
     const existing = await ctx.db
       .query("deliveries")
       .withIndex("by_issue_destination", (q) => q.eq("issueId", issueId).eq("destinationId", destinationId))
       .unique();
     if (existing) {
-      if (!retry || existing.status === "sent") return null;
-      await ctx.db.patch(existing._id, { status: "pending", error: null, updatedAt: now });
+      if (!retry) return null;
+      const current = { status: existing.status, updatedAt: new Date(existing.updatedAt) };
+      if (!mayReclaimDelivery(current, new Date(now))) return null;
+      await ctx.db.patch(existing._id, {
+        status: "pending",
+        error: null,
+        attempts: existing.attempts + 1,
+        updatedAt: now,
+      });
       const reset = await ctx.db.get(existing._id);
       return reset && strip(reset);
     }
@@ -194,8 +211,8 @@ export const claimDelivery = serverMutation({
       externalId: null,
       externalUrl: null,
       error: null,
-      attempts: 0,
-      createdAt: now,
+      attempts: 1,
+      createdAt: Date.now(),
       updatedAt: now,
     };
     await ctx.db.insert("deliveries", record);
@@ -203,26 +220,30 @@ export const claimDelivery = serverMutation({
   },
 });
 
-/** Record the outcome and count the attempt. A failure keeps any earlier link. */
+/** Record the outcome of the attempt numbered `attempts`, only while it is
+ *  still the delivery's own and pending; null otherwise. A failure keeps any
+ *  earlier link. Without `attempts` (a backend older than it, while the two
+ *  are deployed at different times) only "still pending" is checked. */
 export const finishDelivery = serverMutation({
   args: {
     id: v.string(),
+    attempts: v.optional(v.number()),
     outcome: v.union(
       v.object({ ok: v.literal(true), externalId: v.string(), url: v.string() }),
       v.object({ ok: v.literal(false), error: v.string() }),
     ),
   },
-  handler: async (ctx, { id, outcome }) => {
+  handler: async (ctx, { id, attempts, outcome }) => {
     const row = await ctx.db
       .query("deliveries")
       .withIndex("with_id", (q) => q.eq("id", id))
       .unique();
-    if (!row) return null;
+    if (!row || row.status !== "pending") return null;
+    if (attempts !== undefined && row.attempts !== attempts) return null;
     await ctx.db.patch(row._id, {
       status: outcome.ok ? "sent" : "failed",
       ...(outcome.ok && { externalId: outcome.externalId, externalUrl: outcome.url }),
       error: outcome.ok ? null : outcome.error,
-      attempts: row.attempts + 1,
       updatedAt: Date.now(),
     });
     const updated = await ctx.db.get(row._id);
