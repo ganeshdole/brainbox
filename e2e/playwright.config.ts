@@ -27,6 +27,7 @@ import {
 const slowMo = Number(process.env.SLOW_MO ?? 0);
 
 // Made here rather than in the command, which also has to run under cmd.exe.
+// Outside test-results/, which Playwright empties before it starts the servers.
 mkdirSync(dirname(BACKEND_LOG), { recursive: true });
 
 export default defineConfig({
