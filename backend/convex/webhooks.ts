@@ -30,6 +30,9 @@ export const applySubscriptionEvent = serverMutation({
         status: subscriptionStatus,
         currentPeriodEnd: nullable(v.number()),
         sentAt: v.number(),
+        product: v.optional(
+          nullable(v.object({ dodoProductId: v.string(), plan: planId, period: billingPeriod })),
+        ),
         create: v.union(
           v.object({
             userId: v.string(),
@@ -47,13 +50,28 @@ export const applySubscriptionEvent = serverMutation({
     if (!(await claimEvent(ctx, eventId, eventType))) return "duplicate" as const;
     if (!change) return "applied" as const;
 
-    const existing = await ctx.db
+    // The row this subscription has, else the Account's row (one per Account).
+    const bySubscription = await ctx.db
       .query("subscriptions")
       .withIndex("by_dodo_id", (q) => q.eq("dodoSubscriptionId", change.dodoSubscriptionId))
       .unique();
+    const userId = "userId" in change.create ? change.create.userId : null;
+    const existing =
+      bySubscription ??
+      (userId === null
+        ? null
+        : await ctx.db
+            .query("subscriptions")
+            .withIndex("by_user", (q) => q.eq("userId", userId))
+            .unique());
     // The shared rule works in Dates; Convex stores epoch milliseconds.
     const write = planSubscriptionWrite(
-      existing && { lastEventAt: toDate(existing.lastEventAt) },
+      existing && {
+        dodoSubscriptionId: existing.dodoSubscriptionId,
+        status: existing.status,
+        currentPeriodEnd: toDate(existing.currentPeriodEnd),
+        lastEventAt: toDate(existing.lastEventAt),
+      },
       {
         ...change,
         currentPeriodEnd: toDate(change.currentPeriodEnd),
@@ -63,10 +81,11 @@ export const applySubscriptionEvent = serverMutation({
     const now = Date.now();
 
     if (write.kind === "update" && existing) {
+      const { currentPeriodEnd, lastEventAt, ...values } = write.values;
       await ctx.db.patch(existing._id, {
-        status: write.values.status,
-        currentPeriodEnd: change.currentPeriodEnd,
-        lastEventAt: change.sentAt,
+        ...values,
+        currentPeriodEnd: currentPeriodEnd?.getTime() ?? null,
+        lastEventAt: lastEventAt?.getTime() ?? null,
         updatedAt: now,
       });
     } else if (write.kind === "create") {
@@ -76,12 +95,9 @@ export const applySubscriptionEvent = serverMutation({
         lastEventAt: change.sentAt,
         updatedAt: now,
       };
-      // An Account re-subscribing after cancelling already has a row.
-      const mine = await ctx.db
-        .query("subscriptions")
-        .withIndex("by_user", (q) => q.eq("userId", values.userId))
-        .unique();
-      if (mine) await ctx.db.patch(mine._id, values);
+      // An Account re-subscribing already has a row: the rule said this
+      // subscription takes its place.
+      if (existing) await ctx.db.patch(existing._id, values);
       else await ctx.db.insert("subscriptions", { ...values, id: crypto.randomUUID(), createdAt: now });
     }
     return "applied" as const;

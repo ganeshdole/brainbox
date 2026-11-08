@@ -37,6 +37,23 @@ export function installResult(search: URLSearchParams): "connected" | "error" | 
   return v === "connected" || v === "error" ? v : null;
 }
 
+/**
+ * The GitHub account the destination form is on: the one picked, while it is
+ * still connected. Once it is disconnected (or was never set), the account the
+ * saved destination uses, else the first one - never an id that is gone, which
+ * the form would go on saving against.
+ */
+export function pickConnectionId(
+  chosen: string,
+  connections: readonly { id: string }[],
+  savedConnectionId: string | undefined,
+): string {
+  const has = (id: string | undefined) => id !== undefined && connections.some((c) => c.id === id);
+  if (has(chosen)) return chosen;
+  if (has(savedConnectionId) && savedConnectionId !== undefined) return savedConnectionId;
+  return connections[0]?.id ?? "";
+}
+
 /** "bug, feedback ,," → ["bug", "feedback"], de-duplicated. */
 export function parseLabels(input: string): string[] {
   return [...new Set(input.split(",").map((l) => l.trim()).filter(Boolean))];

@@ -14,7 +14,13 @@ import type {
   DestinationInputs,
 } from "@ganeshdole/brainbox-shared";
 
-import { connectionContext, openCredentials, sealCredentials, type SealedCredentials } from "../store/credentials.ts";
+import {
+  connectionContext,
+  openCredentials,
+  sealCredentials,
+  UnreadableCredentialsError,
+  type SealedCredentials,
+} from "../store/credentials.ts";
 import type { ConnectionRecord } from "../store/types.ts";
 
 // The backend's side of Azure DevOps: a connection's token, sealed at rest,
@@ -80,9 +86,10 @@ export function sealToken(
   return sealCredentials(token, { key: settings.encryptionKey, context: connectionContext(conn) });
 }
 
-/** How to call Azure DevOps as this connection. Throws when it has no readable token. */
+/** How to call Azure DevOps as this connection. Throws
+ *  `UnreadableCredentialsError` when it has no readable token. */
 export async function authFor(settings: AzureDevopsSettings, conn: ConnectionRecord): Promise<AzureDevopsAuth> {
-  if (!conn.credentials) throw new Error("the connection has no token");
+  if (!conn.credentials) throw new UnreadableCredentialsError("the connection has no token");
   const pat = await openCredentials(conn.credentials, {
     key: settings.encryptionKey,
     context: connectionContext(conn),
@@ -131,14 +138,21 @@ export type PreparedDestination =
 /**
  * What the dashboard picked, completed with what only Azure DevOps knows
  * (where each type's report goes, whether it has a Priority) and proved by a
- * dry-run create of each kind. `rejected`: the token no longer works.
+ * dry-run create of each kind. `rejected`: the token no longer works, or
+ * can't be read at all.
  */
 export async function prepareDestination(
   settings: AzureDevopsSettings,
   conn: ConnectionRecord,
   input: DestinationInputs["azure-devops"],
 ): Promise<PreparedDestination> {
-  const auth = await authFor(settings, conn);
+  let auth: AzureDevopsAuth;
+  try {
+    auth = await authFor(settings, conn);
+  } catch (err) {
+    if (!(err instanceof UnreadableCredentialsError)) throw err;
+    return { ok: false, rejected: true, status: 502, error: err.message };
+  }
   const organization = organizationOf(conn);
   let types: [AzureDevopsWorkItemTypeInfo, AzureDevopsWorkItemTypeInfo];
   try {

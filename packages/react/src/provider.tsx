@@ -20,7 +20,8 @@ interface OwnedProps {
   /** Where finished reports go. Keep it stable (module-level or `useMemo`):
    *  a new transport means a new instance. */
   transport: Transport;
-  /** Who is filing. Changing it calls `identify()` on the live instance. */
+  /** Who is filing. Changing it calls `identify()` on the live instance;
+   *  removing it (sign-out) clears the identity. */
   identity?: Identity;
   /** Your app's own details for every report (clinic, plan, ...). Changing it
    *  calls `setFields()` on the live instance. */
@@ -138,12 +139,13 @@ function OwnedProvider({
     };
   }, [transport]);
 
+  // The props own the instance's identity and fields: dropping one clears it,
+  // so a signed-out user's reports never carry the previous account's name
+  // or details.
   useEffect(() => {
-    if (brainbox && identity) brainbox.identify(identity);
+    brainbox?.identify(identity ?? null);
   }, [brainbox, identity]);
 
-  // The prop owns the instance's fields: dropping it clears them, so a
-  // signed-out user's reports never carry the previous account's details.
   useEffect(() => {
     brainbox?.setFields(fields ?? []);
   }, [brainbox, fields]);

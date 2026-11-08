@@ -4,7 +4,7 @@ import type { EmailSignInMode } from "@ganeshdole/brainbox-shared";
 import { ConsoleEmailer } from "./email/console.ts";
 import type { Emailer } from "./email/types.ts";
 import { createIntegrations, type Integrations, type IntegrationsOptions } from "./integrations/registry.ts";
-import type { DodoSettings } from "./lib/dodo.ts";
+import { billingConfigured, type DodoSettings } from "./lib/dodo.ts";
 import type { Storage } from "./storage/types.ts";
 import type { AuthStore, BillingStore, Store } from "./store/types.ts";
 import type { Transcriber } from "./transcription/index.ts";
@@ -25,7 +25,15 @@ export interface AppOptions {
   limits?: Partial<IngestLimits>;
   /** Reply-To on every email sent. */
   replyTo?: string;
+  /** How long to wait for one transcription before marking it failed and
+   *  delivering the ticket without it. Default `DEFAULT_TRANSCRIPTION_TIMEOUT_MS`. */
+  transcriptionTimeoutMs?: number;
 }
+
+/** Three minutes: far longer than a hosted Whisper takes for the longest
+ *  recording the widget sends, short enough that a hung call doesn't keep a
+ *  ticket from its tracker (or, on Azure, the `/ingest` response) for long. */
+export const DEFAULT_TRANSCRIPTION_TIMEOUT_MS = 3 * 60_000;
 
 /** Signing in to the dashboard (Auth.js). Needs a store with `auth`. */
 export interface AuthOptions {
@@ -46,7 +54,9 @@ export interface BillingOptions {
   webhookSecret?: string;
   /** Accounts let past the paywall without paying, lower-cased. */
   exemptEmails?: readonly string[];
-  /** Nobody is asked to pay; checkout and webhooks still work. */
+  /** Nobody is asked to pay; checkout and webhooks still work. Also the case,
+   *  whatever this says, while `dodo` has no API key or lacks a product id:
+   *  nobody could pay, so nobody is asked to. */
   disabled?: boolean;
 }
 
@@ -96,12 +106,14 @@ export interface ResolvedBilling {
   dodo: DodoSettings;
   webhookSecret: string;
   exemptEmails: readonly string[];
+  /** Nobody is asked to pay: switched off, or Dodo isn't configured. */
   disabled: boolean;
 }
 
 export interface ResolvedOptions extends AppOptions {
   marketingOrigins: readonly string[];
   limits: IngestLimits;
+  transcriptionTimeoutMs: number;
 }
 
 /** Fills in defaults and refuses combinations that cannot work. */
@@ -135,12 +147,20 @@ export function resolveDeps(deps: AppDeps): Deps {
   let billing: ResolvedBilling | null = null;
   if (deps.billing) {
     if (!store.billing) throw new Error("Billing (deps.billing) needs a store with the billing module");
+    const disabled = deps.billing.disabled ?? false;
+    // A paywall whose checkout can't take a payment would lock everyone out.
+    const sellable = billingConfigured(deps.billing.dodo);
+    if (!disabled && !sellable) {
+      console.warn(
+        "[billing] Dodo Payments is not configured (DODO_API_KEY and every DODO_PRODUCT_*): the paywall is off",
+      );
+    }
     billing = {
       store: store.billing,
       dodo: deps.billing.dodo,
       webhookSecret: deps.billing.webhookSecret ?? "",
       exemptEmails: deps.billing.exemptEmails ?? [],
-      disabled: deps.billing.disabled ?? false,
+      disabled: disabled || !sellable,
     };
   }
 
@@ -156,6 +176,7 @@ export function resolveDeps(deps: AppDeps): Deps {
       ...options,
       marketingOrigins: options.marketingOrigins ?? [],
       limits: { ...DEFAULT_INGEST_LIMITS, ...options.limits },
+      transcriptionTimeoutMs: options.transcriptionTimeoutMs ?? DEFAULT_TRANSCRIPTION_TIMEOUT_MS,
     },
   };
 }

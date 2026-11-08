@@ -44,14 +44,21 @@ export interface BrainboxOptions {
  *  created (unless `consoleErrors: false`) and hands out drafts; `destroy()`
  *  undoes all of it. */
 export interface Brainbox {
-  identify(identity: Identity): void;
+  /** Who files from now on. `null` (or `undefined`) forgets them, for a
+   *  sign-out, so later reports carry no identity. */
+  identify(identity: Identity | null | undefined): void;
   /** Replaces the details sent with every report from now on. */
   setFields(fields: ReportField[]): void;
+  /** A new report. Throws once the instance is destroyed: its drafts would
+   *  have no console-error log and nothing to cancel them. */
   draft(options?: DraftOptions): Draft;
   /** Start loading the capture libraries through this instance's loader, so
    *  the first capture isn't waiting on the network. A UI calls this when it
    *  opens. */
   preloadCapture(): void;
+  /** Cancel every draft and stop collecting console errors. Final: after it,
+   *  `draft()` throws, the other methods do nothing, and calling `destroy()`
+   *  again is harmless. */
   destroy(): void;
 }
 
@@ -71,15 +78,17 @@ export function createBrainbox({
   let details = fields;
   const errors = consoleErrors ? captureErrors() : null;
   const drafts = new Set<Draft>();
+  let destroyed = false;
 
   return {
     identify(next) {
-      who = next;
+      if (!destroyed) who = next ?? undefined;
     },
     setFields(next) {
-      details = next;
+      if (!destroyed) details = next;
     },
     draft(options) {
+      if (destroyed) throw new Error("This Brainbox was destroyed - create a new one");
       const draft = createDraft(
         {
           transport,
@@ -99,9 +108,11 @@ export function createBrainbox({
       return draft;
     },
     preloadCapture() {
-      preloadCapture(loader);
+      if (!destroyed) preloadCapture(loader);
     },
     destroy() {
+      if (destroyed) return;
+      destroyed = true;
       for (const draft of drafts) draft.cancel();
       drafts.clear();
       errors?.stop();

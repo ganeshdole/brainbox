@@ -5,14 +5,19 @@ import type { Deps } from "../deps.ts";
 import { publicFileUrl } from "../lib/public-files.ts";
 import { toTicket } from "../lib/serialize.ts";
 import { readStored } from "../storage/types.ts";
+import { UnreadableCredentialsError } from "../store/credentials.ts";
 import type { ConnectionRecord, DeliveryRecord, DestinationRecord } from "../store/types.ts";
 import { PROVIDER_NAME } from "./registry.ts";
 
 /**
  * Send one issue to its project's destinations and record each outcome. Never
- * throws. Sends nothing when the store has no integrations module. Idempotent per (issue, destination) unless `force` (retry / manual
+ * throws: a store that fails is logged, and the destinations it failed for are
+ * left out of the result. Sends nothing when the store has no integrations
+ * module. Idempotent per (issue, destination) unless `force` (retry / manual
  * send, which also reaches paused destinations); even then a destination the
- * issue was already sent to is skipped. `provider` limits it to that one.
+ * issue was already sent to, or is being sent to right now, is skipped
+ * (`claimDelivery`). `provider` limits it to that one. Returns the deliveries
+ * this call attempted.
  */
 export async function deliverIssue(
   deps: Deps,
@@ -22,39 +27,59 @@ export async function deliverIssue(
   const { store, storage, options } = deps;
   const { integrations } = store;
   if (!integrations) return [];
-  const issue = await store.issues.get(issueId);
-  if (!issue) return [];
-
   const force = opts.force ?? false;
-  const targets = await integrations.deliveryTargets(issue.projectId, { includePaused: force });
-  if (targets.length === 0) return [];
 
-  const ticket = toTicket(issue, {
-    dashboardOrigin: options.dashboardOrigin,
-    fileUrl: (key) => publicFileUrl(options, key),
-    loadFile: (key) => readStored(storage, key),
-  });
+  let targets: Array<{ destination: DestinationRecord; connection: ConnectionRecord }>;
+  let ticket: Ticket;
+  try {
+    const issue = await store.issues.get(issueId);
+    if (!issue) return [];
+    targets = await integrations.deliveryTargets(issue.projectId, { includePaused: force });
+    if (targets.length === 0) return [];
+    ticket = toTicket(issue, {
+      dashboardOrigin: options.dashboardOrigin,
+      fileUrl: (key) => publicFileUrl(options, key),
+      loadFile: (key) => readStored(storage, key),
+    });
+  } catch (err) {
+    console.error(`[integrations] could not look up where to deliver issue ${issueId}:`, err);
+    return [];
+  }
   const out: DeliveryRecord[] = [];
 
   for (const { destination: dest, connection: conn } of targets) {
     if (opts.provider && dest.provider !== opts.provider) continue;
-    const row = await integrations.claimDelivery({
-      issueId,
-      destinationId: dest.id,
-      provider: dest.provider,
-      retry: force,
-    });
-    if (!row) continue;
+    try {
+      const row = await integrations.claimDelivery({
+        issueId,
+        destinationId: dest.id,
+        provider: dest.provider,
+        retry: force,
+        now: new Date(),
+      });
+      if (!row) continue;
 
-    const result = await sendTicket(deps, dest, conn, ticket);
-    if (!result.ok) {
-      console.error(`[integrations] ${dest.provider} delivery failed for issue ${issueId}: ${result.error}`);
+      const result = await sendTicket(deps, dest, conn, ticket);
+      if (!result.ok) {
+        console.error(`[integrations] ${dest.provider} delivery failed for issue ${issueId}: ${result.error}`);
+      }
+      const updated = await integrations.finishDelivery(
+        row,
+        result.ok ? { ok: true, externalId: result.externalId, url: result.url } : { ok: false, error: result.error },
+      );
+      if (updated) out.push(updated);
+      else {
+        // Only after the lease ran out and another attempt claimed it.
+        console.warn(
+          `[integrations] ${dest.provider} delivery of issue ${issueId} was claimed again before it finished; ` +
+            `its outcome (${result.ok ? `sent as ${result.url}` : result.error}) was not recorded`,
+        );
+      }
+    } catch (err) {
+      // A claimed delivery stays pending until its lease runs out, then a
+      // retry can claim it (store/delivery-rules.ts).
+      console.error(`[integrations] could not record the ${dest.provider} delivery of issue ${issueId}:`, err);
     }
-    const updated = await integrations.finishDelivery(
-      row.id,
-      result.ok ? { ok: true, externalId: result.externalId, url: result.url } : { ok: false, error: result.error },
-    );
-    if (updated) out.push(updated);
   }
   return out;
 }
@@ -62,8 +87,10 @@ export async function deliverIssue(
 /**
  * One ticket to one destination. Never throws. A connection whose credentials
  * were rejected isn't called until someone connects it again; a rejection now
- * (a revoked or expired token) marks it so. GitHub App installs mint their own
- * tokens, so a 401 there is ours to fix, not the Customer's.
+ * (a revoked or expired token, or one that can no longer be opened) marks it
+ * so, unless the connection has been given new credentials since. GitHub App
+ * installs mint their own tokens, so a 401 there is ours to fix, not the
+ * Customer's.
  */
 export async function sendTicket(
   deps: Deps,
@@ -76,16 +103,25 @@ export async function sendTicket(
   if (conn.status === "needs_reauth") return { ok: false, status: 401, error: reconnect };
 
   let result: DeliveryResult;
+  let unreadable = false;
   try {
     result = await (await deps.integrations.destinationFor(dest, conn)).deliver(ticket);
   } catch (err) {
+    unreadable = err instanceof UnreadableCredentialsError;
     result = { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
-  if (!result.ok && result.status === 401 && conn.auth !== "app") {
-    await deps.store.integrations?.setConnectionStatus(conn.id, "needs_reauth");
-    return { ok: false, status: 401, error: reconnect };
+  const rejected = unreadable || (!result.ok && result.status === 401 && conn.auth !== "app");
+  if (!rejected) return result;
+  try {
+    await deps.store.integrations?.setConnectionStatus(conn.id, "needs_reauth", { credentials: conn.credentials });
+  } catch (err) {
+    console.error(`[integrations] could not mark connection ${conn.id} as needing a new token:`, err);
   }
-  return result;
+  return {
+    ok: false,
+    status: 401,
+    error: unreadable ? `Brainbox can't read the stored ${name} token. Connect ${name} again in Settings.` : reconnect,
+  };
 }
 
 /** What "Send a test report" sends: a made-up report, so the Customer sees

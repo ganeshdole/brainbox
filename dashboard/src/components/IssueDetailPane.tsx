@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Check, ExternalLink, Inbox, Lightbulb, RotateCcw, ZoomIn } from "lucide-react";
 import type { Issue, IssueEvent, IssueTriagePatch } from "@ganeshdole/brainbox-shared";
@@ -6,7 +6,8 @@ import { SessionReplay } from "@ganeshdole/brainbox-replay";
 
 import { api, isAuthRedirect } from "../lib/api";
 import { importanceLabel, issueTitle, pageLabel } from "../lib/issue";
-import { applyTriage, closeReasonLabel, describeEvent } from "../lib/triage";
+import { requestGate } from "../lib/latest";
+import { applyTriage, closeReasonLabel, describeEvent, revertTriage } from "../lib/triage";
 import { timeAgo } from "../lib/utils";
 import { useModules } from "../lib/modules";
 import { CopyButton } from "./CopyButton";
@@ -143,41 +144,67 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
   const [zoomUrl, setZoomUrl] = useState<string | null>(null);
   const [events, setEvents] = useState<IssueEvent[]>([]);
   const [triage, setTriage] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
+  // Orders the answers that write `issue` and `events`: a poll that left before
+  // a local change must not land after it and put the old values back.
+  const [issueGate] = useState(requestGate);
+  const [activityGate] = useState(requestGate);
+  const triageInFlight = useRef(false);
 
   const { has } = useModules();
   const triageOn = has("triage");
 
   const loadActivity = useCallback(() => {
     if (!triageOn) return;
+    const ticket = activityGate.next();
     api
       .getIssueActivity(issueId)
-      .then(setEvents)
+      .then((next) => {
+        if (activityGate.isCurrent(ticket)) setEvents(next);
+      })
       .catch(() => {
         /* the log is secondary; the issue itself still renders */
       });
-  }, [issueId, triageOn]);
+  }, [issueId, triageOn, activityGate]);
 
-  useEffect(loadActivity, [loadActivity]);
+  useEffect(() => {
+    loadActivity();
+    return () => activityGate.invalidate();
+  }, [loadActivity, activityGate]);
+
+  /** A change made here, applied to the issue as it is now - not as it was
+   *  when the action started - and outranking any poll already out. */
+  const updateIssue = useCallback(
+    (change: (prev: Issue) => Issue) => {
+      issueGate.invalidate();
+      setIssue((prev) => (prev ? change(prev) : prev));
+    },
+    [issueGate],
+  );
 
   // Shows the change at once and puts it back if the server refuses it.
   const changeTriage = useCallback(
     async (patch: IssueTriagePatch) => {
       if (!issue || triage.busy) return;
-      const before = issue;
-      setIssue(applyTriage(issue, patch));
+      const before = { status: issue.status, priority: issue.priority, closeReason: issue.closeReason };
+      triageInFlight.current = true;
+      updateIssue((prev) => applyTriage(prev, patch));
       setTriage({ busy: true, error: null });
       try {
         const saved = await api.triageIssue(issueId, patch);
         // PATCH answers without deliveries; keep the ones on screen
-        setIssue((prev) => ({ ...saved, deliveries: prev?.deliveries }));
+        updateIssue((prev) => ({ ...saved, deliveries: prev.deliveries }));
         setTriage({ busy: false, error: null });
         loadActivity();
       } catch (e) {
-        setIssue(before);
+        // only the fields this patch touched; anything else that changed
+        // while it was out stays
+        updateIssue((prev) => revertTriage(prev, before, patch));
         setTriage({ busy: false, error: isAuthRedirect(e) ? null : (e as Error).message });
+      } finally {
+        triageInFlight.current = false;
       }
     },
-    [issue, issueId, triage.busy, loadActivity],
+    [issue, issueId, triage.busy, loadActivity, updateIssue],
   );
 
   useEffect(() => {
@@ -200,7 +227,7 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
         if (!cancelled) setIssue(next);
       })
       .catch((e: Error) => {
-        if (!cancelled) setError(e.message);
+        if (!cancelled && !isAuthRedirect(e)) setError(e.message);
       });
     return () => {
       cancelled = true;
@@ -215,16 +242,26 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
       issue?.video?.transcriptStatus === "pending" ||
       issue?.deliveries?.some((d) => d.status === "pending");
     if (!pending) return;
+    let cancelled = false;
     const t = setTimeout(() => {
+      const ticket = issueGate.next();
       api
         .getIssue(issueId)
-        .then(setIssue)
+        .then((next) => {
+          // a triage still out would be undone by a read taken before it
+          // landed; its answer re-arms this poll
+          if (cancelled || triageInFlight.current || !issueGate.isCurrent(ticket)) return;
+          setIssue(next);
+        })
         .catch(() => {
           /* keep showing the stale issue; the next poll retries */
         });
     }, 3000);
-    return () => clearTimeout(t);
-  }, [issue, issueId]);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [issue, issueId, issueGate]);
 
   // a feature request is reached from, and goes back to, Features
   const fromFeatures = issue?.kind === "feature";
@@ -302,7 +339,7 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
           <IssueFeature
             issue={issue}
             projectId={projectId}
-            onChange={(next) => setIssue({ ...issue, featureId: next.featureId })}
+            onChange={(next) => updateIssue((prev) => ({ ...prev, featureId: next.featureId }))}
           />
         )}
         {has("integrations") && (
@@ -310,7 +347,7 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
             issueId={issue.id}
             projectId={projectId}
             deliveries={issue.deliveries ?? []}
-            onChange={(deliveries) => setIssue({ ...issue, deliveries })}
+            onChange={(deliveries) => updateIssue((prev) => ({ ...prev, deliveries }))}
           />
         )}
       </header>

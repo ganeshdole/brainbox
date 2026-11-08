@@ -57,3 +57,11 @@ export function titleFromRequest(issue: Pick<Issue, "text" | "audio" | "video">)
   if (!said) return "Untitled feature";
   return said.length <= TITLE_MAX ? said : `${said.slice(0, TITLE_MAX - 1).trimEnd()}…`;
 }
+
+/** A text field's draft after the saved value moves from `before` to `after`
+ *  (a reload after any change on the page): it follows the saved value only
+ *  while it hasn't been edited. A status change must not wipe a half-written
+ *  description. */
+export function syncDraft(draft: string, before: string, after: string): string {
+  return draft === before ? after : draft;
+}

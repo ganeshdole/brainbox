@@ -19,14 +19,18 @@ vi.mock("./capture.ts", async (importOriginal) => ({
 
 const recorder = vi.hoisted(() => ({
   start: vi.fn<(options: SessionRecordingOptions) => void>(),
-  stop: vi.fn<() => Promise<{ session: Blob; audio: Blob | null }>>(),
+  /** `events` defaults to a few: a log the recorder actually wrote to. */
+  stop: vi.fn<() => Promise<{ session: Blob; audio: Blob | null; events?: number }>>(),
+  /** What each recording's `ready` is; resolved unless a test says otherwise. */
+  ready: { current: Promise.resolve() as Promise<void> },
 }));
 vi.mock("./session.ts", () => ({
   canSessionRecord: () => true,
   startSessionRecording: (options: SessionRecordingOptions) => {
     recorder.start(options);
     return {
-      stop: recorder.stop,
+      ready: recorder.ready.current,
+      stop: () => recorder.stop().then((c) => ({ events: 3, ...c })),
       micActive: () => true,
       setMicMuted: () => {},
     };
@@ -75,6 +79,7 @@ beforeEach(() => {
   capture.bakeMarks.mockReset();
   recorder.start.mockReset();
   recorder.stop.mockReset();
+  recorder.ready.current = Promise.resolve();
   bb = createBrainbox({ transport });
 });
 
@@ -153,6 +158,68 @@ describe("Draft screenshots", () => {
     await draft.submit({ text: "still worth filing" });
     expect(sent[0]?.screenshot).toBeUndefined();
     expect(sent[0]?.text).toBe("still worth filing");
+  });
+
+  it("keeps the newest shot when an older, slower capture lands after it", async () => {
+    const slow = deferred<Blob>();
+    const fast = deferred<Blob>();
+    capture.captureViewport.mockReturnValueOnce(slow.promise).mockReturnValueOnce(fast.promise);
+    const draft = bb.draft();
+    const newest = blob("newest");
+
+    draft.captureScreenshot();
+    draft.captureScreenshot();
+    fast.resolve(newest);
+    await flush();
+    slow.resolve(blob("stale"));
+    await flush();
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+
+    await draft.submit({});
+    expect(sent[0]?.screenshot).toBe(newest);
+  });
+
+  it("does not flag a failure for an older capture beside a newer shot", async () => {
+    const slow = deferred<Blob>();
+    capture.captureViewport
+      .mockReturnValueOnce(slow.promise)
+      .mockResolvedValueOnce(blob("good"));
+    const draft = bb.draft();
+
+    draft.captureScreenshot();
+    draft.captureScreenshot();
+    await flush();
+    slow.reject(new Error("timeout"));
+    await flush();
+    expect(draft.getState()).toMatchObject({ screenshotFailed: false, screenshotPending: false });
+    expect(draft.getState().screenshotUrl).not.toBeNull();
+  });
+
+  it("bakes a second markup onto the plain shot, not onto the first bake", async () => {
+    const plain = blob("plain");
+    capture.captureViewport.mockResolvedValue(plain);
+    capture.bakeMarks.mockImplementation(async () => blob("baked"));
+    const draft = bb.draft();
+    const arrow: Mark = { ...box, id: "c", x: 300 };
+
+    draft.captureScreenshot();
+    draft.markUp([box]);
+    await flush();
+    draft.markUp([box, arrow]);
+    await draft.submit({});
+
+    expect(capture.bakeMarks).toHaveBeenCalledTimes(2);
+    expect(capture.bakeMarks.mock.calls[1]?.[0]).toBe(plain);
+    expect(capture.bakeMarks.mock.calls[1]?.[1]).toEqual([box, arrow]);
+  });
+
+  it("flags a capture that fails under a bake still waiting on it", async () => {
+    capture.captureViewport.mockRejectedValue(new Error("timeout"));
+    const draft = bb.draft();
+    draft.captureScreenshot();
+    draft.markUp([box]);
+    await flush();
+    expect(draft.getState()).toMatchObject({ screenshotFailed: true, screenshotPending: false });
   });
 
   it("drops a shot that lands after cancel", async () => {
@@ -246,6 +313,68 @@ describe("Draft recordings", () => {
     expect(draft.getState().hasSession).toBe(false);
   });
 
+  it("stops once however often stop() is called", async () => {
+    recorder.stop.mockResolvedValue({ session: blob("events"), audio: null });
+    capture.captureViewport.mockResolvedValue(blob("thumb"));
+    const draft = bb.draft();
+    const rec = draft.startRecording();
+    const first = rec.stop();
+    expect(rec.stop()).toBe(first);
+    await first;
+    expect(recorder.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a second recording while the first runs, so nothing leaks", async () => {
+    recorder.stop.mockResolvedValue({ session: blob("events"), audio: null });
+    capture.captureViewport.mockResolvedValue(blob("thumb"));
+    const draft = bb.draft();
+    const rec = draft.startRecording();
+    expect(() => draft.startRecording()).toThrow("already running");
+    expect(recorder.start).toHaveBeenCalledTimes(1);
+
+    await rec.stop();
+    // stopped: the next one may start
+    expect(() => draft.startRecording()).not.toThrow();
+  });
+
+  it("attaches no session when Stop beat the recorder to its first event", async () => {
+    recorder.stop.mockResolvedValue({ session: blob("{v:1,events:[]}"), audio: null, events: 0 });
+    capture.captureViewport.mockRejectedValue(new Error("no frame"));
+    const draft = bb.draft();
+    await draft.startRecording().stop();
+
+    expect(draft.getState().hasSession).toBe(false);
+    await expect(draft.submit({})).rejects.toThrow("Nothing to send");
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("tracks the thumbnail like any screenshot, so a submit waits for it", async () => {
+    recorder.stop.mockResolvedValue({ session: blob("events"), audio: null });
+    const thumb = deferred<Blob>();
+    capture.captureViewport.mockReturnValue(thumb.promise);
+    capture.bakeMarks.mockImplementation(async (shot) => shot);
+    const draft = bb.draft();
+    const stopped = draft.startRecording().stop();
+    await flush();
+    expect(draft.getState()).toMatchObject({ hasSession: true, screenshotPending: true });
+
+    const submitted = draft.submit({});
+    const frame = blob("frame");
+    thumb.resolve(frame);
+    await Promise.all([stopped, submitted]);
+    expect(sent[0]?.screenshot).toBe(frame);
+    expect(draft.getState().screenshotPending).toBe(false);
+  });
+
+  it("passes on a recorder that could not load, as soon as it fails", async () => {
+    const failed = Promise.reject(new Error("Couldn't load widget-capture.js"));
+    failed.catch(() => {});
+    recorder.ready.current = failed;
+    recorder.stop.mockRejectedValue(new Error("Couldn't load widget-capture.js"));
+    const draft = bb.draft();
+    await expect(draft.startRecording().ready).rejects.toThrow("widget-capture.js");
+  });
+
   it("cancel stops an in-flight recording and removes its marks", async () => {
     recorder.stop.mockResolvedValue({ session: blob("events"), audio: null });
     const draft = bb.draft();
@@ -326,6 +455,82 @@ describe("Draft submit", () => {
     expect(sent[0]).not.toHaveProperty("importance");
   });
 
+  it("sends once when submit is called twice", async () => {
+    const draft = bb.draft();
+    const first = draft.submit({ text: "x" });
+    await expect(draft.submit({ text: "x" })).rejects.toThrow("already being sent");
+    await first;
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("will not send the same report again until it is cancelled", async () => {
+    const draft = bb.draft();
+    await draft.submit({ text: "x" });
+    await expect(draft.submit({ text: "x" })).rejects.toThrow("already sent");
+    expect(send).toHaveBeenCalledTimes(1);
+
+    draft.cancel();
+    await draft.submit({ text: "the next one" });
+    expect(sent[1]?.text).toBe("the next one");
+  });
+
+  it("can be tried again after the transport fails", async () => {
+    send.mockRejectedValueOnce(new Error("offline"));
+    const draft = bb.draft();
+    await expect(draft.submit({ text: "x" })).rejects.toThrow("offline");
+    await draft.submit({ text: "x" });
+    expect(sent).toHaveLength(1);
+  });
+
+  it("sends nothing, and fires no onSubmitted, when cancelled while waiting on the screenshot", async () => {
+    const onSubmitted = vi.fn();
+    const withHook = createBrainbox({ transport, onSubmitted });
+    const shot = deferred<Blob>();
+    capture.captureViewport.mockReturnValue(shot.promise);
+    const draft = withHook.draft();
+    draft.captureScreenshot();
+
+    const submitted = draft.submit({ text: "x" });
+    draft.cancel();
+    shot.resolve(blob("late"));
+    await expect(submitted).rejects.toThrow("cancelled");
+    expect(send).not.toHaveBeenCalled();
+    expect(onSubmitted).not.toHaveBeenCalled();
+    withHook.destroy();
+  });
+
+  it("sends nothing when the instance is destroyed while beforeSend runs", async () => {
+    const gate = deferred<void>();
+    const slow = createBrainbox({
+      transport,
+      beforeSend: async (report) => {
+        await gate.promise;
+        return report;
+      },
+    });
+    const submitted = slow.draft().submit({ text: "x" });
+    await flush();
+    slow.destroy();
+    gate.resolve();
+    await expect(submitted).rejects.toThrow("cancelled");
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("refuses to send while a recording is still running", async () => {
+    recorder.stop.mockResolvedValue({ session: blob("events"), audio: null });
+    capture.captureViewport.mockResolvedValue(blob("thumb"));
+    const draft = bb.draft();
+    const rec = draft.startRecording();
+    await expect(draft.submit({ text: "x" })).rejects.toThrow("Stop the recording");
+
+    // nor while it is still stopping
+    const stopped = rec.stop();
+    await expect(draft.submit({ text: "x" })).rejects.toThrow("Stop the recording");
+    await stopped;
+    await draft.submit({ text: "x" });
+    expect(sent[0]?.session).toBeDefined();
+  });
+
   it("reports a successful submit to the instance", async () => {
     const onSubmitted = vi.fn();
     const withHook = createBrainbox({ transport, onSubmitted });
@@ -394,6 +599,42 @@ describe("Brainbox destroy", () => {
     shot.resolve(blob("late"));
     await flush();
     expect(draft.getState().screenshotUrl).toBeNull();
+  });
+});
+
+describe("Brainbox after destroy", () => {
+  it("hands out no more drafts, and ignores the rest", () => {
+    const loader: CaptureLoader = {
+      recorder: vi.fn(() => new Promise<never>(() => {})),
+      rasteriser: vi.fn(() => new Promise<never>(() => {})),
+    };
+    const gone = createBrainbox({ transport, loader });
+    gone.destroy();
+    expect(() => gone.draft()).toThrow("destroyed");
+    gone.preloadCapture();
+    expect(loader.recorder).not.toHaveBeenCalled();
+    expect(() => {
+      gone.identify({ id: "u1" });
+      gone.setFields([]);
+      gone.destroy();
+    }).not.toThrow();
+  });
+
+  it("restores console.error once however often it is destroyed", () => {
+    const other = createBrainbox({ transport });
+    other.destroy();
+    other.destroy();
+    // bb's own hook is still installed: the second destroy released nothing
+    expect(console.error).not.toBe(originalConsoleError);
+  });
+});
+
+describe("Brainbox identity", () => {
+  it("forgets the user when identified with null", async () => {
+    bb.identify({ id: "u1" });
+    bb.identify(null);
+    await bb.draft().submit({ text: "x" });
+    expect(sent[0]?.metadata.identity).toBeUndefined();
   });
 });
 

@@ -25,6 +25,9 @@ export function IssueDeliveries({
   const [providers, setProviders] = useState<IntegrationProvider[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Without the destinations there is no Send button; say why rather than
+  // leaving the row silently empty.
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,7 +36,9 @@ export function IssueDeliveries({
       .then((list) => {
         if (!cancelled) setProviders(list.map((d) => d.provider));
       })
-      .catch(() => {});
+      .catch((e: Error) => {
+        if (!cancelled && !isAuthRedirect(e)) setLoadError(`Could not load destinations: ${e.message}`);
+      });
     return () => {
       cancelled = true;
     };
@@ -51,7 +56,7 @@ export function IssueDeliveries({
     }
   }
 
-  if (deliveries.length === 0 && providers.length === 0) return null;
+  if (deliveries.length === 0 && providers.length === 0 && !loadError) return null;
 
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
@@ -80,7 +85,7 @@ export function IssueDeliveries({
           </span>
         );
       })}
-      {deliveries.length === 0 && (
+      {deliveries.length === 0 && providers.length > 0 && (
         <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void send()}>
           {providers.map((p) => (
             <ProviderMark key={p} provider={p} className="size-3.5" />
@@ -89,6 +94,7 @@ export function IssueDeliveries({
         </Button>
       )}
       {error && <span className="text-error">{error}</span>}
+      {loadError && <span className="text-error">{loadError}</span>}
     </div>
   );
 }

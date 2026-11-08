@@ -70,8 +70,10 @@ export interface TeamInviteRecord {
 }
 
 /** How a change to a membership went. A Team always keeps an Owner, so the
- *  change that would leave it with none is refused as `last_owner`. */
-export type MembershipChange = "done" | "not_found" | "last_owner";
+ *  change that would leave it with none is refused as `last_owner`. A change
+ *  made by an `actorId` whose role, at that moment, doesn't allow it
+ *  (`mayManage` in `store/team-rules.ts`) is refused as `forbidden`. */
+export type MembershipChange = "done" | "not_found" | "last_owner" | "forbidden";
 
 export type InviteAcceptance =
   | { status: "accepted"; teamId: string }
@@ -234,6 +236,9 @@ export interface WaitlistSignupRecord {
   createdAt: Date;
 }
 
+/** Which attempt at a delivery is finishing: the row `claimDelivery` returned. */
+export type DeliveryClaim = Pick<DeliveryRecord, "id" | "attempts">;
+
 /** What a destination reported back, recorded by `integrations.finishDelivery`. */
 export type DeliveryOutcome =
   | { ok: true; externalId: string; url: string }
@@ -253,10 +258,17 @@ export interface SubscriptionEvent {
 export interface SubscriptionChange {
   dodoSubscriptionId: string;
   status: SubscriptionStatus;
+  /** Null when the event carries no billing date; the stored one is kept. */
   currentPeriodEnd: Date | null;
   sentAt: Date;
+  /** The product the event says the subscription is on, when it is one this
+   *  deployment sells: applied to an existing row, so a plan change lands.
+   *  Absent, the row keeps its plan. */
+  product?: Pick<NewSubscription, "dodoProductId" | "plan" | "period"> | null;
   /** Used only when no row has this `dodoSubscriptionId` yet: the checkout we
-   *  started. `error` explains why such an event cannot be applied. */
+   *  started. `error` explains why such an event cannot be applied. It also
+   *  names the Account whose row the event is then checked against
+   *  (`planSubscriptionWrite`). */
   create: NewSubscription | { error: string };
 }
 
@@ -338,8 +350,11 @@ export interface TeamStore {
   membership(teamId: string, userId: string): Promise<TeamMemberRecord | null>;
   /** Oldest first. */
   members(teamId: string): Promise<TeamMemberProfile[]>;
-  setRole(teamId: string, userId: string, role: TeamRole): Promise<MembershipChange>;
-  removeMember(teamId: string, userId: string): Promise<MembershipChange>;
+  /** With `actorId`, made by that member: their role and the target's are
+   *  checked with `mayManage` in the same atomic step as the change. */
+  setRole(teamId: string, userId: string, role: TeamRole, actorId?: string): Promise<MembershipChange>;
+  /** With `actorId`, checked as `setRole` is. Someone leaving passes none. */
+  removeMember(teamId: string, userId: string, actorId?: string): Promise<MembershipChange>;
 
   /** Insert, or replace the invite already open for (team, email), which
    *  gets a new id: the old link stops working. */
@@ -389,7 +404,8 @@ export interface FeatureStore {
    *  one step: two features found to be the same thing become one. */
   merge(fromId: string, intoId: string): Promise<void>;
   /** Attach a feature request to a Feature, or with null send it back to
-   *  waiting. The caller checks both belong to the same project. */
+   *  waiting. The caller checks both belong to the same project. Throws when
+   *  the Feature doesn't exist (deleted since the caller looked). */
   attach(issueId: string, featureId: string | null): Promise<void>;
 }
 
@@ -403,7 +419,17 @@ export interface IntegrationStore {
    *  provider, externalId). Either way it ends up `active`: saving is how
    *  a connection is connected again. */
   saveConnection(input: Omit<ConnectionRecord, "id" | "createdAt" | "status">): Promise<ConnectionRecord>;
-  setConnectionStatus(id: string, status: ConnectionStatus): Promise<void>;
+  /**
+   * With `expected`, only while the connection still holds those
+   * credentials, compared in the same atomic step: a 401 for a token that
+   * someone has since replaced (by connecting again) leaves the new one
+   * alone. True when the connection was there to change.
+   */
+  setConnectionStatus(
+    id: string,
+    status: ConnectionStatus,
+    expected?: { credentials: SealedCredentials | null },
+  ): Promise<boolean>;
   /** Also removes its destinations; their deliveries keep their links. */
   deleteConnection(id: string): Promise<void>;
 
@@ -419,19 +445,30 @@ export interface IntegrationStore {
 
   listDeliveries(issueId: string): Promise<DeliveryRecord[]>;
   /**
-   * Start one delivery as `pending`. Returns null when this (issue,
-   * destination) already has one, which is the idempotency guard; with
-   * `retry` the existing row is reset to pending instead, unless it was
-   * sent: a retry never files the same report twice.
+   * Start one attempt at a delivery: `pending`, counted in `attempts`, and
+   * stamped `now`. Returns null when this (issue, destination) already has
+   * one, which is the idempotency guard. With `retry` the existing row is
+   * claimed again instead when `mayReclaimDelivery` allows it: a failed one,
+   * or a pending one whose attempt has outlived `DELIVERY_LEASE_MS`
+   * (`store/delivery-rules.ts`). Never one that was sent, so a retry never
+   * files the same report twice, and never one still in flight, so two
+   * retries at once send once. All in one atomic step.
    */
   claimDelivery(input: {
     issueId: string;
     destinationId: string;
     provider: IntegrationProvider;
     retry: boolean;
+    now: Date;
   }): Promise<DeliveryRecord | null>;
-  /** Record the outcome and count the attempt. A failure keeps any earlier link. */
-  finishDelivery(id: string, outcome: DeliveryOutcome): Promise<DeliveryRecord | null>;
+  /**
+   * Record the outcome of the attempt `claim` (what `claimDelivery` returned)
+   * started. Only while that attempt is still the delivery's own: pending,
+   * with the same `attempts`. Otherwise (another attempt has claimed it since,
+   * or it is no longer pending) nothing changes and it returns null, so a slow
+   * attempt cannot overwrite a newer outcome. A failure keeps any earlier link.
+   */
+  finishDelivery(claim: DeliveryClaim, outcome: DeliveryOutcome): Promise<DeliveryRecord | null>;
 
   /** Records the GitHub App webhook's id and applies it atomically: a
    *  failure leaves no record, so the sender's retry is processed rather

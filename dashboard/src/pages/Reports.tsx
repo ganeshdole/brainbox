@@ -16,6 +16,7 @@ import { Skeleton } from "../components/ui/skeleton";
 import { api, isAuthRedirect } from "../lib/api";
 import { cleanIdentity } from "../lib/reporter";
 import {
+  activeFilter,
   isBugReport,
   issueTitle,
   newestFirst,
@@ -158,6 +159,7 @@ function ReportList({
   projectNames,
   selected,
   onToggle,
+  locked = false,
 }: {
   issues: Issue[];
   /** Present in the all-projects view: id → name for the row meta line. */
@@ -165,6 +167,8 @@ function ReportList({
   selected: ReadonlySet<string>;
   /** Absent when the backend has no triage: nothing to select rows for. */
   onToggle?: (id: string) => void;
+  /** A bulk change is out: the ticks it applies to stay as they are. */
+  locked?: boolean;
 }) {
   return (
     <ul className="overflow-hidden rounded-xl border border-default bg-elevated">
@@ -182,6 +186,7 @@ function ReportList({
               <input
                 type="checkbox"
                 checked={selected.has(issue.id)}
+                disabled={locked}
                 onChange={() => onToggle(issue.id)}
                 aria-label={`Select "${issueTitle(issue)}"`}
                 className={cn(
@@ -225,7 +230,8 @@ function BulkBar({
       <button
         type="button"
         onClick={onClear}
-        className="ml-auto rounded-md px-2 py-1 text-xs text-muted transition hover:bg-interactive-hover hover:text-emphasis"
+        disabled={busy}
+        className="ml-auto disabled:opacity-50 rounded-md px-2 py-1 text-xs text-muted transition hover:bg-interactive-hover hover:text-emphasis"
       >
         Clear
       </button>
@@ -240,13 +246,16 @@ export function Reports() {
   const triageOn = has("triage");
   // Feature requests are tracked under Features, when there is one.
   const featuresOn = has("features");
-  const [filter, setFilter] = useState<ReportFilterKey>("all");
+  const [pickedFilter, setFilter] = useState<ReportFilterKey>("all");
   // Both keyed by scope, so another project starts on its default tab with
   // nothing ticked. No tab picked yet means it follows the data (defaultTab).
   const [picked, setPicked] = useState<{ scope: string; tab: TriageTabKey } | null>(null);
   const [ticks, setTicks] = useState<{ scope: string; ids: ReadonlySet<string> } | null>(null);
   const [sort, setSort] = useState<"newest" | "priority">("newest");
-  const [bulk, setBulk] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
+  // keyed by scope too: another project doesn't inherit this one's error
+  const [bulkState, setBulk] = useState<{ scope: string; busy: boolean; error: string | null } | null>(
+    null,
+  );
   const [query, setQuery] = useState("");
   // all-projects view: ids unticked in the Projects dropdown
   const [hiddenProjects, setHiddenProjects] = useState<ReadonlySet<string>>(new Set());
@@ -282,6 +291,8 @@ export function Reports() {
 
   const current = result?.scope === scope ? result : null;
   const issues = current?.issues ?? null;
+  const filter = activeFilter(pickedFilter, issues);
+  const bulk = bulkState?.scope === scope ? bulkState : { busy: false, error: null };
   const error = current?.error ?? null;
   const projectNames = project ? undefined : new Map(projects.map((p) => [p.id, p.name]));
 
@@ -339,7 +350,11 @@ export function Reports() {
   const active = REPORT_FILTERS.find((f) => f.key === filter) ?? REPORT_FILTERS[0];
   const activeTab = !triageOn ? "all" : picked?.scope === scope ? picked.tab : defaultTab(scoped ?? []);
   const selected: ReadonlySet<string> = ticks?.scope === scope ? ticks.ids : new Set();
-  const setSelected = (ids: ReadonlySet<string>) => setTicks({ scope, ids });
+  const setSelected = (ids: ReadonlySet<string>) => {
+    setTicks({ scope, ids });
+    // the error was about the last change to a selection that is now another
+    setBulk((prev) => (prev?.busy ? prev : null));
+  };
   const tabDef = TRIAGE_TABS.find((t) => t.key === activeTab) ?? TRIAGE_TABS[0];
   const filtered = scoped
     ? visibleReports(scoped.filter(tabDef.match), { filter, query })
@@ -353,6 +368,7 @@ export function Reports() {
   const ticked = visible?.filter((i) => selected.has(i.id)).map((i) => i.id) ?? [];
 
   function toggle(id: string) {
+    if (bulk.busy) return;
     const next = new Set(selected);
     if (next.has(id)) next.delete(id);
     else next.add(id);
@@ -360,16 +376,17 @@ export function Reports() {
   }
 
   async function applyBulk(patch: IssueTriagePatch) {
-    setBulk({ busy: true, error: null });
+    if (bulk.busy) return;
+    setBulk({ scope, busy: true, error: null });
     try {
       const updated = new Map((await api.triageIssues(ticked, patch)).map((i) => [i.id, i]));
       setResult((prev) =>
         prev?.issues ? { ...prev, issues: prev.issues.map((i) => updated.get(i.id) ?? i) } : prev,
       );
-      setSelected(new Set());
-      setBulk({ busy: false, error: null });
+      setTicks({ scope, ids: new Set() });
+      setBulk(null);
     } catch (e) {
-      setBulk({ busy: false, error: isAuthRedirect(e) ? null : (e as Error).message });
+      setBulk({ scope, busy: false, error: isAuthRedirect(e) ? null : (e as Error).message });
     }
   }
 
@@ -512,14 +529,14 @@ export function Reports() {
             </ul>
           )}
           {visible && visible.length > 0 && !grouped && (
-            <ReportList issues={visible} projectNames={projectNames} selected={selected} onToggle={triageOn ? toggle : undefined} />
+            <ReportList issues={visible} projectNames={projectNames} selected={selected} onToggle={triageOn ? toggle : undefined} locked={bulk.busy} />
           )}
           {visible && grouped && (
             <>
               <GroupLabel>Today</GroupLabel>
-              <ReportList issues={today} projectNames={projectNames} selected={selected} onToggle={triageOn ? toggle : undefined} />
+              <ReportList issues={today} projectNames={projectNames} selected={selected} onToggle={triageOn ? toggle : undefined} locked={bulk.busy} />
               <GroupLabel>Earlier</GroupLabel>
-              <ReportList issues={earlier} projectNames={projectNames} selected={selected} onToggle={triageOn ? toggle : undefined} />
+              <ReportList issues={earlier} projectNames={projectNames} selected={selected} onToggle={triageOn ? toggle : undefined} locked={bulk.busy} />
             </>
           )}
           {visible && visible.length === 0 && (

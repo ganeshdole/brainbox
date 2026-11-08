@@ -1,7 +1,7 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import { ProjectLayout } from "./components/ProjectLayout";
-import { ProtectedRoute } from "./components/ProtectedRoute";
+import { GuestOnly, ProtectedRoute } from "./components/ProtectedRoute";
 import { RequireModule } from "./components/RequireModule";
 import { Billing } from "./pages/Billing";
 import { BillingReturn } from "./pages/BillingReturn";
@@ -17,7 +17,14 @@ import { Settings } from "./pages/Settings";
 import { StandaloneTeam, Team } from "./pages/Team";
 
 export const router = createBrowserRouter([
-  { path: "/login", element: <Login /> },
+  {
+    path: "/login",
+    element: (
+      <GuestOnly>
+        <Login />
+      </GuestOnly>
+    ),
+  },
   {
     element: <ProtectedRoute />,
     children: [

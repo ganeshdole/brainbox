@@ -26,7 +26,8 @@ export interface FeatureComposerProps {
   onRemoveScreenshot: () => void;
   /** Throw the request away and close. */
   onCancel: () => void;
-  /** Send it. A feature request needs text or a voice note. */
+  /** Send it. A feature request needs text or a voice note. Send is held
+   *  while a voice note is still recording. */
   onSubmit: (text: string, audio: Blob | null, importance: Importance | undefined) => void;
 }
 
@@ -46,7 +47,11 @@ export function FeatureComposer({
   const [audio, setAudio] = useState<Blob | null>(null);
   const [importance, setImportance] = useState<Importance | undefined>();
 
-  const canSend = !!text.trim() || !!audio;
+  // Held while a voice note is still recording: sending then would leave out
+  // what the user is in the middle of saying.
+  const [voiceBusy, setVoiceBusy] = useState(false);
+
+  const canSend = !voiceBusy && (!!text.trim() || !!audio);
   const hasShot = !!screenshotUrl || !!capturePending;
 
   return (
@@ -71,7 +76,11 @@ export function FeatureComposer({
           className="h-24 w-full resize-none bg-transparent p-3 text-sm text-default outline-none placeholder:text-placeholder"
         />
         <div className="border-t border-subtle">
-          <VoiceNote onChange={setAudio} prompt="Or say it out loud" />
+          <VoiceNote
+            onChange={setAudio}
+            prompt="Or say it out loud"
+            onRecordingChange={setVoiceBusy}
+          />
         </div>
       </div>
 

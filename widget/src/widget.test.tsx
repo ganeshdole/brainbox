@@ -383,3 +383,148 @@ describe("BrainboxWidget", () => {
     }
   });
 });
+
+describe("BrainboxWidget flow", () => {
+  /** A host button that calls `start(mode)` for each mode, in one click. */
+  function HostStart({ modes, label }: { modes: ("screenshot" | "record" | "feature")[]; label: string }) {
+    const { start } = useBrainboxWidget();
+    return <button onClick={() => modes.forEach((m) => start(m))}>{label}</button>;
+  }
+  const settle = (ms = 0) => act(() => new Promise((resolve) => setTimeout(resolve, ms)));
+
+  it("starts one report when a host calls start() twice in one tick", async () => {
+    act(() => {
+      root.render(
+        <BrainboxProvider transport={transport}>
+          <HostControls />
+          <HostStart modes={["screenshot", "record"]} label="Both" />
+          <BrainboxWidget trigger="manual" />
+        </BrainboxProvider>,
+      );
+    });
+    // the UI loaded and listening, on the chooser
+    act(() => hostClick("Report a problem"));
+    await uiReady();
+    act(() => hostClick("Both"));
+    // the markup the first asked for, not a recording started over it
+    expect(buttons()).toContain("Next");
+    expect(findButton("Stop")).toBeUndefined();
+  });
+
+  it("brings a failed send back to the form, as it was, to try again", async () => {
+    const sent: Report[] = [];
+    let attempts = 0;
+    const flaky: Transport = {
+      send: async (report) => {
+        attempts += 1;
+        if (attempts === 1) throw new Error("Offline");
+        sent.push(report);
+        return { id: "f2" };
+      },
+    };
+    act(() => {
+      root.render(
+        <BrainboxProvider transport={flaky}>
+          <HostControls />
+          <HostStart modes={["feature"]} label="Idea" />
+          <BrainboxWidget trigger="manual" />
+        </BrainboxProvider>,
+      );
+    });
+    act(() => hostClick("Idea"));
+    await uiReady();
+    act(() => typeInto(shadow()!.querySelector("textarea")!, "Bulk export"));
+    await act(async () => findButton("Send idea")?.click());
+
+    expect(shadow()?.textContent).toContain("Offline");
+    expect(findButton("Dismiss")).toBeDefined();
+    act(() => findButton("Try again")?.click());
+    expect(shadow()?.querySelector("textarea")?.value).toBe("Bulk export");
+
+    await act(async () => findButton("Send idea")?.click());
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.text).toBe("Bulk export");
+    expect(shadow()?.textContent).toContain("Thanks! Your idea was sent.");
+  });
+
+  it("stays closed when a send the host closed over finishes late", async () => {
+    let finish: (id: string) => void = () => {};
+    const slow: Transport = {
+      send: () => new Promise((resolve) => (finish = (id) => resolve({ id }))),
+    };
+    act(() => {
+      root.render(
+        <BrainboxProvider transport={slow}>
+          <HostControls />
+          <HostStart modes={["feature"]} label="Idea" />
+          <BrainboxWidget trigger="manual" />
+        </BrainboxProvider>,
+      );
+    });
+    act(() => hostClick("Idea"));
+    await uiReady();
+    act(() => typeInto(shadow()!.querySelector("textarea")!, "Dark mode"));
+    await act(async () => findButton("Send idea")?.click());
+    expect(shadow()?.textContent).toContain("Sending");
+
+    act(() => hostClick("Never mind"));
+    finish("late");
+    await settle();
+    expect(hostSees()).toBe("closed");
+    expect(buttons()).toEqual([]);
+
+    // and opening again starts fresh, not on the late "sent"
+    act(() => hostClick("Report a problem"));
+    expect(hostSees()).toBe("open");
+    expect(buttons().some((b) => b.startsWith("Screenshot"))).toBe(true);
+    expect(shadow()?.textContent).not.toContain("Thanks");
+  });
+
+  it("shows the recording finishing, then the composer", async () => {
+    vi.stubGlobal("CompressionStream", undefined);
+    try {
+      act(() => {
+        root.render(
+          <BrainboxProvider transport={transport}>
+            <HostStart modes={["record"]} label="Record it" />
+            <BrainboxWidget trigger="manual" />
+          </BrainboxProvider>,
+        );
+      });
+      act(() => hostClick("Record it"));
+      await uiReady();
+      await settle(50);
+
+      act(() => findButton("Stop")?.click());
+      expect(shadow()?.textContent).toContain("Finishing the recording");
+      expect(findButton("Stop")).toBeUndefined();
+
+      await settle(300);
+      expect(shadow()?.textContent).not.toContain("Finishing the recording");
+      expect(findButton("Send")).toBeDefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("says straight away when the recorder can't load, with nothing to retry", async () => {
+    const offline = () => Promise.reject(new Error("Couldn't load widget-capture.js"));
+    act(() => {
+      root.render(
+        <BrainboxProvider transport={transport} loader={{ recorder: offline, rasteriser: offline }}>
+          <HostControls />
+          <HostStart modes={["record"]} label="Record it" />
+          <BrainboxWidget trigger="manual" />
+        </BrainboxProvider>,
+      );
+    });
+    act(() => hostClick("Record it"));
+    await uiReady();
+    await settle();
+
+    expect(shadow()?.textContent).toContain("Couldn't load widget-capture.js");
+    expect(findButton("Try again")).toBeUndefined();
+    act(() => findButton("Dismiss")?.click());
+    expect(hostSees()).toBe("closed");
+  });
+});

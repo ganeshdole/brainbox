@@ -100,8 +100,10 @@ project sends where, and when, is here. Each tracker's settings are optional;
 Azure DevOps connections store a token, which `integrations/azure-devops.ts`
 seals with `INTEGRATIONS_ENCRYPTION_KEY` before `saveConnection` and opens
 when it needs it. Stores keep the `SealedCredentials` string as it is and
-never see the key; never hand a store plaintext. A 401 from a tool marks the
-connection `needs_reauth` (`sendTicket` in `dispatch.ts`). Tests stub Azure
+never see the key; never hand a store plaintext. A 401 from a tool, or a
+token that no longer opens (`UnreadableCredentialsError`), marks the
+connection `needs_reauth` (`sendTicket` in `dispatch.ts`), passing the
+credentials that were used so a reconnect made meanwhile is left alone. Tests stub Azure
 DevOps with `test/azure-devops-fake.ts`; `scripts/fake-azure-devops.ts` is a
 fake to run against by hand and in `e2e/`.
 

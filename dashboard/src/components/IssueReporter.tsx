@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Check, Copy, Mail, Phone } from "lucide-react";
 import type { Identity, ReportField } from "@ganeshdole/brainbox-shared";
 
@@ -10,6 +9,7 @@ import {
   initials,
   reporterSummary,
 } from "../lib/reporter";
+import { useFlash } from "../lib/flash";
 import { Eyebrow } from "./Eyebrow";
 
 /**
@@ -141,16 +141,13 @@ function ActionLink({
 }
 
 function CopyAll({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, flashCopied] = useFlash(1500);
   return (
     <button
       type="button"
       title="Copy every detail"
       onClick={() => {
-        void navigator.clipboard.writeText(text).then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1500);
-        });
+        void navigator.clipboard.writeText(text).then(flashCopied);
       }}
       className={ACTION}
     >

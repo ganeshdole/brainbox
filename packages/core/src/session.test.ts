@@ -141,21 +141,76 @@ describe("loading rrweb", () => {
     recorderGate = Promise.resolve();
   });
 
-  it("starts the duration cap with the recorder", async () => {
+  it("starts the duration cap at start(), with the clock the user sees", async () => {
     vi.useFakeTimers();
     let release = () => {};
     recorderGate = new Promise((r) => (release = r));
     const onAutoStop = vi.fn();
-    const rec = startSessionRecording({ onAutoStop, maxMs: 1_000 });
-    await vi.advanceTimersByTimeAsync(900);
-    release();
-    await vi.advanceTimersByTimeAsync(900);
-    expect(onAutoStop).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(200);
-    expect(onAutoStop).toHaveBeenCalledOnce();
-    vi.useRealTimers();
+    try {
+      const rec = startSessionRecording({ onAutoStop, maxMs: 1_000 });
+      await vi.advanceTimersByTimeAsync(900);
+      // rrweb arriving late does not buy the recording more time
+      release();
+      await vi.advanceTimersByTimeAsync(99);
+      expect(onAutoStop).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(onAutoStop).toHaveBeenCalledOnce();
+      vi.useRealTimers();
+      await rec.stop();
+    } finally {
+      vi.useRealTimers();
+      recorderGate = Promise.resolve();
+    }
+  });
+
+  it("is ready once rrweb records, and says so at once when it can't load", async () => {
+    const rec = startSessionRecording();
+    await expect(rec.ready).resolves.toBeUndefined();
     await rec.stop();
+
+    const broken: CaptureLoader = {
+      ...loader,
+      recorder: () => Promise.reject(new Error("Couldn't load widget-capture.js")),
+    };
+    const failed = startWith({ loader: broken });
+    await expect(failed.ready).rejects.toThrow("widget-capture.js");
+    // and Stop still reports it rather than handing back an empty log
+    await expect(failed.stop()).rejects.toThrow("widget-capture.js");
+  });
+
+  it("counts no events when Stop beats the load", async () => {
+    let release = () => {};
+    recorderGate = new Promise((r) => (release = r));
+    const rec = startSessionRecording();
+    const stopped = rec.stop();
+    release();
+    expect((await stopped).events).toBe(0);
     recorderGate = Promise.resolve();
+  });
+
+  it("counts the events rrweb emitted", async () => {
+    record.mockImplementationOnce(((options: { emit: (e: unknown) => void }) => {
+      options.emit({ type: 4 });
+      options.emit({ type: 2 });
+      return stopRecorder;
+    }) as unknown as () => typeof stopRecorder);
+    const rec = startSessionRecording();
+    await micUp();
+    expect((await rec.stop()).events).toBe(2);
+  });
+});
+
+describe("stop", () => {
+  it("hands every caller the one result, stopping the recorder and the mic once", async () => {
+    stopRecorder.mockClear();
+    const rec = startSessionRecording();
+    await micUp();
+    const first = rec.stop();
+    const second = rec.stop();
+    expect(second).toBe(first);
+    await first;
+    expect(rec.stop()).toBe(first);
+    expect(stopRecorder).toHaveBeenCalledOnce();
   });
 });
 

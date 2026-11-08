@@ -9,6 +9,7 @@ import {
   installResult,
   iterationInput,
   parseLabels,
+  pickConnectionId,
 } from "./integrations";
 
 const base: Delivery = {
@@ -106,5 +107,23 @@ describe("iterationInput", () => {
 
   it("has nothing to save for Fixed until an iteration is chosen", () => {
     expect(iterationInput("fixed", "", "Web")).toBeNull();
+  });
+});
+
+describe("pickConnectionId", () => {
+  const two = [{ id: "a" }, { id: "b" }];
+
+  it("keeps the account picked while it is connected", () => {
+    expect(pickConnectionId("b", two, "a")).toBe("b");
+  });
+
+  it("moves off a disconnected account to the saved one, else the first", () => {
+    expect(pickConnectionId("gone", two, "b")).toBe("b");
+    expect(pickConnectionId("gone", two, "also-gone")).toBe("a");
+    expect(pickConnectionId("gone", two, undefined)).toBe("a");
+  });
+
+  it("is empty with nothing connected", () => {
+    expect(pickConnectionId("a", [], "a")).toBe("");
   });
 });

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import type { Project } from "@ganeshdole/brainbox-shared";
 
-import { api } from "../lib/api";
+import { api, isAuthRedirect } from "../lib/api";
 import { groupByTeam, newProjectTeam } from "../lib/team";
 import { cn } from "../lib/utils";
 
@@ -34,7 +34,9 @@ export function ProjectSwitcher({
   }
 
   useEffect(() => {
-    if (!open) return;
+    // Not while a create is out: closing would wipe the form, and its error
+    // would only turn up on the next open.
+    if (!open || busy) return;
     const onDown = (e: PointerEvent) => {
       if (ref.current && e.target instanceof Node && !ref.current.contains(e.target)) close();
     };
@@ -47,11 +49,11 @@ export function ProjectSwitcher({
       document.removeEventListener("pointerdown", onDown);
       window.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, busy]);
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -61,7 +63,7 @@ export function ProjectSwitcher({
       close();
       navigate(`/projects/${project.id}`);
     } catch (err) {
-      setError((err as Error).message);
+      if (!isAuthRedirect(err)) setError((err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -73,7 +75,11 @@ export function ProjectSwitcher({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
-        onClick={() => (open ? close() : setOpen(true))}
+        onClick={() => {
+          if (busy) return;
+          if (open) close();
+          else setOpen(true);
+        }}
         className="flex w-full min-w-0 items-center gap-2 rounded-lg border border-interactive bg-interactive px-2.5 py-2 text-left text-sm text-emphasis outline-none transition hover:bg-interactive-hover focus-visible:ring-[3px] focus-visible:ring-focus"
       >
         <span className="min-w-0 flex-1 truncate font-medium">

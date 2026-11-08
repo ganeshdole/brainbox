@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { Feature, Issue } from "@ganeshdole/brainbox-shared";
 
-import { byDemand, FEATURE_FILTERS, isOpen, statusLabel, titleFromRequest, waitingRequests } from "./feature";
+import {
+  byDemand,
+  FEATURE_FILTERS,
+  isOpen,
+  statusLabel,
+  syncDraft,
+  titleFromRequest,
+  waitingRequests,
+} from "./feature";
 
 const feature = (over: Partial<Feature> & { id: string }): Feature => ({
   projectId: "p1",
@@ -80,5 +88,17 @@ describe("titleFromRequest", () => {
     const title = titleFromRequest({ text: "a".repeat(120) });
     expect(title).toHaveLength(80);
     expect(title.endsWith("…")).toBe(true);
+  });
+});
+
+describe("syncDraft", () => {
+  it("follows the saved value while the draft is untouched", () => {
+    expect(syncDraft("Old", "Old", "New")).toBe("New");
+    expect(syncDraft("", "", "First load")).toBe("First load");
+  });
+
+  it("keeps an edited draft through a reload", () => {
+    expect(syncDraft("Half-written", "Old", "Old")).toBe("Half-written");
+    expect(syncDraft("Half-written", "Old", "Changed elsewhere")).toBe("Half-written");
   });
 });

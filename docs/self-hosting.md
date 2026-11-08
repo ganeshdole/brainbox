@@ -31,8 +31,13 @@ Why it is built this way: [ADR 0007](adr/0007-pluggable-stores-and-runtimes.md).
 
 Always required: `AUTH_SECRET` (`openssl rand -base64 32`), `PUBLIC_API_URL`
 (where the backend is reachable), `AUTH_URL` (`<PUBLIC_API_URL>/api/auth`) and
-`DASHBOARD_ORIGIN`. A self-hosted install usually sets `BILLING_DISABLED=true`.
-Everything else is in `backend/src/env.ts`.
+`DASHBOARD_ORIGIN`. Everything else is in `backend/src/env.ts`.
+
+There is no paywall unless Dodo Payments is set up: `DODO_API_KEY` and all
+four `DODO_PRODUCT_*`. Until then nobody could pay, so nobody is asked to
+(the server logs a warning at startup) and the dashboard shows no billing
+page. `BILLING_DISABLED=true` turns the paywall off on an install that has
+them; the billing page stays, so checkout can still be tried.
 
 | Option | Needs |
 |---|---|
@@ -195,7 +200,10 @@ settings in a git-ignored `backend/local.settings.json`, against a local Convex
 deployment (`CONVEX_AGENT_MODE=anonymous npx convex dev`).
 
 On Azure the `/ingest` response waits until transcription and ticket delivery
-finish, because Azure may freeze the instance once it has responded.
+finish, because Azure may freeze the instance once it has responded. A
+transcription is given up on after three minutes (`options.transcriptionTimeoutMs`
+for a backend built from parts): the transcript is marked failed and the
+ticket is sent without it.
 
 ## Pointing the widget at your install
 
@@ -244,7 +252,7 @@ turns its feature off:
 | `transcriber` (`groqTranscriber`, `openaiTranscriber`, `aiSdkTranscriber`, or your own `Transcriber`) | Voice notes and recordings arrive without a transcript. |
 | `integrations` (`github` for your GitHub App, `azureDevops` with an encryption key) | Those trackers answer 503 and the dashboard says they aren't set up. |
 | `auth` (Google sign-in, email mode, allowed domains) | No dashboard API: the app receives reports, serves file links and runs webhooks, nothing more. Auth.js reads `AUTH_URL` from the environment if it is set. |
-| `billing` (Dodo Payments settings) | No paywall. |
+| `billing` (Dodo Payments settings) | No paywall. Given, but without an API key and every product id, no paywall either. |
 
 ### Your own store
 

@@ -73,6 +73,23 @@ export function applyTriage(issue: Issue, patch: IssueTriagePatch): Issue {
   return { ...issue, status, priority: patch.priority ?? issue.priority, closeReason };
 }
 
+/** Undoes a refused `patch` on the issue as it is now, putting back only the
+ *  fields the patch touched (from `before`, the issue it was applied to).
+ *  Everything else - deliveries, a feature link, a poll's fresh transcript -
+ *  may have changed while the request was out and is kept. */
+export function revertTriage(
+  current: Issue,
+  before: Pick<Issue, "status" | "priority" | "closeReason">,
+  patch: IssueTriagePatch,
+): Issue {
+  const next = { ...current };
+  if (patch.status !== undefined) next.status = before.status;
+  if (patch.priority !== undefined) next.priority = before.priority;
+  // a status change can drop the close reason, so it goes back with status
+  if (patch.status !== undefined || patch.closeReason !== undefined) next.closeReason = before.closeReason;
+  return next;
+}
+
 /** One activity line, e.g. "Ada changed status from New to Resolved" or
  *  "Ada set the close reason to Duplicate". */
 export function describeEvent(event: IssueEvent): string {

@@ -135,6 +135,24 @@ describe("BrainboxProvider", () => {
     expect(sent[0]?.metadata).not.toHaveProperty("fields");
   });
 
+  it("clears the identity when the prop is dropped, so it cannot outlive a sign-out", async () => {
+    let bb: Brainbox | null = null;
+    const render = (identity?: { email: string }) =>
+      act(() => {
+        root.render(
+          <BrainboxProvider transport={transport} identity={identity}>
+            <Probe onInstance={(next) => (bb = next)} />
+          </BrainboxProvider>,
+        );
+      });
+
+    render({ email: "a@b.c" });
+    render(undefined);
+    await act(() => bb!.draft().submit({ text: "signed out" }));
+
+    expect(sent[0]?.metadata.identity).toBeUndefined();
+  });
+
   it("provides a caller-owned instance as is and leaves its lifecycle alone", () => {
     const own = createBrainbox({ transport });
     const seen: (Brainbox | null)[] = [];

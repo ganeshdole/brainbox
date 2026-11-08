@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Globe, Plus, X } from "lucide-react";
 
-import { api } from "../lib/api";
+import { api, isAuthRedirect } from "../lib/api";
 import { normalizeOrigin } from "../lib/utils";
 
 /** Strip the scheme for display - the chip reads "app.example.com", the
@@ -30,7 +30,7 @@ export function DomainsEditor({
       const updated = await api.updateProject(projectId, { allowedOrigins: next });
       onChange(updated.allowedOrigins);
     } catch (e) {
-      setError((e as Error).message);
+      if (!isAuthRedirect(e)) setError((e as Error).message);
     } finally {
       setSaving(false);
     }

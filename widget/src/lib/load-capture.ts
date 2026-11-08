@@ -32,19 +32,37 @@ const ownSrc =
 
 let loading: Promise<CaptureLibs> | null = null;
 
+/** How long `widget-capture.js` gets to arrive. A request that hangs (a proxy
+ *  holding it open, a CDN stall) would otherwise leave every capture waiting
+ *  on it forever, with no retry. */
+export const CAPTURE_LOAD_TIMEOUT_MS = 30_000;
+
 /** Inject `widget-capture.js` once and resolve with what it publishes. A failed
- *  load is forgotten so the next capture tries again. */
-export function loadCapture(src = ownSrc): Promise<CaptureLibs> {
+ *  or timed-out load is forgotten, and its tag taken back out of `<head>`, so
+ *  the next capture tries again from scratch. */
+export function loadCapture(src = ownSrc, timeoutMs = CAPTURE_LOAD_TIMEOUT_MS): Promise<CaptureLibs> {
   loading ??= new Promise<CaptureLibs>((resolve, reject) => {
     const script = document.createElement("script");
+    const fail = (err: Error) => {
+      clearTimeout(timer);
+      script.onload = null;
+      script.onerror = null;
+      script.remove();
+      reject(err);
+    };
+    const timer = setTimeout(
+      () => fail(new Error("Timed out loading widget-capture.js")),
+      timeoutMs,
+    );
     script.src = captureUrl(src);
     script.async = true;
     script.onload = () => {
+      clearTimeout(timer);
       const libs = (window as unknown as Record<string, CaptureLibs | undefined>)[CAPTURE_GLOBAL];
       if (libs) resolve(libs);
-      else reject(new Error("widget-capture.js loaded but published nothing"));
+      else fail(new Error("widget-capture.js loaded but published nothing"));
     };
-    script.onerror = () => reject(new Error("Couldn't load widget-capture.js"));
+    script.onerror = () => fail(new Error("Couldn't load widget-capture.js"));
     document.head.appendChild(script);
   }).catch((err: unknown) => {
     loading = null;

@@ -24,6 +24,11 @@
   color: var(--bb-replay-fg);
 }
 
+/* Kept mounted under an error, so the next recording has a frame to load into. */
+.bb-replay[hidden] {
+  display: none;
+}
+
 .bb-replay__frame {
   position: relative;
   width: 100%;
@@ -55,6 +60,13 @@
 
 .bb-replay__btn:hover {
   color: var(--bb-replay-fg);
+}
+
+/* Still loading: nothing to play or seek yet. */
+.bb-replay__btn:disabled,
+.bb-replay__range:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .bb-replay__btn--primary {

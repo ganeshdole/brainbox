@@ -67,18 +67,35 @@ export async function sealCredentials(
   return asSealedCredentials(`${VERSION}.${base64url(iv)}.${base64url(new Uint8Array(sealed))}`);
 }
 
-/** Throws when the value was sealed with another key or for another context. */
+/** Stored credentials that can't be opened: sealed with another key (the
+ *  key was changed), for another connection, or not there at all. Only
+ *  connecting again, which seals a new token, makes the connection work. */
+export class UnreadableCredentialsError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "UnreadableCredentialsError";
+  }
+}
+
+/** Throws `UnreadableCredentialsError` when the value was sealed with another
+ *  key or for another context; a plain Error when `key` itself is unusable. */
 export async function openCredentials(
   sealed: SealedCredentials,
   opts: { key: string; context: string },
 ): Promise<string> {
   const [version, iv, data] = sealed.split(".");
-  if (version !== VERSION || !iv || !data) throw new Error("unrecognised sealed credentials");
-  const plain = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: fromBase64url(iv), additionalData: utf8(opts.context) },
-    await importKey(opts.key),
-    fromBase64url(data),
-  );
+  if (version !== VERSION || !iv || !data) throw new UnreadableCredentialsError("unrecognised sealed credentials");
+  const key = await importKey(opts.key);
+  let plain: ArrayBuffer;
+  try {
+    plain = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: fromBase64url(iv), additionalData: utf8(opts.context) },
+      key,
+      fromBase64url(data),
+    );
+  } catch (err) {
+    throw new UnreadableCredentialsError("the stored token can't be opened with this encryption key", { cause: err });
+  }
   return new TextDecoder().decode(plain);
 }
 

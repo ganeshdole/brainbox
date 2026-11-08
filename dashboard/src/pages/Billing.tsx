@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useReducer, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import type { BillingPeriod, BillingState } from "@ganeshdole/brainbox-shared";
+import type { BillingPeriod, PlanId } from "@ganeshdole/brainbox-shared";
 
 import { Button } from "../components/ui/button";
 import { Spinner } from "../components/ui/spinner";
-import { api } from "../lib/api";
+import { api, isAuthRedirect } from "../lib/api";
+import { autoStartDue, billingReducer, initialBilling, type BillingAction } from "../lib/billing";
 import {
   OVERAGE_CENTS_PER_TICKET,
   PLAN_OPTIONS,
@@ -31,115 +32,155 @@ function isPeriod(v: string | null): v is BillingPeriod {
  * brings the browser back, and if that landed on a URL still carrying ?plan=
  * we would bounce them straight back out to Dodo, trapping them in a loop they
  * cannot escape with the back button. sessionStorage (not state) because the
- * return is a full page load, and per plan+period so deliberately picking a
- * different plan afterwards still works.
+ * return is a full page load, and per plan+period so a different deep link
+ * afterwards still works.
  */
 function autoStartKey(plan: string, period: BillingPeriod): string {
   return `brainbox:autoCheckout:${plan}:${period}`;
 }
 
+/** Asks for a checkout and leaves for it. Not cancelled by an effect cleanup:
+ *  StrictMode's remount would swallow the answer and strand the spinner. Only
+ *  a real unmount (`isMounted` false) stops the navigation. */
+async function runCheckout(
+  dispatch: (action: BillingAction) => void,
+  isMounted: () => boolean,
+  plan: PlanId,
+  period: BillingPeriod,
+  auto: boolean,
+) {
+  dispatch({ type: "start", plan, auto });
+  try {
+    const { checkoutUrl } = await api.startCheckout(plan, period);
+    // Full navigation, not a router push: checkout is Dodo's own page.
+    if (isMounted()) window.location.assign(checkoutUrl);
+  } catch (e) {
+    if (isAuthRedirect(e)) return;
+    // Fall back to the plan picker with the reason shown, rather than
+    // stranding them on a spinner.
+    dispatch({ type: "startFailed", error: e instanceof Error ? e.message : "Could not start checkout" });
+  }
+}
+
 export function Billing() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  // Marketing deep-links here as /billing?plan=pro&period=annual. Honouring the
-  // period means someone who clicked an annual price sees that same price here
-  // rather than the monthly one, which would read as a bait and switch.
-  const [period, setPeriod] = useState<BillingPeriod>(() => {
-    const requested = params.get("period");
-    return isPeriod(requested) ? requested : "annual";
-  });
   const requestedPlan = params.get("plan");
-  const [state, setState] = useState<BillingState | null>(null);
-  const [starting, setStarting] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  // The plan they picked on the marketing page, if this is that arrival and we
-  // have not already acted on it. Decided once at mount rather than in an
-  // effect: it is derived from the URL, which cannot change under us here.
-  const [autoStart] = useState<PlanOption | null>(() => {
+  const [page, dispatch] = useReducer(billingReducer, null, () => {
+    // Marketing deep-links here as /billing?plan=pro&period=annual. Honouring
+    // the period means someone who clicked an annual price sees that same
+    // price here rather than the monthly one, which would read as a bait and
+    // switch.
+    const requested = params.get("period");
+    const period: BillingPeriod = isPeriod(requested) ? requested : "annual";
+    // The plan they picked on the marketing page, if this is that arrival and
+    // we have not already acted on it.
     const plan = PLAN_OPTIONS.find((p) => p.id === requestedPlan);
-    if (!plan) return null;
+    let pending: PlanId | null = null;
     try {
-      return sessionStorage.getItem(autoStartKey(plan.id, period)) ? null : plan;
+      if (plan && !sessionStorage.getItem(autoStartKey(plan.id, period))) pending = plan.id;
     } catch {
       // Storage disabled: skip the auto-start rather than risk the loop.
-      return null;
     }
+    return initialBilling(period, pending);
   });
-  const [autoStartFailed, setAutoStartFailed] = useState(false);
+  const { period, checkout } = page;
 
+  const mounted = useRef(false);
   useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  // Once per visit, whatever re-renders or remounts come after.
+  const autoFired = useRef(false);
+
+  const attempt = page.load.kind === "ready" ? null : page.load.attempt;
+  useEffect(() => {
+    if (attempt === null) return;
+    let cancelled = false;
     api
       .getBillingState()
-      .then(setState)
-      .catch(() => setState({ subscription: null, exempt: false, hasAccess: false }));
-  }, []);
-
-  async function choose(plan: PlanOption, forPeriod: BillingPeriod = period) {
-    setStarting(plan.id);
-    setError(null);
-    try {
-      const { checkoutUrl } = await api.startCheckout(plan.id, forPeriod);
-      // Full navigation, not a router push: checkout is Dodo's own page.
-      window.location.assign(checkoutUrl);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not start checkout");
-      setStarting(null);
-    }
-  }
+      .then((state) => {
+        if (!cancelled) dispatch({ type: "loaded", state });
+      })
+      .catch((e: Error) => {
+        if (!cancelled && !isAuthRedirect(e)) dispatch({ type: "loadFailed", error: e.message });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
 
   // They already chose a plan on the marketing page, and (if they were signed
   // out) just came back through sign-in to get here. Asking them to pick the
   // same plan a second time is the dead end this flow used to have, so take
   // them straight to checkout.
+  const due = autoStartDue(page);
+  const duePlan = due?.plan;
+  const duePeriod = due?.period;
   useEffect(() => {
-    if (!autoStart || !state || state.hasAccess) return;
-
-    const key = autoStartKey(autoStart.id, period);
+    if (!duePlan || !duePeriod || autoFired.current) return;
+    autoFired.current = true;
     try {
-      // Also re-checked here: StrictMode runs effects twice, and Dodo's
-      // cancel_url brings the browser back - neither may re-fire checkout.
-      if (sessionStorage.getItem(key)) return;
-      sessionStorage.setItem(key, "1");
+      // Dodo's cancel_url brings the browser back to this same URL; this is
+      // what stops it bouncing them straight back out.
+      sessionStorage.setItem(autoStartKey(duePlan, duePeriod), "1");
     } catch {
+      dispatch({ type: "skipAuto" });
       return;
     }
+    void runCheckout(dispatch, () => mounted.current, duePlan, duePeriod, true);
+  }, [duePlan, duePeriod]);
 
-    let cancelled = false;
-    api
-      .startCheckout(autoStart.id, period)
-      .then(({ checkoutUrl }) => window.location.assign(checkoutUrl))
-      .catch((e: Error) => {
-        if (cancelled) return;
-        // Fall back to the plan picker with the reason shown, rather than
-        // stranding them on a spinner.
-        setError(e.message);
-        setAutoStartFailed(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [autoStart, state, period]);
+  function choose(plan: PlanOption) {
+    if (checkout.kind !== "idle") return;
+    void runCheckout(dispatch, () => mounted.current, plan.id, period, false);
+  }
 
-  // Checkout is on its way; showing the plan grid underneath would invite a
-  // second click on a plan they already chose.
-  if (autoStart && !autoStartFailed && state && !state.hasAccess) {
+  const starting = checkout.kind === "starting" ? checkout.plan : null;
+  const error = checkout.kind === "idle" ? checkout.error : null;
+  const autoPlan = PLAN_OPTIONS.find(
+    (p) => p.id === (due?.plan ?? (checkout.kind === "starting" && checkout.auto ? checkout.plan : null)),
+  );
+
+  if (page.load.kind === "failed") {
     return (
       <div className="grid min-h-dvh place-items-center bg-background px-6">
-        <div className="text-center">
-          <Spinner />
-          <p className="mt-4 text-sm text-muted">
-            Taking you to checkout for {autoStart.name}&hellip;
+        <div className="w-full max-w-md text-center">
+          <p role="alert" className="text-sm text-error">
+            Couldn&rsquo;t check your subscription: {page.load.error}
           </p>
+          <Button className="mt-6" variant="secondary" onClick={() => dispatch({ type: "retry" })}>
+            Try again
+          </Button>
         </div>
       </div>
     );
   }
 
-  if (!state) {
+  if (page.load.kind === "loading") {
     return (
       <div className="grid min-h-dvh place-items-center bg-background">
         <Spinner />
+      </div>
+    );
+  }
+
+  const state = page.load.state;
+
+  // Checkout is on its way; showing the plan grid underneath would invite a
+  // second click on a plan they already chose.
+  if (autoPlan && !state.hasAccess) {
+    return (
+      <div className="grid min-h-dvh place-items-center bg-background px-6">
+        <div className="text-center">
+          <Spinner />
+          <p className="mt-4 text-sm text-muted">
+            Taking you to checkout for {autoPlan.name}&hellip;
+          </p>
+        </div>
       </div>
     );
   }
@@ -202,14 +243,14 @@ export function Billing() {
                   const idx = (i + delta + PERIODS.length) % PERIODS.length;
                   const next = PERIODS[idx];
                   if (!next) return;
-                  setPeriod(next.value);
+                  dispatch({ type: "period", period: next.value });
                   const radios =
                     e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
                       '[role="radio"]',
                     );
                   radios?.[idx]?.focus();
                 }}
-                onClick={() => setPeriod(p.value)}
+                onClick={() => dispatch({ type: "period", period: p.value })}
                 className={cn(
                   "rounded-full px-5 py-1.5 text-sm font-medium transition-colors",
                   period === p.value
@@ -261,7 +302,7 @@ export function Billing() {
                 className="mt-5 w-full"
                 variant={plan.featured ? "default" : "secondary"}
                 disabled={starting !== null}
-                onClick={() => void choose(plan)}
+                onClick={() => choose(plan)}
               >
                 {starting === plan.id ? <Spinner /> : `Choose ${plan.name}`}
               </Button>

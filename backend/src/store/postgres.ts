@@ -1,5 +1,5 @@
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
-import { and, asc, count, desc, eq, gt, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import type { DB } from "../db/connect.ts";
 import {
@@ -22,9 +22,10 @@ import {
   waitlistSignups,
   webhookEvents,
 } from "../db/schema/index.ts";
+import { leaseCutoff } from "./delivery-rules.ts";
 import { planTriageWrite } from "./issue-triage.ts";
 import { planSubscriptionWrite } from "./subscription-write.ts";
-import { leavesNoOwner } from "./team-rules.ts";
+import { leavesNoOwner, mayManage } from "./team-rules.ts";
 import type { DestinationRecord, FullStore, InviteAcceptance, MembershipChange } from "./types.ts";
 
 type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
@@ -64,13 +65,15 @@ export function createPostgresStore(db: DB): FullStore {
   }
 
   // Locks the Team's row for the rest of the transaction, so changes to its
-  // members take turns, and returns the member being changed and how many
-  // Owners there are.
-  async function lockMembership(tx: Tx, teamId: string, userId: string) {
+  // members take turns, and returns the member being changed, the member
+  // making the change ("gone" when no longer in the Team; null when none was
+  // named) and how many Owners there are.
+  async function lockMembership(tx: Tx, teamId: string, userId: string, actorId: string | undefined) {
     await tx.select({ id: teams.id }).from(teams).where(eq(teams.id, teamId)).for("update");
     const rows = await tx.select().from(teamMembers).where(eq(teamMembers.teamId, teamId));
     return {
       member: rows.find((r) => r.userId === userId) ?? null,
+      actor: actorId === undefined ? null : (rows.find((r) => r.userId === actorId) ?? ("gone" as const)),
       owners: rows.filter((r) => r.role === "owner").length,
     };
   }
@@ -119,10 +122,11 @@ export function createPostgresStore(db: DB): FullStore {
           .orderBy(asc(teamMembers.createdAt));
         return rows.map((r) => ({ ...r.member, email: r.email, name: r.name, image: r.image }));
       },
-      async setRole(teamId, userId, role) {
+      async setRole(teamId, userId, role, actorId) {
         return db.transaction(async (tx): Promise<MembershipChange> => {
-          const { member, owners } = await lockMembership(tx, teamId, userId);
+          const { member, actor, owners } = await lockMembership(tx, teamId, userId, actorId);
           if (!member) return "not_found";
+          if (actor === "gone" || (actor && !mayManage(actor.role, member.role, role))) return "forbidden";
           if (leavesNoOwner(owners, member.role, role)) return "last_owner";
           await tx
             .update(teamMembers)
@@ -131,10 +135,11 @@ export function createPostgresStore(db: DB): FullStore {
           return "done";
         });
       },
-      async removeMember(teamId, userId) {
+      async removeMember(teamId, userId, actorId) {
         return db.transaction(async (tx): Promise<MembershipChange> => {
-          const { member, owners } = await lockMembership(tx, teamId, userId);
+          const { member, actor, owners } = await lockMembership(tx, teamId, userId, actorId);
           if (!member) return "not_found";
+          if (actor === "gone" || (actor && !mayManage(actor.role, member.role))) return "forbidden";
           if (leavesNoOwner(owners, member.role, null)) return "last_owner";
           await tx
             .delete(teamMembers)
@@ -396,8 +401,19 @@ export function createPostgresStore(db: DB): FullStore {
         if (!row) throw new Error("connection upsert returned no row");
         return row;
       },
-      async setConnectionStatus(id, status) {
-        await db.update(integrationConnections).set({ status }).where(eq(integrationConnections.id, id));
+      async setConnectionStatus(id, status, expected) {
+        const holds =
+          expected === undefined
+            ? undefined
+            : expected.credentials === null
+              ? isNull(integrationConnections.credentials)
+              : eq(integrationConnections.credentials, expected.credentials);
+        const rows = await db
+          .update(integrationConnections)
+          .set({ status })
+          .where(and(eq(integrationConnections.id, id), holds))
+          .returning({ id: integrationConnections.id });
+        return rows.length > 0;
       },
       async deleteConnection(id) {
         await db.delete(integrationConnections).where(eq(integrationConnections.id, id));
@@ -454,32 +470,42 @@ export function createPostgresStore(db: DB): FullStore {
       async listDeliveries(issueId) {
         return db.select().from(deliveries).where(eq(deliveries.issueId, issueId));
       },
-      async claimDelivery({ issueId, destinationId, provider, retry }) {
+      async claimDelivery({ issueId, destinationId, provider, retry, now }) {
         const claim = db
           .insert(deliveries)
-          .values({ issueId, destinationId, provider, status: "pending" });
+          .values({ issueId, destinationId, provider, status: "pending", attempts: 1, updatedAt: now });
+        // The upsert's WHERE is mayReclaimDelivery (store/delivery-rules.ts),
+        // checked against the row as it is when the claim takes it.
         const [row] = retry
           ? await claim
               .onConflictDoUpdate({
                 target: [deliveries.issueId, deliveries.destinationId],
-                set: { status: "pending", error: null, updatedAt: new Date() },
-                setWhere: ne(deliveries.status, "sent"),
+                set: { status: "pending", error: null, attempts: sql`${deliveries.attempts} + 1`, updatedAt: now },
+                setWhere: or(
+                  eq(deliveries.status, "failed"),
+                  and(eq(deliveries.status, "pending"), lte(deliveries.updatedAt, leaseCutoff(now))),
+                ),
               })
               .returning()
           : await claim.onConflictDoNothing().returning();
         return row ?? null;
       },
-      async finishDelivery(id, outcome) {
+      async finishDelivery(claim, outcome) {
         const [row] = await db
           .update(deliveries)
           .set({
             status: outcome.ok ? "sent" : "failed",
             ...(outcome.ok && { externalId: outcome.externalId, externalUrl: outcome.url }),
             error: outcome.ok ? null : outcome.error,
-            attempts: sql`${deliveries.attempts} + 1`,
             updatedAt: new Date(),
           })
-          .where(eq(deliveries.id, id))
+          .where(
+            and(
+              eq(deliveries.id, claim.id),
+              eq(deliveries.status, "pending"),
+              eq(deliveries.attempts, claim.attempts),
+            ),
+          )
           .returning();
         return row ?? null;
       },
@@ -517,24 +543,33 @@ export function createPostgresStore(db: DB): FullStore {
           if (!(await claimEvent(tx, eventId, eventType))) return false;
           if (!change) return true;
 
-          const [existing] = await tx
+          // The row this subscription has, else the Account's row (one per
+          // Account), locked so two events for it take turns.
+          const [bySubscription] = await tx
             .select()
             .from(subscriptions)
             .where(eq(subscriptions.dodoSubscriptionId, change.dodoSubscriptionId))
-            .limit(1);
-          const write = planSubscriptionWrite(existing ?? null, change);
+            .for("update");
+          const userId = "userId" in change.create ? change.create.userId : null;
+          const [byUser] =
+            bySubscription || userId === null
+              ? []
+              : await tx.select().from(subscriptions).where(eq(subscriptions.userId, userId)).for("update");
+          const existing = bySubscription ?? byUser ?? null;
+          const write = planSubscriptionWrite(existing, change);
 
-          if (write.kind === "update") {
+          if (write.kind === "update" && existing) {
             await tx
               .update(subscriptions)
               .set({ ...write.values, updatedAt: new Date() })
-              .where(eq(subscriptions.dodoSubscriptionId, change.dodoSubscriptionId));
+              .where(eq(subscriptions.id, existing.id));
           } else if (write.kind === "create") {
             const v = write.values;
             await tx
               .insert(subscriptions)
               .values(v)
-              // An Account re-subscribing after cancelling already has a row.
+              // An Account re-subscribing already has a row: the rule said
+              // this subscription takes its place.
               .onConflictDoUpdate({
                 target: subscriptions.userId,
                 set: {

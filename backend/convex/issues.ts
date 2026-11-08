@@ -154,9 +154,19 @@ export const listEvents = serverQuery({
   },
 });
 
+/** Attach a feature request to a Feature, or with null send it back to
+ *  waiting. A Feature that is gone (deleted since the caller checked) is
+ *  refused, as Postgres' foreign key refuses it. */
 export const setFeature = serverMutation({
   args: { id: v.string(), featureId: v.union(v.string(), v.null()) },
   handler: async (ctx, { id, featureId }) => {
+    if (featureId !== null) {
+      const feature = await ctx.db
+        .query("features")
+        .withIndex("with_id", (q) => q.eq("id", featureId))
+        .unique();
+      if (!feature) throw new Error(`feature ${featureId} does not exist`);
+    }
     const row = await ctx.db
       .query("issues")
       .withIndex("with_id", (q) => q.eq("id", id))

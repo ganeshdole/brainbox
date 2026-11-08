@@ -20,7 +20,8 @@ export interface ComposerProps {
   position: Position;
   /** Throw the report away and close. */
   onCancel: () => void;
-  /** Send the report with what the user typed and the voice note, if any. */
+  /** Send the report with what the user typed and the voice note, if any.
+   *  Send is held while a voice note is still recording. */
   onSubmit: (text: string, audio: Blob | null) => void;
 }
 
@@ -41,7 +42,12 @@ export function Composer({
   const voiceDone = !!voiceCaptured;
   const [typing, setTyping] = useState(voiceDone);
 
-  const canSend = !captureFailed || !!text.trim() || !!audio || voiceDone || !!sessionReady;
+  // Held while a voice note is still recording: sending then would leave out
+  // what the user is in the middle of saying.
+  const [voiceBusy, setVoiceBusy] = useState(false);
+
+  const canSend =
+    !voiceBusy && (!captureFailed || !!text.trim() || !!audio || voiceDone || !!sessionReady);
 
   return (
     <div
@@ -97,7 +103,7 @@ export function Composer({
           textarea sitting above it made the panel look inert and buried the mic.
           Typing is one click away for whoever wants it. */}
       <div className="overflow-hidden rounded-xl border border-default bg-background focus-within:border-interactive">
-        {!voiceDone && <VoiceNote onChange={setAudio} />}
+        {!voiceDone && <VoiceNote onChange={setAudio} onRecordingChange={setVoiceBusy} />}
         {typing && (
           <div className={voiceDone ? "" : "border-t border-subtle"}>
             <textarea

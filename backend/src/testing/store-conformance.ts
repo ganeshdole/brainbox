@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { generateProjectKey } from "../lib/projectKey.ts";
+import { asSealedCredentials } from "../store/credentials.ts";
+import { DELIVERY_LEASE_MS } from "../store/delivery-rules.ts";
 import type { NewIssue, Store, StoreModule, StoreWith } from "../store/types.ts";
 
 // What every Store must do, checked against the store itself rather than
@@ -423,6 +425,45 @@ function teamTests(get: () => StoreWith<"auth" | "teams">) {
     expect(await store.teams.removeMember(team.id, admin.id)).toBe("done");
     expect(await store.teams.listForUser(admin.id)).toEqual([]);
   });
+
+  it("checks who may change whom with their roles as they are at the change", async () => {
+    const store = get();
+    const owner = await newUser(store);
+    const team = await store.teams.create({ name: "Acme", ownerId: owner.id });
+    const join = async (role: "admin" | "member") => {
+      const user = await newUser(store);
+      const invite = await store.teams.createInvite({
+        teamId: team.id,
+        email: user.email,
+        role,
+        invitedBy: owner.id,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      await store.teams.acceptInvite(invite.id, user.id, new Date());
+      return user;
+    };
+    const admin = await join("admin");
+    const member = await join("member");
+
+    // An Admin manages Members, but neither touches Owners nor makes them,
+    // themselves included.
+    expect(await store.teams.setRole(team.id, member.id, "admin", admin.id)).toBe("done");
+    expect(await store.teams.setRole(team.id, member.id, "member", admin.id)).toBe("done");
+    expect(await store.teams.setRole(team.id, owner.id, "member", admin.id)).toBe("forbidden");
+    expect(await store.teams.setRole(team.id, admin.id, "owner", admin.id)).toBe("forbidden");
+    expect(await store.teams.removeMember(team.id, owner.id, admin.id)).toBe("forbidden");
+
+    // Demoted a moment ago: a request that passed its role check before
+    // then is refused now.
+    expect(await store.teams.setRole(team.id, admin.id, "member", owner.id)).toBe("done");
+    expect(await store.teams.setRole(team.id, member.id, "admin", admin.id)).toBe("forbidden");
+    expect(await store.teams.removeMember(team.id, member.id, admin.id)).toBe("forbidden");
+    // Nor can someone no longer in the Team.
+    expect(await store.teams.removeMember(team.id, admin.id, owner.id)).toBe("done");
+    expect(await store.teams.setRole(team.id, member.id, "admin", admin.id)).toBe("forbidden");
+    expect(await store.teams.membership(team.id, member.id)).toMatchObject({ role: "member" });
+    expect(await store.teams.membership(team.id, owner.id)).toMatchObject({ role: "owner" });
+  });
 }
 
 function triageTests(get: () => StoreWith<"triage">) {
@@ -513,6 +554,16 @@ function featureTests(get: () => StoreWith<"features">) {
     expect((await store.issues.get(request.id))?.featureId).toBe(into.id);
   });
 
+  it("refuses to attach a request to a feature that is gone", async () => {
+    const store = get();
+    const project = await newProject(store);
+    const feature = await store.features.create({ projectId: project.id, title: "Dark mode", description: null });
+    const request = await newIssue(store, project.id, { kind: "feature", screenshotKey: null });
+    await store.features.delete(feature.id);
+    await expect(store.features.attach(request.id, feature.id)).rejects.toThrow();
+    expect((await store.issues.get(request.id))?.featureId).toBeNull();
+  });
+
   it("sends a deleted feature's requests back to waiting", async () => {
     const store = get();
     const project = await newProject(store);
@@ -573,8 +624,7 @@ function integrationTests(get: () => StoreWith<"integrations">) {
     expect(await store.integrations.listDestinations(project.id)).toEqual([]);
   });
 
-  it("claims a delivery once, unless retrying one not sent, and records its outcome", async () => {
-    const store = get();
+  async function delivering(store: StoreWith<"integrations">) {
     const { conn, project } = await connected(store);
     const dest = await store.integrations.saveDestination({
       projectId: project.id,
@@ -584,19 +634,82 @@ function integrationTests(get: () => StoreWith<"integrations">) {
       enabled: true,
     });
     const issue = await newIssue(store, project.id);
-    const claim = { issueId: issue.id, destinationId: dest.id, provider: "github" as const };
-    const row = await store.integrations.claimDelivery({ ...claim, retry: false });
-    expect(row).toMatchObject({ status: "pending", attempts: 0 });
-    expect(await store.integrations.claimDelivery({ ...claim, retry: false })).toBeNull();
+    return { issue, claim: { issueId: issue.id, destinationId: dest.id, provider: "github" as const } };
+  }
 
-    const sent = await store.integrations.finishDelivery(must(row).id, { ok: true, externalId: "42", url: "https://gh/42" });
-    expect(sent).toMatchObject({ status: "sent", externalId: "42", externalUrl: "https://gh/42", attempts: 1 });
+  it("claims a delivery once, unless retrying one that failed, and records its outcome", async () => {
+    const store = get();
+    const { issue, claim } = await delivering(store);
+    const now = new Date();
+    const row = must(await store.integrations.claimDelivery({ ...claim, retry: false, now }));
+    expect(row).toMatchObject({ status: "pending", attempts: 1 });
+    expect(await store.integrations.claimDelivery({ ...claim, retry: false, now })).toBeNull();
+
+    const failed = await store.integrations.finishDelivery(row, { ok: false, error: "down" });
+    expect(failed).toMatchObject({ status: "failed", error: "down", attempts: 1 });
+    // Without retry a failure stays failed: only a retry sends again.
+    expect(await store.integrations.claimDelivery({ ...claim, retry: false, now })).toBeNull();
+
+    const again = must(await store.integrations.claimDelivery({ ...claim, retry: true, now }));
+    expect(again).toMatchObject({ id: row.id, status: "pending", error: null, attempts: 2 });
+    const sent = await store.integrations.finishDelivery(again, { ok: true, externalId: "42", url: "https://gh/42" });
+    expect(sent).toMatchObject({ status: "sent", externalId: "42", externalUrl: "https://gh/42", attempts: 2 });
+    expect(await store.integrations.listDeliveries(issue.id)).toEqual([sent]);
     // A retry never files the same report twice.
-    expect(await store.integrations.claimDelivery({ ...claim, retry: true })).toBeNull();
-    const failed = await store.integrations.finishDelivery(must(row).id, { ok: false, error: "down" });
-    expect(failed).toMatchObject({ status: "failed", error: "down", externalUrl: "https://gh/42", attempts: 2 });
-    expect(await store.integrations.listDeliveries(issue.id)).toEqual([failed]);
-    expect(await store.integrations.claimDelivery({ ...claim, retry: true })).toMatchObject({ id: must(row).id, status: "pending" });
+    expect(await store.integrations.claimDelivery({ ...claim, retry: true, now })).toBeNull();
+  });
+
+  it("refuses a retry while the delivery is in flight, until its lease runs out", async () => {
+    const store = get();
+    const { claim } = await delivering(store);
+    const t0 = new Date();
+    const first = must(await store.integrations.claimDelivery({ ...claim, retry: true, now: t0 }));
+    // Two retries at once (a double click, two people): only one sends.
+    expect(await store.integrations.claimDelivery({ ...claim, retry: true, now: t0 })).toBeNull();
+    const soon = new Date(t0.getTime() + DELIVERY_LEASE_MS - 1000);
+    expect(await store.integrations.claimDelivery({ ...claim, retry: true, now: soon })).toBeNull();
+
+    // The attempt that claimed it never finished (a crash): past the lease, a
+    // retry may claim it again.
+    const late = new Date(t0.getTime() + DELIVERY_LEASE_MS + 1000);
+    const second = must(await store.integrations.claimDelivery({ ...claim, retry: true, now: late }));
+    expect(second).toMatchObject({ id: first.id, status: "pending", attempts: 2 });
+    // The first attempt, should it finish after all, no longer owns it.
+    expect(await store.integrations.finishDelivery(first, { ok: false, error: "slow" })).toBeNull();
+    expect(await store.integrations.finishDelivery(second, { ok: true, externalId: "7", url: "https://gh/7" })).toMatchObject({
+      status: "sent",
+      externalId: "7",
+    });
+  });
+
+  it("never lets a late outcome overwrite a sent delivery", async () => {
+    const store = get();
+    const { issue, claim } = await delivering(store);
+    const row = must(await store.integrations.claimDelivery({ ...claim, retry: false, now: new Date() }));
+    const sent = await store.integrations.finishDelivery(row, { ok: true, externalId: "42", url: "https://gh/42" });
+    expect(sent).toMatchObject({ status: "sent", attempts: 1 });
+    // The same attempt reporting twice, or reporting a failure late.
+    expect(await store.integrations.finishDelivery(row, { ok: false, error: "timeout" })).toBeNull();
+    expect(await store.integrations.finishDelivery({ id: crypto.randomUUID(), attempts: 1 }, { ok: false, error: "x" })).toBeNull();
+    expect(await store.integrations.listDeliveries(issue.id)).toEqual([sent]);
+  });
+
+  it("marks a connection only while it holds the credentials that were rejected", async () => {
+    const store = get();
+    const teamId = await newTeamId(store);
+    const identity = { teamId, provider: "azure-devops" as const, externalId: `pat:org-${unique()}`, label: "org", auth: "pat" as const };
+    const old = asSealedCredentials("v1.old.token");
+    const conn = await store.integrations.saveConnection({ ...identity, credentials: old });
+    // Someone connects again while a call with the old token is in flight...
+    await store.integrations.saveConnection({ ...identity, credentials: asSealedCredentials("v1.new.token") });
+    // ...and that call's 401 lands after: the new token stays active.
+    expect(await store.integrations.setConnectionStatus(conn.id, "needs_reauth", { credentials: old })).toBe(false);
+    expect((await store.integrations.getConnection(conn.id))?.status).toBe("active");
+
+    const fresh = must(await store.integrations.getConnection(conn.id));
+    expect(await store.integrations.setConnectionStatus(conn.id, "needs_reauth", { credentials: fresh.credentials })).toBe(true);
+    expect((await store.integrations.getConnection(conn.id))?.status).toBe("needs_reauth");
+    expect(await store.integrations.setConnectionStatus(crypto.randomUUID(), "active")).toBe(false);
   });
 
   it("removes a connection with its destinations, keeping their deliveries' links", async () => {
@@ -610,8 +723,14 @@ function integrationTests(get: () => StoreWith<"integrations">) {
       enabled: true,
     });
     const issue = await newIssue(store, project.id);
-    const row = await store.integrations.claimDelivery({ issueId: issue.id, destinationId: dest.id, provider: "github", retry: false });
-    await store.integrations.finishDelivery(must(row).id, { ok: true, externalId: "1", url: "https://gh/1" });
+    const row = await store.integrations.claimDelivery({
+      issueId: issue.id,
+      destinationId: dest.id,
+      provider: "github",
+      retry: false,
+      now: new Date(),
+    });
+    await store.integrations.finishDelivery(must(row), { ok: true, externalId: "1", url: "https://gh/1" });
     await store.integrations.deleteConnection(conn.id);
     expect(await store.integrations.getConnection(conn.id)).toBeNull();
     expect(await store.integrations.listDestinations(project.id)).toEqual([]);
@@ -663,6 +782,58 @@ function billingTests(get: () => StoreWith<"auth" | "billing">) {
     await store.billing.applySubscriptionEvent(change("active", at(10)));
     await store.billing.applySubscriptionEvent(change("on_hold", at(0)));
     expect((await store.billing.subscriptionFor(user.id))?.status).toBe("active");
+  });
+
+  it("keeps a re-subscribed Account's new subscription when the old one's ending arrives late", async () => {
+    const store = get();
+    const user = await newUser(store);
+    const create = { userId: user.id, dodoCustomerId: "cus", dodoProductId: "pdt", plan: "pro" as const, period: "monthly" as const };
+    const at = (s: number) => new Date(Date.now() + s * 1000);
+    const event = (dodoSubscriptionId: string, status: "active" | "cancelled" | "expired", sentAt: Date) => ({
+      eventId: `evt-${unique()}`,
+      eventType: `subscription.${status}`,
+      change: { dodoSubscriptionId, status, currentPeriodEnd: null, sentAt, create },
+    });
+    const [a, b] = [`sub-a-${unique()}`, `sub-b-${unique()}`];
+    await store.billing.applySubscriptionEvent(event(a, "active", at(0)));
+    await store.billing.applySubscriptionEvent(event(a, "cancelled", at(10)));
+    await store.billing.applySubscriptionEvent(event(b, "active", at(20)));
+    // Subscription A's row is now B's. A retry of A's cancellation, and A's
+    // expiry sent after B started, must not lock the paying Account out.
+    await store.billing.applySubscriptionEvent(event(a, "cancelled", at(10)));
+    await store.billing.applySubscriptionEvent(event(a, "expired", at(30)));
+    expect(await store.billing.subscriptionFor(user.id)).toMatchObject({ dodoSubscriptionId: b, status: "active" });
+  });
+
+  it("applies a plan change, and keeps the period end an event leaves out", async () => {
+    const store = get();
+    const user = await newUser(store);
+    const dodoSubscriptionId = `sub-${unique()}`;
+    const create = { userId: user.id, dodoCustomerId: "cus", dodoProductId: "pdt_pro", plan: "pro" as const, period: "monthly" as const };
+    const periodEnd = new Date("2026-12-01T00:00:00Z");
+    await store.billing.applySubscriptionEvent({
+      eventId: `evt-${unique()}`,
+      eventType: "subscription.active",
+      change: { dodoSubscriptionId, status: "active", currentPeriodEnd: periodEnd, sentAt: new Date(Date.now() - 1000), create },
+    });
+    await store.billing.applySubscriptionEvent({
+      eventId: `evt-${unique()}`,
+      eventType: "subscription.plan_changed",
+      change: {
+        dodoSubscriptionId,
+        status: "active",
+        currentPeriodEnd: null,
+        sentAt: new Date(),
+        product: { dodoProductId: "pdt_business_annual", plan: "business", period: "annual" },
+        create,
+      },
+    });
+    expect(await store.billing.subscriptionFor(user.id)).toMatchObject({
+      dodoProductId: "pdt_business_annual",
+      plan: "business",
+      period: "annual",
+      currentPeriodEnd: periodEnd,
+    });
   });
 }
 

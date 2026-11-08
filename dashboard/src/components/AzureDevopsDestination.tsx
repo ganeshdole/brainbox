@@ -72,7 +72,10 @@ function AzureDevopsCard({
     useCallback(() => Promise.all([api.getIntegrations(teamId), api.listDestinations(projectId)]), [teamId, projectId]),
   );
   const [changingToken, setChangingToken] = useState(false);
+  // One flag for the whole card: a disconnect and a save or test below must
+  // not run at once.
   const [busy, setBusy] = useState(false);
+  const [disconnectError, setDisconnectError] = useState<string | null>(null);
 
   const destination =
     data?.[1].find((d): d is AzureDevopsDestinationRecord => d.provider === "azure-devops") ?? null;
@@ -81,11 +84,14 @@ function AzureDevopsCard({
 
   async function disconnect(id: string) {
     setBusy(true);
+    setDisconnectError(null);
     try {
       await api.deleteConnection(id);
       onChanged();
     } catch (e) {
-      if (!isAuthRedirect(e)) setBusy(false);
+      if (isAuthRedirect(e)) return;
+      setDisconnectError((e as Error).message);
+      setBusy(false);
     }
   }
 
@@ -121,6 +127,8 @@ function AzureDevopsCard({
         )}
       </div>
 
+      {disconnectError && <p className="mt-2 text-xs text-error">{disconnectError}</p>}
+
       <div className="mt-3">
         {error ? (
           <p className="text-xs text-error">{error}</p>
@@ -143,6 +151,8 @@ function AzureDevopsCard({
             projectId={projectId}
             connection={connection}
             destination={destination}
+            busy={busy}
+            setBusy={setBusy}
             onChanged={onChanged}
           />
         )}
@@ -249,11 +259,16 @@ function WorkItemSettings({
   projectId,
   connection,
   destination,
+  busy,
+  setBusy,
   onChanged,
 }: {
   projectId: string;
   connection: IntegrationConnection;
   destination: AzureDevopsDestinationRecord | null;
+  /** The card's: shared with its Change token and Disconnect. */
+  busy: boolean;
+  setBusy: (busy: boolean) => void;
   onChanged: () => void;
 }) {
   const saved: AzureDevopsDestinationConfig | undefined = destination?.config;
@@ -264,9 +279,11 @@ function WorkItemSettings({
   const [assignedTo, setAssignedTo] = useState(saved?.assignedTo ?? "");
   const [bug, setBug] = useState(() => draftOf(saved?.bug, ["brainbox", "feedback"]));
   const [feature, setFeature] = useState(() => draftOf(saved?.feature, ["brainbox", "feature-request"]));
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState<{ externalId: string; url: string } | null>(null);
+  // The test report, with the form as it stood when sent: once the form is
+  // edited, "created" no longer describes what Save would do.
+  const [sent, setSent] = useState<{ externalId: string; url: string; draft: string } | null>(null);
+  const draftKey = JSON.stringify([project, team, areaPath, assignedTo, bug, feature]);
 
   // Each picker loads from the one before: project, then its teams and types.
   const adoProject = project?.id;
@@ -385,6 +402,9 @@ function WorkItemSettings({
             onChange={(e) => {
               setTeam(teams.data?.find((t) => t.id === e.target.value) ?? null);
               setAreaPath(undefined);
+              // a fixed iteration is one of the old team's
+              setBug((d) => ({ ...d, fixedPath: "" }));
+              setFeature((d) => ({ ...d, fixedPath: "" }));
             }}
           >
             {!team && <option value="">{project ? "Choose a team…" : "Pick a project first"}</option>}
@@ -479,7 +499,10 @@ function WorkItemSettings({
               size="sm"
               disabled={busy}
               onClick={() =>
-                void run(async () => setSent(await api.testDestination(projectId, "azure-devops")))
+                void run(async () => {
+                  const item = await api.testDestination(projectId, "azure-devops");
+                  setSent({ ...item, draft: draftKey });
+                })
               }
             >
               Send a test report
@@ -491,7 +514,7 @@ function WorkItemSettings({
         </Button>
       </div>
       {(error ?? loadError) && <p className="text-xs text-error">{error ?? loadError}</p>}
-      {sent && (
+      {sent && sent.draft === draftKey && (
         <p className="text-xs text-default">
           Test report created:{" "}
           <a href={sent.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-link">

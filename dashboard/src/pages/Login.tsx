@@ -1,5 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
-import type { EmailSignInMode } from "@ganeshdole/brainbox-shared";
+import { useEffect, useReducer, useState, type FormEvent } from "react";
 import { signIn } from "@hono/auth-js/react";
 import { useLocation, useSearchParams } from "react-router-dom";
 
@@ -14,8 +13,7 @@ import {
   savePendingSignIn,
   takePendingSignIn,
 } from "../lib/sign-in";
-
-type Status = "idle" | "sending" | "sent" | "error";
+import { initialLogin, loginReducer } from "../lib/login";
 
 /**
  * Auth.js error codes, in our words.
@@ -64,7 +62,7 @@ function GoogleMark() {
 }
 
 export function Login() {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const location = useLocation();
   const errorCode = params.get("error");
 
@@ -72,29 +70,42 @@ export function Login() {
   // straight back to the code step instead of starting over.
   const [retry] = useState(() => (errorCode === "Verification" ? takePendingSignIn() : null));
   const [email, setEmail] = useState(retry?.email ?? "");
-  const [status, setStatus] = useState<Status>(retry ? "sent" : "idle");
-  const [mode, setMode] = useState<EmailSignInMode>(retry ? "code" : "link");
-  // Hidden only once the backend says it has no Google client.
-  const [google, setGoogle] = useState(true);
-  // Why the API refused to send, e.g. AccessDenied for an address outside
-  // AUTH_ALLOWED_EMAIL_DOMAINS. Null when the send itself failed.
-  const [refusal, setRefusal] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(
+    loginReducer,
+    {
+      retrying: retry !== null,
+      // Auth.js redirects here after a magic link is sent (pages.verifyRequest),
+      // carrying ?provider=<id>&type=email from its own request. The normal
+      // path never gets here - the form below uses redirect:false and shows
+      // the inbox state inline - but a sign-in started anywhere else lands on it.
+      sentElsewhere: params.get("type") === "email",
+      error: errorCode !== null,
+    },
+    initialLogin,
+  );
+  const { mode, google, step } = state;
 
   useEffect(() => {
+    let cancelled = false;
     void fetchSignInOptions().then((options) => {
-      setMode(options.email);
-      setGoogle(options.google);
+      if (!cancelled) dispatch({ type: "options", email: options.email, google: options.google });
     });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const errorMessage = retry
-    ? "That code didn't work. Check it and try again. After five wrong codes, wait 15 minutes and send a new one."
-    : errorCode
-      ? (ERROR_MESSAGES[errorCode] ?? "Something went wrong signing in. Try again.")
-      : null;
-  const sendsCode = mode !== "link";
+  const errorMessage = !state.banner
+    ? null
+    : retry
+      ? "That code didn't work. Check it and try again. After five wrong codes, wait 15 minutes and send a new one."
+      : errorCode
+        ? (ERROR_MESSAGES[errorCode] ?? "Something went wrong signing in. Try again.")
+        : null;
+  const sendsCode = mode !== null && mode !== "link";
   // Google-only deployment (AUTH_EMAIL_MODE=off): no email form, no "or".
   const emailOff = mode === "off";
+  const sending = step.kind === "sending";
 
   // Where to land after signing in. ProtectedRoute stashes the page that
   // bounced us here, so a deep link - notably /claim?token=... after a purchase
@@ -105,16 +116,10 @@ export function Login() {
     retry?.callbackUrl ??
     (from ? `${window.location.origin}${from.pathname}${from.search}` : window.location.origin);
 
-  // Auth.js redirects here after a magic link is sent (pages.verifyRequest),
-  // carrying ?provider=<id>&type=email from its own request. The normal path
-  // never gets here - the form below uses redirect:false and shows the inbox
-  // state inline - but a sign-in started anywhere else lands on it.
-  const sentViaRedirect = params.get("type") === "email";
-
   async function sendEmail() {
     const address = email.trim();
-    if (!address || status === "sending") return;
-    setStatus("sending");
+    if (!address || sending || mode === null) return;
+    dispatch({ type: "send" });
     try {
       // redirect:false keeps the user here so we can say "check your inbox"
       // rather than bouncing them to the Auth.js default verify-request page.
@@ -122,14 +127,36 @@ export function Login() {
       // Taking it for success told refused addresses a code was on its way.
       const result = await signIn("magic-link", { email: address, redirect: false, callbackUrl });
       if (result?.error) {
-        setRefusal(result.error);
-        setStatus("error");
+        dispatch({ type: "sendFailed", refusal: result.error });
         return;
       }
-      setStatus("sent");
+      dispatch({ type: "sent" });
     } catch {
-      setRefusal(null);
-      setStatus("error");
+      dispatch({ type: "sendFailed", refusal: null });
+    }
+  }
+
+  function signInWithGoogle() {
+    if (state.googleBusy) return;
+    dispatch({ type: "google" });
+    // Success leaves the page; only a failure to start comes back here.
+    signIn("google", { callbackUrl }).catch(() => dispatch({ type: "googleFailed" }));
+  }
+
+  function changeEmail() {
+    dispatch({ type: "changeEmail" });
+    // ?type=email is what put the inbox notice up; leaving it would bring the
+    // notice back on a reload.
+    if (params.has("type")) {
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("type");
+          next.delete("provider");
+          return next;
+        },
+        { replace: true },
+      );
     }
   }
 
@@ -170,9 +197,10 @@ export function Login() {
               <Button
                 variant="secondary"
                 className="mt-7 w-full"
-                onClick={() => signIn("google", { callbackUrl })}
+                disabled={state.googleBusy}
+                onClick={signInWithGoogle}
               >
-                <GoogleMark />
+                {state.googleBusy ? <Spinner /> : <GoogleMark />}
                 Continue with Google
               </Button>
 
@@ -189,15 +217,15 @@ export function Login() {
             <div className="mt-7" />
           )}
 
-          {emailOff ? null : status === "sent" && sendsCode ? (
+          {emailOff ? null : step.kind === "sent" && sendsCode ? (
             <CodeForm
               email={email}
               alsoLink={mode === "both"}
               callbackUrl={callbackUrl}
               onResend={() => void sendEmail()}
-              onChangeEmail={() => setStatus("idle")}
+              onChangeEmail={changeEmail}
             />
-          ) : status === "sent" || sentViaRedirect ? (
+          ) : step.kind === "sent" || state.sentElsewhere ? (
             <div
               role="status"
               className="rounded-lg border border-default bg-interactive px-4 py-3 text-sm text-emphasis"
@@ -212,7 +240,7 @@ export function Login() {
               It expires in 15 minutes.
               <button
                 type="button"
-                onClick={() => setStatus("idle")}
+                onClick={changeEmail}
                 className="mt-2 block text-xs text-muted underline underline-offset-4 hover:text-emphasis"
               >
                 Use a different email
@@ -236,9 +264,11 @@ export function Login() {
               <Button
                 type="submit"
                 className="mt-3 w-full"
-                disabled={status === "sending" || !email.trim()}
+                // until the options answer, the button can't say (or know)
+                // whether it sends a link or a code
+                disabled={sending || mode === null || !email.trim()}
               >
-                {status === "sending" ? (
+                {sending || mode === null ? (
                   <Spinner />
                 ) : sendsCode ? (
                   "Email me a sign-in code"
@@ -246,10 +276,10 @@ export function Login() {
                   "Send me a sign-in link"
                 )}
               </Button>
-              {status === "error" && (
+              {step.kind === "error" && (
                 <p role="alert" className="mt-3 text-sm text-error">
-                  {refusal
-                    ? (ERROR_MESSAGES[refusal] ?? "Something went wrong signing in. Try again.")
+                  {step.refusal
+                    ? (ERROR_MESSAGES[step.refusal] ?? "Something went wrong signing in. Try again.")
                     : "Couldn’t send the email. Try again, or use Google."}
                 </p>
               )}
@@ -257,7 +287,7 @@ export function Login() {
           )}
         </div>
 
-        {!emailOff && (
+        {mode !== null && !emailOff && (
           <p className="mt-4 text-center text-xs text-muted">
             No password to remember. We&rsquo;ll email you a {sendsCode ? "code" : "link"} that signs
             you in.

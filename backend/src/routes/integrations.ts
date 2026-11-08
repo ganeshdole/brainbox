@@ -1,4 +1,9 @@
-import { AzureDevopsApiError, GithubApiError, type AzureDevopsCatalog } from "@ganeshdole/brainbox-integrations";
+import {
+  AzureDevopsApiError,
+  GithubApiError,
+  type AzureDevopsAuth,
+  type AzureDevopsCatalog,
+} from "@ganeshdole/brainbox-integrations";
 import type { IntegrationRepo } from "@ganeshdole/brainbox-shared";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
@@ -14,6 +19,7 @@ import {
 import { projectAccess, teamAccess } from "../lib/access.ts";
 import { toConnection } from "../lib/serialize.ts";
 import { sign, verify } from "../lib/signed.ts";
+import { UnreadableCredentialsError } from "../store/credentials.ts";
 import { requireModule } from "../store/modules.ts";
 import type { AppEnv } from "../types.ts";
 
@@ -30,6 +36,7 @@ const patSchema = z.object({
 
 const ADO_UNAVAILABLE = "Azure DevOps is not configured on this deployment";
 const ADO_REJECTED = "Azure DevOps rejected the token. Connect Azure DevOps again with a new one.";
+const ADO_UNREADABLE = "Brainbox can't read the stored Azure DevOps token. Connect Azure DevOps again.";
 
 /**
  * An Azure DevOps connection the caller administers, with a catalog that
@@ -48,11 +55,20 @@ async function azureDevopsConnection(
   const ado = deps.integrations.azureDevops;
   if (!ado) return c.json({ error: ADO_UNAVAILABLE }, 503);
   if (conn.status === "needs_reauth") return c.json({ error: ADO_REJECTED, code: "needs_reauth" }, 409);
-  return {
-    catalog: catalogFor(ado, await authFor(ado, conn)),
-    organization: organizationOf(conn),
-    markRejected: () => integrations.setConnectionStatus(conn.id, "needs_reauth"),
+  // Only the token this request used: a reconnect since has sealed a new one.
+  const markRejected = async () => {
+    await integrations.setConnectionStatus(conn.id, "needs_reauth", { credentials: conn.credentials });
   };
+  let auth: AzureDevopsAuth;
+  try {
+    auth = await authFor(ado, conn);
+  } catch (err) {
+    if (!(err instanceof UnreadableCredentialsError)) throw err;
+    console.error(`[integrations] the token of connection ${conn.id} can't be read:`, err.message);
+    await markRejected();
+    return c.json({ error: ADO_UNREADABLE, code: "needs_reauth" }, 409);
+  }
+  return { catalog: catalogFor(ado, auth), organization: organizationOf(conn), markRejected };
 }
 
 /** One catalog lookup as a response: Azure DevOps' own message on failure,

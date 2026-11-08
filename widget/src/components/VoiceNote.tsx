@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Mic, Pause, Play, Square, Trash2 } from "./icons.tsx";
+import { Loader2, Mic, Pause, Play, Square, Trash2 } from "./icons.tsx";
 import { startAudioRecording, type AudioRecorder } from "@ganeshdole/brainbox-core";
 import { downsample, peakLevel } from "../lib/multiband.ts";
 import { useMultibandVolume } from "../lib/use-multiband.ts";
@@ -12,19 +12,30 @@ const BARS = 32;
 /** Hard cap so a forgotten recording can't grow unbounded. */
 const MAX_SECS = 120;
 
-type Phase = "idle" | "recording" | "recorded";
+/** `requesting`: the mic permission prompt is up. `stopping`: the recorder
+ *  is handing over the clip. Neither takes a click, so one tap can't start
+ *  two recorders or stop one twice. */
+type Phase = "idle" | "requesting" | "recording" | "stopping" | "recorded";
 
 export interface VoiceNoteProps {
   /** The recorded clip once the user stops, or null when they delete it. */
   onChange: (b: Blob | null) => void;
   /** The idle label, asking for what the form's textarea asks for. */
   prompt?: string;
+  /** Whether a clip is on its way: true from the mic prompt until the clip
+   *  is handed over (or the attempt fails). A form holds Send while it is,
+   *  or the voice the user is still speaking would be left out. */
+  onRecordingChange?: (busy: boolean) => void;
 }
 
 /** Voice capture as the primary way to file a report: one big mic target, bars
  *  that track the speaker's voice per frequency band, and playback before
  *  sending - people won't submit audio they can't hear back. */
-export function VoiceNote({ onChange, prompt = "Say what went wrong" }: VoiceNoteProps) {
+export function VoiceNote({
+  onChange,
+  prompt = "Say what went wrong",
+  onRecordingChange,
+}: VoiceNoteProps) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [envelope, setEnvelope] = useState<number[]>([]);
@@ -38,6 +49,11 @@ export function VoiceNote({ onChange, prompt = "Say what went wrong" }: VoiceNot
   /** Banked in a ref, not state: this accumulates ~30x a second and is only ever
    *  read once, when recording stops. */
   const envelopeRef = useRef<number[]>([]);
+  /** Cleared on unmount, so a mic that comes up after the form has gone is
+   *  let go at once instead of recording into nothing. */
+  const mountedRef = useRef(true);
+  /** The permission prompt is up: set before the first await. */
+  const requestingRef = useRef(false);
 
   // Live bands drive the bars while recording.
   const bands = useMultibandVolume(phase === "recording" ? stream : null, { bands: BARS });
@@ -47,6 +63,7 @@ export function VoiceNote({ onChange, prompt = "Say what went wrong" }: VoiceNot
     if (!rec) return;
     recRef.current = null;
     setStream(null);
+    setPhase("stopping");
     try {
       const blob = await rec.stop();
       setEnvelope(envelopeRef.current);
@@ -60,9 +77,18 @@ export function VoiceNote({ onChange, prompt = "Say what went wrong" }: VoiceNot
   }, [onChange]);
 
   const start = async () => {
+    // A ref, not `phase`: two clicks can land before a render disables the
+    // button, and each would open a recorder of its own.
+    if (requestingRef.current || recRef.current) return;
+    requestingRef.current = true;
     setErr("");
+    setPhase("requesting");
     try {
       const rec = await startAudioRecording();
+      if (!mountedRef.current) {
+        void rec.stop().catch(() => {});
+        return;
+      }
       recRef.current = rec;
       envelopeRef.current = [];
       setStream(rec.stream);
@@ -71,11 +97,16 @@ export function VoiceNote({ onChange, prompt = "Say what went wrong" }: VoiceNot
       setPlayed(0);
       setPhase("recording");
     } catch {
+      if (!mountedRef.current) return;
       setErr("Mic blocked - allow microphone access, or type instead");
+      setPhase("idle");
+    } finally {
+      requestingRef.current = false;
     }
   };
 
   const discard = () => {
+    setErr("");
     audioRef.current?.pause();
     setPlaying(false);
     setPlayed(0);
@@ -119,31 +150,55 @@ export function VoiceNote({ onChange, prompt = "Say what went wrong" }: VoiceNot
     return () => URL.revokeObjectURL(clipUrl);
   }, [clipUrl]);
 
-  // An abandoned recording must release the mic.
-  useEffect(
-    () => () => {
+  // An abandoned recording must release the mic, including one still
+  // waiting on the permission prompt (see `start`).
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
       const rec = recRef.current;
       recRef.current = null;
       if (rec) void rec.stop().catch(() => {});
-    },
-    [],
-  );
+    };
+  }, []);
+
+  // Tell the form whether a clip is still on its way. A ref, so a parent's
+  // inline arrow doesn't re-run this every render.
+  const onBusyRef = useRef(onRecordingChange);
+  useEffect(() => {
+    onBusyRef.current = onRecordingChange;
+  }, [onRecordingChange]);
+  const busy = phase === "requesting" || phase === "recording" || phase === "stopping";
+  useEffect(() => {
+    onBusyRef.current?.(busy);
+  }, [busy]);
 
   const recorded = phase === "recorded";
-  const label = recorded ? (playing ? "Pause" : "Play voice note") : "Record a voice note";
+  const live = phase === "recording" || phase === "stopping";
+  const label =
+    phase === "requesting"
+      ? "Waiting for the microphone"
+      : recorded
+        ? playing
+          ? "Pause"
+          : "Play voice note"
+        : "Record a voice note";
 
   return (
     <div className="flex items-center gap-3 px-3 py-2.5">
       <button
         onClick={phase === "recording" ? () => void stop() : recorded ? togglePlay : start}
-        aria-label={phase === "recording" ? "Stop recording" : label}
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors ${
-          phase === "recording"
+        disabled={phase === "requesting" || phase === "stopping"}
+        aria-label={live ? "Stop recording" : label}
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-60 ${
+          live
             ? "bg-error text-error ring-2 ring-error"
             : "bg-brand text-on-brand shadow-button hover:bg-brand-hover"
         }`}
       >
-        {phase === "recording" ? (
+        {phase === "requesting" ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : live ? (
           <Square className="h-3.5 w-3.5 fill-current" />
         ) : recorded ? (
           playing ? (
@@ -156,7 +211,7 @@ export function VoiceNote({ onChange, prompt = "Say what went wrong" }: VoiceNot
         )}
       </button>
 
-      {phase === "idle" ? (
+      {phase === "idle" || phase === "requesting" ? (
         // Verb + object, and no gesture verb: "Tap" is wrong on desktop and the
         // mic icon already carries the interaction. Mirrors the textarea's
         // "Describe what went wrong" so both inputs ask for the same thing. A
@@ -188,7 +243,9 @@ export function VoiceNote({ onChange, prompt = "Say what went wrong" }: VoiceNot
         </button>
       )}
 
-      {phase !== "idle" && err && <span className="shrink-0 text-xs text-error">{err}</span>}
+      {phase !== "idle" && phase !== "requesting" && err && (
+        <span className="shrink-0 text-xs text-error">{err}</span>
+      )}
 
       {clipUrl && (
         <audio

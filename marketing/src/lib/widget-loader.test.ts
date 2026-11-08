@@ -122,4 +122,36 @@ describe("openWidget", () => {
 
     expect(open).toHaveBeenCalledOnce();
   });
+
+  it("opens once however many clicks came before the script", () => {
+    vi.useFakeTimers();
+    const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+    openWidget();
+    openWidget();
+    openWidget();
+    // one waiter, not one per click
+    expect(setIntervalSpy).toHaveBeenCalledOnce();
+
+    const open = vi.fn();
+    window.Brainbox = { open, close: vi.fn() };
+    vi.advanceTimersByTime(150);
+    expect(open).toHaveBeenCalledOnce();
+
+    // the wait is over: the next click opens straight away, once
+    openWidget();
+    expect(open).toHaveBeenCalledTimes(2);
+    setIntervalSpy.mockRestore();
+  });
+
+  it("waits afresh after a wait that timed out", () => {
+    vi.useFakeTimers();
+    openWidget();
+    vi.advanceTimersByTime(10_000);
+
+    openWidget();
+    const open = vi.fn();
+    window.Brainbox = { open, close: vi.fn() };
+    vi.advanceTimersByTime(150);
+    expect(open).toHaveBeenCalledOnce();
+  });
 });

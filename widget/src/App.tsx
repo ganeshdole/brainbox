@@ -2,31 +2,26 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   canSessionRecord,
   type Brainbox,
-  type Importance,
-  type IssueKind,
   type Mark,
   type Recording,
+  type SubmitInput,
 } from "@ganeshdole/brainbox-core";
 import { useDraft } from "@ganeshdole/brainbox-react";
 import type { TriggerMode } from "@ganeshdole/brainbox-shared";
+import {
+  canStart,
+  formMounted,
+  initialFlow,
+  reduceFlow,
+  type Flow,
+  type FlowAction,
+} from "./lib/flow.ts";
 import type { Position } from "./lib/position.ts";
 import { widgetStore } from "./lib/widget-store.ts";
 import type { WidgetComponents } from "./slots.ts";
 import * as builtIn from "./components/screens.ts";
 
-/** Which screen is showing. The report itself - screenshot, bake, recording,
- *  what gets sent - lives in the core `Draft`; this is only the UI's position
- *  in the flow. */
-type Status =
-  | "idle"
-  | "choosing"
-  | "marking"
-  | "recording"
-  | "composing"
-  | "requesting"
-  | "submitting"
-  | "done"
-  | "error";
+const reason = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 export function App({
   brainbox,
@@ -55,108 +50,122 @@ export function App({
   const Result = components.Result ?? builtIn.Result;
 
   // Open/closed is shared with the host (`useBrainboxWidget`, `mount().open()`),
-  // so it lives outside this component and the screen follows it.
+  // so it lives outside this component and the flow follows it: the store
+  // opening moves the flow off idle, and the flow going back to idle closes
+  // the store. Nothing else changes either.
   const ui = useMemo(() => widgetStore(brainbox), [brainbox]);
-  const [status, setStatus] = useState<Status>(() => (ui.isOpen() ? "choosing" : "idle"));
-  const [recording, setRecording] = useState<Recording | null>(null);
-  const [error, setError] = useState("");
-  const [issueId, setIssueId] = useState("");
-  // A feature request takes its own form, and its screenshot is a detour that
-  // comes back to it rather than going on to the bug composer.
-  const [kind, setKind] = useState<IssueKind>("bug");
+
+  // The flow is state for rendering, and a ref for deciding: a check made in
+  // a click or a store notification must see a step changed earlier in the
+  // same tick, which state only shows on the next render.
+  const [flow, setFlow] = useState<Flow>(() => initialFlow(ui.isOpen()));
+  const flowRef = useRef(flow);
+  /** Apply `action`; false when it doesn't apply where the flow is. */
+  const dispatch = useCallback((action: FlowAction): boolean => {
+    const next = reduceFlow(flowRef.current, action);
+    if (next === flowRef.current) return false;
+    flowRef.current = next;
+    setFlow(next);
+    return true;
+  }, []);
+  const { step, kind } = flow;
 
   // One draft for the lifetime of the widget; `cancel()` resets it between runs.
   const draft = useMemo(() => brainbox.draft({ exclude: hostEl }), [brainbox, hostEl]);
   const report = useDraft(draft);
 
+  // Closing the store notifies the listener below, which resets: the guard
+  // keeps a reset from running itself a second time on the way.
+  const resetting = useRef(false);
   const reset = useCallback(() => {
-    draft.cancel();
-    setRecording(null);
-    setStatus("idle");
-    setError("");
-    setIssueId("");
-    setKind("bug");
-    ui.close();
-  }, [draft, ui]);
+    if (resetting.current) return;
+    resetting.current = true;
+    try {
+      draft.cancel();
+      dispatch({ type: "reset" });
+      ui.close();
+    } finally {
+      resetting.current = false;
+    }
+  }, [draft, dispatch, ui]);
 
   // Fetch the capture libraries while the user is still choosing, so the
   // screenshot or recording they pick isn't waiting on the network.
-  const open = status !== "idle";
+  const open = step.name !== "idle";
   useEffect(() => {
     if (open) brainbox.preloadCapture();
   }, [open, brainbox]);
 
   // Not a dialog while recording: then the user is working in the host page.
-  const modal = open && status !== "recording";
+  const modal = open && step.name !== "recording";
 
   const startMarkup = useCallback(() => {
-    draft.captureScreenshot();
-    setStatus("marking");
-  }, [draft]);
+    if (dispatch({ type: "mark" })) draft.captureScreenshot();
+  }, [draft, dispatch]);
 
   const onMarksDone = useCallback(
     (marks: Mark[]) => {
-      draft.markUp(marks);
-      setStatus(kind === "feature" ? "requesting" : "composing");
+      if (dispatch({ type: "marked" })) draft.markUp(marks);
     },
-    [draft, kind],
+    [draft, dispatch],
   );
 
   const startFeature = useCallback(() => {
-    setKind("feature");
-    setStatus("requesting");
-  }, []);
+    dispatch({ type: "feature" });
+  }, [dispatch]);
 
   // Back to the form without the screenshot. The draft holds nothing else of a
   // feature request; its words live in the form.
   const dropScreenshot = useCallback(() => {
-    draft.cancel();
-    setStatus("requesting");
-  }, [draft]);
+    if (dispatch({ type: "dropScreenshot" })) draft.cancel();
+  }, [draft, dispatch]);
 
-  const finishRecording = useCallback(async (rec: Recording) => {
-    setRecording(null);
-    try {
-      await rec.stop();
-      setStatus("composing");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Recording failed");
-      setStatus("error");
-    }
-  }, []);
+  const finishRecording = useCallback(
+    async (rec: Recording) => {
+      const { run } = flowRef.current;
+      // Once: the cap and the user's click can both get here.
+      if (!dispatch({ type: "stop", recording: rec })) return;
+      try {
+        await rec.stop();
+        dispatch({ type: "stopped", run });
+      } catch (e) {
+        dispatch({ type: "failed", run, message: reason(e, "Recording failed"), retry: false });
+      }
+    },
+    [dispatch],
+  );
 
   // rrweb DOM recording - starts instantly, no permission prompt, captures only the app.
   const startRecord = useCallback(() => {
+    if (!canStart(flowRef.current)) return;
+    let rec: Recording;
     try {
-      const rec: Recording = draft.startRecording({
-        onAutoStop: () => void finishRecording(rec),
-      });
-      setRecording(rec);
-      setStatus("recording");
+      rec = draft.startRecording({ onAutoStop: () => void finishRecording(rec) });
     } catch {
-      setStatus("choosing");
+      dispatch({ type: "open" });
+      return;
     }
-  }, [draft, finishRecording]);
-
-  // Read by the store listener below, which must not restart a run under way.
-  const statusRef = useRef(status);
-  useEffect(() => {
-    statusRef.current = status;
-  }, [status]);
+    dispatch({ type: "record", recording: rec });
+    const { run } = flowRef.current;
+    // A recorder that never loads says so now, not after a minute of clock.
+    rec.ready.catch((e: unknown) => {
+      dispatch({ type: "failed", run, message: reason(e, "Couldn't start recording"), retry: false });
+    });
+  }, [draft, dispatch, finishRecording]);
 
   // The screen follows the shared open state. `open()` lands on the chooser;
   // a host's `start(mode)` goes straight into a screenshot, a recording or a
-  // feature request.
+  // feature request, unless a report is already under way.
   useEffect(() => {
     const sync = () => {
       if (!ui.isOpen()) return reset();
       const mode = ui.takeStart();
-      if (!mode) return setStatus((s) => (s === "idle" ? "choosing" : s));
-      if (statusRef.current !== "idle" && statusRef.current !== "choosing") return;
+      if (!mode) return void dispatch({ type: "open" });
+      if (!canStart(flowRef.current)) return;
       if (mode === "screenshot") startMarkup();
       else if (mode === "feature") startFeature();
       else if (canSessionRecord()) startRecord();
-      else setStatus("choosing");
+      else dispatch({ type: "open" });
     };
     const unsubscribe = ui.subscribe(sync);
     // A start() made before this subscription, e.g. `mount()` then `start()`
@@ -170,46 +179,41 @@ export function App({
       live = false;
       unsubscribe();
     };
-  }, [ui, reset, startMarkup, startRecord, startFeature]);
+  }, [ui, reset, dispatch, startMarkup, startRecord, startFeature]);
 
-  const onSubmit = useCallback(
-    async (text: string, audio: Blob | null) => {
-      setStatus("submitting");
+  const send = useCallback(
+    async (input: SubmitInput) => {
+      const { run } = flowRef.current;
+      if (!dispatch({ type: "submit" })) return;
       try {
-        const { id } = await draft.submit({ text, audio });
-        setIssueId(id ?? "");
-        setStatus("done");
+        const { id } = await draft.submit(input);
+        dispatch({ type: "sent", run, issueId: id ?? "" });
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Upload failed");
-        setStatus("error");
+        // Kept: the form, what is in it and the draft, for "Try again".
+        dispatch({ type: "failed", run, message: reason(e, "Upload failed"), retry: true });
       }
     },
-    [draft],
+    [draft, dispatch],
   );
 
-  const onSubmitFeature = useCallback(
-    async (text: string, audio: Blob | null, importance: Importance | undefined) => {
-      setStatus("submitting");
-      try {
-        const { id } = await draft.submit({ text, audio, kind: "feature", importance });
-        setIssueId(id ?? "");
-        setStatus("done");
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Upload failed");
-        setStatus("error");
-      }
-    },
-    [draft],
-  );
+  const retry = useCallback(() => {
+    dispatch({ type: "retry" });
+  }, [dispatch]);
+
+  // The form stays mounted, hidden, through the steps that come back to it
+  // (the feature request's markup, sending, a failed send), so what the user
+  // typed or said is still there.
+  const showForm = formMounted(flow);
+  const formHidden = step.name !== (kind === "feature" ? "requesting" : "composing");
 
   return (
     <>
       {/* First, so it commits before any panel below autofocuses. */}
       <DialogMark hostEl={hostEl} active={modal} />
-      {trigger === "floating" && status === "idle" && (
+      {trigger === "floating" && step.name === "idle" && (
         <Launcher position={position} onClick={ui.open} />
       )}
-      {status === "choosing" && (
+      {step.name === "choosing" && (
         <Chooser
           position={position}
           canRecord={canSessionRecord()}
@@ -219,7 +223,7 @@ export function App({
           onCancel={reset}
         />
       )}
-      {status === "marking" && (
+      {step.name === "marking" && (
         <MarkupOverlay
           screenshotUrl={report.screenshotUrl ?? undefined}
           capturePending={report.screenshotPending}
@@ -228,30 +232,33 @@ export function App({
           onCancel={kind === "feature" ? dropScreenshot : reset}
         />
       )}
-      {status === "recording" && recording && (
+      {step.name === "recording" && (
         <RecordOverlay
-          annotations={recording.annotations}
-          onStop={() => void finishRecording(recording)}
-          micActive={recording.micActive}
-          onMuteChange={recording.setMicMuted}
+          annotations={step.recording.annotations}
+          onStop={() => void finishRecording(step.recording)}
+          micActive={step.recording.micActive}
+          onMuteChange={step.recording.setMicMuted}
         />
       )}
-      {status === "composing" && (
-        <Composer
-          screenshotUrl={report.screenshotUrl ?? undefined}
-          sessionReady={report.hasSession}
-          voiceCaptured={report.hasVoice}
-          capturePending={report.screenshotPending}
-          captureFailed={report.screenshotFailed}
-          position={position}
-          onCancel={reset}
-          onSubmit={onSubmit}
-        />
+      {step.name === "stopping" && (
+        <Result kind="loading" message="Finishing the recording…" position={position} />
       )}
-      {/* Kept mounted, hidden, while its screenshot is marked up, so what the
-          user typed or said is still there when they come back. */}
-      {kind === "feature" && (status === "requesting" || status === "marking") && (
-        <div hidden={status === "marking"}>
+      {kind === "bug" && showForm && (
+        <div hidden={formHidden}>
+          <Composer
+            screenshotUrl={report.screenshotUrl ?? undefined}
+            sessionReady={report.hasSession}
+            voiceCaptured={report.hasVoice}
+            capturePending={report.screenshotPending}
+            captureFailed={report.screenshotFailed}
+            position={position}
+            onCancel={reset}
+            onSubmit={(text, audio) => void send({ text, audio })}
+          />
+        </div>
+      )}
+      {kind === "feature" && showForm && (
+        <div hidden={formHidden}>
           <FeatureComposer
             screenshotUrl={report.screenshotUrl ?? undefined}
             capturePending={report.screenshotPending}
@@ -260,22 +267,30 @@ export function App({
             onScreenshot={startMarkup}
             onRemoveScreenshot={dropScreenshot}
             onCancel={reset}
-            onSubmit={(text, audio, importance) => void onSubmitFeature(text, audio, importance)}
+            onSubmit={(text, audio, importance) =>
+              void send({ text, audio, kind: "feature", importance })
+            }
           />
         </div>
       )}
-      {status === "submitting" && <Result kind="loading" position={position} />}
-      {status === "done" && (
+      {step.name === "submitting" && <Result kind="loading" position={position} />}
+      {step.name === "done" && (
         <Result
           kind="success"
-          id={issueId}
+          id={step.issueId}
           thanks={kind === "feature" ? "Thanks! Your idea was sent." : undefined}
           position={position}
           onClose={reset}
         />
       )}
-      {status === "error" && (
-        <Result kind="error" message={error} position={position} onClose={reset} />
+      {step.name === "error" && (
+        <Result
+          kind="error"
+          message={step.message}
+          position={position}
+          onClose={reset}
+          onRetry={step.retry ? retry : undefined}
+        />
       )}
     </>
   );

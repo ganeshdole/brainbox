@@ -203,6 +203,8 @@ function FeaturesBoard({ projectId }: { projectId: string }) {
             className="ml-auto"
             size="sm"
             variant="secondary"
+            // closing mid-create would hide the form the error belongs to
+            disabled={busy}
             onClick={() => setNewTitle((t) => (t === null ? "" : null))}
           >
             <Plus /> New feature

@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "../src/app.ts";
-import { deliverIssue } from "../src/integrations/dispatch.ts";
+import { patExternalId, sealToken } from "../src/integrations/azure-devops.ts";
+import { deliverIssue, sendTicket, testTicket } from "../src/integrations/dispatch.ts";
 import { getStore } from "../src/store/index.ts";
 import { fakeAzureDevops, fieldOf } from "./azure-devops-fake.ts";
 import { fakeGithub } from "./github-fake.ts";
@@ -16,6 +17,7 @@ import {
   makeIssue,
   makeProject,
   makeUser,
+  teamOf,
 } from "./helpers.ts";
 
 vi.mock("../src/lib/transcription.ts", () => ({
@@ -418,5 +420,79 @@ describe("sending a test report", () => {
 
     const none = await app.request(`/api/projects/${project.id}/destinations/github/test`, { method: "POST", headers });
     expect(none.status).toBe(404);
+  });
+});
+
+describe("a stored token that can't be read", () => {
+  // The encryption key was changed since the token was sealed: every stored
+  // token is unreadable, and only connecting again seals a readable one.
+  async function unreadable(userId: string) {
+    const identity = { teamId: await teamOf(userId), provider: "azure-devops" as const, externalId: patExternalId("acme") };
+    const otherKey = Buffer.alloc(32, 9).toString("base64");
+    return getStore().integrations.saveConnection({
+      ...identity,
+      label: "acme",
+      auth: "pat",
+      credentials: await sealToken({ encryptionKey: otherKey }, identity, "fake-pat"),
+    });
+  }
+
+  it("marks the connection on a lookup, and answers 409 rather than 500", async () => {
+    const ado = fakeAzureDevops();
+    const { me, headers } = await setup();
+    const conn = await unreadable(me.id);
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await app.request(`/api/integrations/connections/${conn.id}/projects`, { headers });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: "needs_reauth" });
+    expect((await getStore().integrations.getConnection(conn.id))?.status).toBe("needs_reauth");
+    expect(ado.calls).toHaveLength(0);
+    error.mockRestore();
+  });
+
+  it("marks the connection when saving a destination through it", async () => {
+    fakeAzureDevops();
+    const { me, project, headers } = await setup();
+    const conn = await unreadable(me.id);
+    const res = await app.request(`/api/projects/${project.id}/destinations/azure-devops`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ connectionId: conn.id, config: INPUT }),
+    });
+    expect(res.status).toBe(409);
+    expect((await getStore().integrations.getConnection(conn.id))?.status).toBe("needs_reauth");
+  });
+
+  it("marks the connection when delivering through it", async () => {
+    const ado = fakeAzureDevops();
+    const { me, project } = await setup();
+    const conn = await unreadable(me.id);
+    await makeAzureDevopsDestination(project.id, conn.id);
+    const issue = await makeIssue(project.id, { screenshotKey: null });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const [failed] = await deliverIssue(testDeps, issue.id);
+    expect(failed).toMatchObject({ status: "failed", error: expect.stringContaining("Connect Azure DevOps again") });
+    expect((await getStore().integrations.getConnection(conn.id))?.status).toBe("needs_reauth");
+    expect(ado.calls).toHaveLength(0);
+    error.mockRestore();
+  });
+});
+
+describe("a rejection that lands after a reconnect", () => {
+  it("leaves the new token active", async () => {
+    fakeAzureDevops({ rejectAll: true });
+    const { me, project } = await setup();
+    const before = await makeAzureDevopsConnection(me.id, "old-token");
+    const dest = await makeAzureDevopsDestination(project.id, before.id);
+    // Someone pastes a new token while a send with the old one is in flight.
+    await makeAzureDevopsConnection(me.id, "new-token");
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await sendTicket(testDeps, dest, before, testTicket("https://dash.test", project));
+    expect(result).toMatchObject({ ok: false, status: 401 });
+    expect((await getStore().integrations.getConnection(before.id))?.status).toBe("active");
+    error.mockRestore();
   });
 });

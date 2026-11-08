@@ -8,7 +8,7 @@ import type {
 } from "@ganeshdole/brainbox-shared";
 
 import { api, isAuthRedirect } from "../lib/api";
-import { installResult, parseLabels } from "../lib/integrations";
+import { installResult, parseLabels, pickConnectionId } from "../lib/integrations";
 import { GithubMark } from "./GithubMark";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -27,9 +27,15 @@ interface Loaded {
 
 export function GithubDestination({ projectId, teamId }: { projectId: string; teamId: string }) {
   const [params, setParams] = useSearchParams();
-  const [notice] = useState(() => installResult(params));
+  // The install round-trip's outcome. Settings keys this card on the project,
+  // so it shows only on the project it came back to, and goes once acted on.
+  const [notice, setNotice] = useState(() => installResult(params));
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  // Loading failed: there is no card to show. Kept apart from connectError,
+  // which leaves the card (and the way to try again) in place.
   const [error, setError] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
@@ -59,11 +65,17 @@ export function GithubDestination({ projectId, teamId }: { projectId: string; te
   }, [projectId, teamId, reload]);
 
   async function connect() {
+    if (connecting) return;
+    setConnecting(true);
+    setConnectError(null);
+    setNotice(null);
     try {
       const { url } = await api.startGithubInstall(projectId);
+      // stays busy: the page is leaving for GitHub
       window.location.assign(url);
     } catch (e) {
-      if (!isAuthRedirect(e)) setError((e as Error).message);
+      setConnecting(false);
+      if (!isAuthRedirect(e)) setConnectError((e as Error).message);
     }
   }
 
@@ -86,8 +98,14 @@ export function GithubDestination({ projectId, teamId }: { projectId: string; te
           <p className="flex items-center gap-2 text-sm text-default">
             <GithubMark className="size-4 shrink-0" /> GitHub: open an issue for every report.
           </p>
-          <Button type="button" variant="outline" size="sm" onClick={() => void connect()}>
-            <GithubMark className="size-4" /> Connect GitHub
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={connecting}
+            onClick={() => void connect()}
+          >
+            <GithubMark className="size-4" /> {connecting ? "Connecting…" : "Connect GitHub"}
           </Button>
         </div>
       ) : (
@@ -96,10 +114,15 @@ export function GithubDestination({ projectId, teamId }: { projectId: string; te
           projectId={projectId}
           connections={loaded.state.connections}
           destination={loaded.destination}
+          connecting={connecting}
           onConnect={() => void connect()}
-          onChanged={() => setReload((n) => n + 1)}
+          onChanged={() => {
+            setNotice(null);
+            setReload((n) => n + 1);
+          }}
         />
       )}
+      {connectError && <p className="mt-3 text-xs text-error">{connectError}</p>}
     </div>
   );
 }
@@ -108,18 +131,20 @@ function DestinationForm({
   projectId,
   connections,
   destination,
+  connecting,
   onConnect,
   onChanged,
 }: {
   projectId: string;
   connections: IntegrationConnection[];
   destination: GithubDestinationRecord | null;
+  connecting: boolean;
   onConnect: () => void;
   onChanged: () => void;
 }) {
-  const [connectionId, setConnectionId] = useState(
-    destination?.connectionId ?? connections[0]?.id ?? "",
-  );
+  const [chosen, setConnectionId] = useState(destination?.connectionId ?? connections[0]?.id ?? "");
+  // after a disconnect the picked id can be gone from the list
+  const connectionId = pickConnectionId(chosen, connections, destination?.connectionId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -159,7 +184,7 @@ function DestinationForm({
         ) : (
           <span className="flex-1 text-sm text-emphasis">{connection?.label}</span>
         )}
-        <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={onConnect}>
+        <Button type="button" variant="ghost" size="sm" disabled={busy || connecting} onClick={onConnect}>
           Add account
         </Button>
         <Button

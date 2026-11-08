@@ -111,7 +111,7 @@ export const destinationsRoute = new Hono<AppEnv>()
     const prepared = await prepareDestination(ado, conn, input.config);
     if (!prepared.ok) {
       if (!prepared.rejected) return c.json({ error: prepared.error }, prepared.status);
-      await integrations.setConnectionStatus(conn.id, "needs_reauth");
+      await integrations.setConnectionStatus(conn.id, "needs_reauth", { credentials: conn.credentials });
       return c.json(REJECTED, 409);
     }
     const row = await integrations.saveDestination({

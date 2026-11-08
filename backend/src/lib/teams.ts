@@ -14,17 +14,8 @@ export function atLeast(role: TeamRole, min: TeamRole): boolean {
   return RANK[role] >= RANK[min];
 }
 
-/**
- * Whether `actor` may change a member who holds `target`, to `next` when
- * given (a removal otherwise). Owners may do anything; Admins manage Admins
- * and Members but neither touch Owners nor make them. The dashboard mirrors
- * this in lib/team.ts to decide which controls to show.
- */
-export function mayManage(actor: TeamRole, target: TeamRole, next?: TeamRole): boolean {
-  if (actor === "owner") return true;
-  if (actor !== "admin") return false;
-  return target !== "owner" && next !== "owner";
-}
+// Checked again by the store, with both roles as they are at the change.
+export { mayManage } from "../store/team-rules.ts";
 
 /** The name of the Team a first project creates. */
 export function defaultTeamName(name: string | null | undefined, email: string | null | undefined): string {
