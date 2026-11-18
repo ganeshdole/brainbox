@@ -1,0 +1,40 @@
+{
+  "name": "@ganeshdole/brainbox-video",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts Launch out/brainbox-launch.mp4",
+    "render:square": "remotion render src/index.ts LaunchSquare out/brainbox-launch-1x1.mp4",
+    "render:vertical": "remotion render src/index.ts LaunchVertical out/brainbox-launch-9x16.mp4",
+    "render:reels": "for id in $(remotion compositions src/index.ts --quiet); do case $id in Reel*) remotion render src/index.ts $id out/reels/$id.mp4 || exit 1;; esac; done",
+    "still": "remotion still src/index.ts Launch",
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.529",
+    "@remotion/google-fonts": "4.0.529",
+    "@remotion/paths": "4.0.529",
+    "lucide-react": "^1.17.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "remotion": "4.0.529"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@ganeshdole/brainbox-integrations": "workspace:*",
+    "@types/node": "catalog:",
+    "@types/react": "^19.2.16",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^10.4.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.6.0",
+    "typescript": "catalog:",
+    "typescript-eslint": "^8.60.1",
+    "vitest": "catalog:"
+  }
+}
