@@ -9,8 +9,9 @@
    BRAINBOX - Resend design system
    Real two-layer tokens: Radix primitives (primitives.css) +
    semantic layer (tokens.css). Dark-first marketing surface
-   (html.dark). This file holds only theme scalars and the one
-   effect the page uses (glass, on the sticky nav).
+   (html.dark). This file holds theme scalars, the page's motion
+   (press feedback, the hero entrance) and the one
+   effect it uses (glass, on the sticky nav).
    ============================================================ */
 
 @theme inline {
@@ -21,6 +22,14 @@
   --shadow-button: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
+/* The site's ease-out: a strong curve that answers at once and settles softly,
+   for press feedback and things that enter. Replaces Tailwind's weaker
+   `ease-out`; plain colour fades (`transition-colors`) keep the default.
+   lib/motion.ts reads it for the FAQ answer. */
+@theme {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
 /* Press feedback for anything clickable: it shrinks a touch while held, so a
    click is felt before the page responds, on a strong ease-out that answers at
    once and settles softly. Large targets set --press-scale nearer 1; text links
@@ -28,7 +37,7 @@
 @utility press {
   transition-property: color, background-color, border-color, text-decoration-color, box-shadow, opacity, scale;
   transition-duration: 150ms;
-  transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+  transition-timing-function: var(--ease-out);
   &:active {
     scale: var(--press-scale, 0.97);
   }
@@ -50,8 +59,12 @@
     border-color: var(--border-default);
   }
   html {
-    scroll-behavior: smooth;
     overflow-x: hidden;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
   }
   body {
     background: var(--bg-background);
@@ -62,7 +75,9 @@
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     letter-spacing: -0.011em;
-    overflow-x: hidden;
+    /* clip, not hidden: hidden makes <body> a scroll container, and the sticky
+       nav would stick to it (which never scrolls) instead of the page. */
+    overflow-x: clip;
   }
   ::selection {
     background: var(--gray-a5);
@@ -70,8 +85,35 @@
   }
 }
 
-/* glass blur (the sticky nav) */
+/* glass blur (the sticky nav). Unprefixed only: the build adds the -webkit-
+   copy Safari needs, and given both it kept just that one, so Chrome and
+   Firefox drew no blur at all. */
 .glass {
   backdrop-filter: saturate(140%) blur(25px);
-  -webkit-backdrop-filter: saturate(140%) blur(25px);
+}
+
+/* The home hero's text arrives as one wave on each load of the page: the
+   headline leads and travels furthest, the rest follow with shorter rises and
+   shrinking gaps.
+   `backwards` holds the start state through each delay and lets go after, so
+   nothing stays promoted. Reduced motion keeps the fade, together, in place. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--rise, 8px));
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+.hero-enter {
+  animation: rise-in var(--duration, 560ms) var(--ease-out) var(--delay, 0ms) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-enter {
+    animation: fade-in 300ms ease backwards;
+  }
 }

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 import type { Article, Block, Hub } from "@/content/types"
 import { CONTAINER } from "./section-head"
 
-const LINK = "text-emphasis underline underline-offset-4 decoration-gray-8 hover:decoration-current"
+const LINK = "text-emphasis underline underline-offset-4 decoration-gray-8 transition-colors hover:decoration-current"
 const INLINE = /(`[^`]+`|\[[^\]]+\]\([^)\s]+\))/
 
 /** Text with `inline code` and [links](/path). */
@@ -104,7 +104,7 @@ function BlockView({ block }: { block: Block }) {
 function Eyebrow({ parent, name }: { parent: { label: string; href: string }; name?: string }) {
   return (
     <p className="font-mono text-[12px] tracking-[0.12em] text-gray-10 uppercase">
-      <a href={parent.href} className="hover:text-emphasis">
+      <a href={parent.href} className="transition-colors hover:text-emphasis">
         {parent.label}
       </a>
       {name && <> / {name}</>}
@@ -129,7 +129,9 @@ function TryIt() {
 
 export function ArticlePage({ article }: { article: Article }) {
   return (
-    <article className={`${CONTAINER} pt-16 pb-20 md:pt-24 md:pb-28`}>
+    // break-words: an unbroken key, URL, path or identifier wraps at the column
+    // edge instead of running off a phone screen. Tables keep their own scroll.
+    <article className={`${CONTAINER} pt-16 pb-20 break-words md:pt-24 md:pb-28`}>
       <div className="max-w-[760px]">
         <Eyebrow parent={article.parent} name={article.name} />
         <h1 className="mt-4 text-[36px] leading-[1.08] font-[560] tracking-[-0.03em] text-balance text-emphasis md:text-[52px]">
@@ -167,7 +169,7 @@ export function ArticlePage({ article }: { article: Article }) {
             <ul className="mt-3 space-y-2 text-[14px]">
               {article.checked.sources.map((s) => (
                 <li key={s.href}>
-                  <a href={s.href} target="_blank" rel="noreferrer" className="text-gray-10 underline-offset-4 hover:text-emphasis hover:underline">
+                  <a href={s.href} target="_blank" rel="noreferrer" className="text-gray-10 underline-offset-4 transition-colors hover:text-emphasis hover:underline">
                     {s.label}
                   </a>
                 </li>
@@ -179,13 +181,13 @@ export function ArticlePage({ article }: { article: Article }) {
         {article.related && article.related.length > 0 && (
           <nav aria-label="Related" className="mt-12">
             <h2 className="text-[15px] font-[560] text-emphasis">Related</h2>
-            <ul className="mt-3 grid gap-x-8 gap-y-2 text-[15px] sm:grid-cols-2">
+            <ul className="mt-3 grid gap-x-8 gap-y-2 text-[15px] wrap-anywhere sm:grid-cols-2">
               {article.related.map((r) => (
                 <li key={r.href}>
                   <a
                     href={r.href}
                     {...(r.href.startsWith("http") && { target: "_blank", rel: "noreferrer" })}
-                    className="text-gray-10 underline-offset-4 hover:text-emphasis hover:underline"
+                    className="text-gray-10 underline-offset-4 transition-colors hover:text-emphasis hover:underline"
                   >
                     {r.label}
                   </a>
@@ -201,7 +203,7 @@ export function ArticlePage({ article }: { article: Article }) {
 
 export function HubPage({ hub }: { hub: Hub }) {
   return (
-    <section className={`${CONTAINER} pt-16 pb-20 md:pt-24 md:pb-28`}>
+    <section className={`${CONTAINER} pt-16 pb-20 break-words md:pt-24 md:pb-28`}>
       <div className="max-w-[760px]">
         <Eyebrow parent={{ label: "Brainbox", href: "/" }} name={hub.name} />
         <h1 className="mt-4 text-[36px] leading-[1.08] font-[560] tracking-[-0.03em] text-balance text-emphasis md:text-[52px]">
@@ -213,7 +215,9 @@ export function HubPage({ hub }: { hub: Hub }) {
           </p>
         ))}
       </div>
-      <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* wrap-anywhere, not just break-words: a grid track sizes to its longest
+          unbroken word unless that word may break. */}
+      <ul className="mt-12 grid gap-4 wrap-anywhere sm:grid-cols-2 lg:grid-cols-3">
         {hub.items.map((item) => (
           <li key={item.href}>
             <a

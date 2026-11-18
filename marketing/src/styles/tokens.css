@@ -32,7 +32,8 @@
   /* interactive (gray) */
   --bg-interactive: var(--gray-a2);
   --bg-interactive-hover: var(--gray-a3);
-  --ring-focus: var(--gray-a3);
+  /* step 9: 3.5:1 against the black page and 5.9:1 against a white button (WCAG asks 3:1) */
+  --ring-focus: var(--gray-a9);
 
   /* brand (primary button) */
   --bg-brand: #000000;
