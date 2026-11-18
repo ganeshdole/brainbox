@@ -5,7 +5,7 @@ import { SessionReplay } from "./SessionReplay.tsx";
 
 // jsdom can't run a real Replayer; this one only has to exist and answer the
 // few calls the player makes. Created by hand, so a test can hold it back.
-const replayers = vi.hoisted(() => ({ created: 0 }));
+const replayers = vi.hoisted(() => ({ created: 0, calls: [] as string[] }));
 vi.mock("@rrweb/replay", () => ({
   Replayer: class {
     wrapper = document.createElement("div");
@@ -19,8 +19,12 @@ vi.mock("@rrweb/replay", () => ({
     getCurrentTime() {
       return 0;
     }
-    pause() {}
-    play() {}
+    pause(ms?: number) {
+      replayers.calls.push(ms === undefined ? "pause" : `pause ${ms}`);
+    }
+    play(ms?: number) {
+      replayers.calls.push(ms === undefined ? "play" : `play ${ms}`);
+    }
     on() {}
   },
 }));
@@ -39,6 +43,7 @@ let root: Root;
 
 beforeEach(() => {
   replayers.created = 0;
+  replayers.calls = [];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -51,6 +56,14 @@ afterEach(() => {
 });
 
 const play = () => container.querySelector<HTMLButtonElement>(".bb-replay__btn--primary");
+const range = () => container.querySelector<HTMLInputElement>(".bb-replay__range");
+/** Moves the scrubber the way a drag does: a new value, then React's input event. */
+function scrubTo(ms: number) {
+  const el = range();
+  if (!el) throw new Error("no scrubber");
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(el, String(ms));
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+}
 const error = () => container.querySelector(".bb-replay__error")?.textContent ?? null;
 
 describe("SessionReplay", () => {
@@ -116,5 +129,46 @@ describe("SessionReplay", () => {
     expect(error()).toBeNull();
     expect(player()?.hidden).toBe(false);
     expect(play()?.disabled).toBe(false);
+  });
+
+  it("holds playback still while the scrubber is dragged, then plays on from where it landed", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(log)));
+    act(() => root.render(<SessionReplay url="/a.json" vw={800} vh={600} />));
+    await settle();
+    act(() => play()?.click());
+    expect(replayers.calls.at(-1)).toBe("play 0");
+    replayers.calls = [];
+
+    act(() => {
+      range()?.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    });
+    act(() => scrubTo(400));
+    act(() => scrubTo(650));
+    // every position is shown paused; nothing plays from it mid-drag
+    expect(replayers.calls).toEqual(["pause", "pause 400", "pause 650"]);
+    // still reads as playing: the drag is a pause the person didn't ask for
+    expect(play()?.getAttribute("aria-label")).toBe("Pause");
+
+    act(() => {
+      range()?.dispatchEvent(new Event("pointerup", { bubbles: true }));
+    });
+    expect(replayers.calls.at(-1)).toBe("play 650");
+  });
+
+  it("stays paused after a scrub that started paused", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(log)));
+    act(() => root.render(<SessionReplay url="/a.json" vw={800} vh={600} />));
+    await settle();
+    replayers.calls = [];
+
+    act(() => {
+      range()?.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    });
+    act(() => scrubTo(300));
+    act(() => {
+      range()?.dispatchEvent(new Event("pointerup", { bubbles: true }));
+    });
+    expect(replayers.calls).toEqual(["pause 300"]);
+    expect(play()?.getAttribute("aria-label")).toBe("Play");
   });
 });

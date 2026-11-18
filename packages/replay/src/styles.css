@@ -55,11 +55,31 @@
   color: var(--bb-replay-muted);
   padding: 6px;
   cursor: pointer;
-  transition: color 120ms, background-color 120ms;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    scale 150ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-.bb-replay__btn:hover {
-  color: var(--bb-replay-fg);
+/* Held down, a control gives a little: feedback the moment it is pressed,
+   on touch as well as with a mouse. Reduced motion keeps only the colours. */
+.bb-replay__btn:active:not(:disabled) {
+  scale: 0.95;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bb-replay__btn:active:not(:disabled) {
+    scale: none;
+  }
+}
+
+/* Hover only where there is a pointer that hovers: a tap would leave it on. */
+@media (hover: hover) and (pointer: fine) {
+  .bb-replay__btn:hover {
+    color: var(--bb-replay-fg);
+  }
 }
 
 /* Still loading: nothing to play or seek yet. */
@@ -75,14 +95,18 @@
   color: var(--bb-replay-accent-fg);
 }
 
-.bb-replay__btn--primary:hover {
-  background: var(--bb-replay-accent-hover);
-  color: var(--bb-replay-accent-fg);
+@media (hover: hover) and (pointer: fine) {
+  .bb-replay__btn--primary:hover {
+    background: var(--bb-replay-accent-hover);
+    color: var(--bb-replay-accent-fg);
+  }
 }
 
 .bb-replay__range {
   width: 100%;
   accent-color: var(--bb-replay-accent);
+  /* A sideways drag scrubs at once; an up-and-down one still scrolls the page. */
+  touch-action: pan-y;
 }
 
 .bb-replay__clock {
