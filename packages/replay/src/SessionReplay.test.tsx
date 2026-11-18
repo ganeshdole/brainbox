@@ -140,7 +140,7 @@ describe("SessionReplay", () => {
     replayers.calls = [];
 
     act(() => {
-      range()?.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+      range()?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
     });
     act(() => scrubTo(400));
     act(() => scrubTo(650));
@@ -149,8 +149,9 @@ describe("SessionReplay", () => {
     // still reads as playing: the drag is a pause the person didn't ask for
     expect(play()?.getAttribute("aria-label")).toBe("Pause");
 
+    // let go off the bar: the release still ends the scrub
     act(() => {
-      range()?.dispatchEvent(new Event("pointerup", { bubbles: true }));
+      document.body.dispatchEvent(new MouseEvent("pointerup", { bubbles: true, button: 0 }));
     });
     expect(replayers.calls.at(-1)).toBe("play 650");
   });
@@ -162,13 +163,43 @@ describe("SessionReplay", () => {
     replayers.calls = [];
 
     act(() => {
-      range()?.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+      range()?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
     });
     act(() => scrubTo(300));
     act(() => {
-      range()?.dispatchEvent(new Event("pointerup", { bubbles: true }));
+      range()?.dispatchEvent(new MouseEvent("pointerup", { bubbles: true, button: 0 }));
     });
     expect(replayers.calls).toEqual(["pause 300"]);
     expect(play()?.getAttribute("aria-label")).toBe("Play");
+  });
+
+  it("ends a scrub when the window loses focus mid-drag", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(log)));
+    act(() => root.render(<SessionReplay url="/a.json" vw={800} vh={600} />));
+    await settle();
+    act(() => play()?.click());
+    act(() => {
+      range()?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
+    });
+    act(() => scrubTo(200));
+    act(() => {
+      window.dispatchEvent(new Event("blur"));
+    });
+    expect(replayers.calls.at(-1)).toBe("play 200");
+    // a later drag plays on from its own landing spot, not frozen
+    act(() => scrubTo(800));
+    expect(replayers.calls.at(-1)).toBe("play 800");
+  });
+
+  it("doesn't scrub on a right-click", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(log)));
+    act(() => root.render(<SessionReplay url="/a.json" vw={800} vh={600} />));
+    await settle();
+    act(() => play()?.click());
+    replayers.calls = [];
+    act(() => {
+      range()?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 2 }));
+    });
+    expect(replayers.calls).toEqual([]);
   });
 });

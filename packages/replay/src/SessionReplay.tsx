@@ -85,9 +85,10 @@ export function SessionReplay({
   const [playing, setPlaying] = useState(false);
   // Held on the scrubber: playback stands still under the thumb, so the frame
   // follows the finger and the voice doesn't stutter through every position
-  // passed. The ref answers within the same gesture, before a re-render.
+  // passed. The ref holds where the thumb is, read within the same gesture
+  // before a re-render.
   const [scrubbing, setScrubbing] = useState(false);
-  const scrubbingRef = useRef(false);
+  const scrubRef = useRef<{ at: number } | null>(null);
   const running = playing && !scrubbing;
   const [muted, setMuted] = useState(false);
   const [time, setTime] = useState(0);
@@ -173,7 +174,7 @@ export function SessionReplay({
       }
       replayerRef.current = null;
       el.innerHTML = "";
-      scrubbingRef.current = false;
+      scrubRef.current = null;
       setScrubbing(false);
       setPlaying(false);
       setTime(0);
@@ -204,6 +205,9 @@ export function SessionReplay({
   const toggle = useCallback(() => {
     const r = replayerRef.current;
     if (!r) return;
+    // a press here (a second finger) settles any scrub still held
+    scrubRef.current = null;
+    setScrubbing(false);
     if (playing) {
       r.pause();
       setTime(r.getCurrentTime());
@@ -219,7 +223,11 @@ export function SessionReplay({
       const r = replayerRef.current;
       if (!r) return;
       setTime(ms);
-      if (playing && !scrubbingRef.current) r.play(ms);
+      const scrub = scrubRef.current;
+      if (scrub) {
+        scrub.at = ms;
+        r.pause(ms);
+      } else if (playing) r.play(ms);
       else r.pause(ms);
     },
     [playing],
@@ -228,30 +236,38 @@ export function SessionReplay({
   const startScrub = useCallback(
     (e: PointerEvent<HTMLInputElement>) => {
       const r = replayerRef.current;
-      if (!r || scrubbingRef.current) return;
-      scrubbingRef.current = true;
+      // the main button of the main pointer; a right-click is not a scrub
+      if (!r || scrubRef.current || e.button !== 0 || e.isPrimary === false) return;
+      scrubRef.current = { at: time };
       setScrubbing(true);
       if (playing) r.pause();
-      // the release lands here even if the pointer has slid off the bar
-      try {
-        e.currentTarget.setPointerCapture(e.pointerId);
-      } catch {
-        /* not every pointer can be captured; the scrub still works */
-      }
     },
-    [playing],
+    [playing, time],
   );
 
-  // Let go: a playing replay plays on from wherever the thumb landed.
-  const endScrub = useCallback(() => {
-    if (!scrubbingRef.current) return;
-    scrubbingRef.current = false;
-    setScrubbing(false);
-    const r = replayerRef.current;
-    if (!r || !playing) return;
-    if (time >= total) setPlaying(false);
-    else r.play(time);
-  }, [playing, time, total]);
+  // Let go, wherever that happens: off the bar, outside the window, or the
+  // window losing focus mid-drag. A playing replay plays on from where the
+  // thumb landed.
+  useEffect(() => {
+    if (!scrubbing) return;
+    const end = () => {
+      const scrub = scrubRef.current;
+      scrubRef.current = null;
+      setScrubbing(false);
+      const r = replayerRef.current;
+      if (!scrub || !r || !playing) return;
+      if (scrub.at >= total) setPlaying(false);
+      else r.play(scrub.at);
+    };
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    window.addEventListener("blur", end);
+    return () => {
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      window.removeEventListener("blur", end);
+    };
+  }, [scrubbing, playing, total]);
 
   const classes = className ? `bb-replay ${className}` : "bb-replay";
 
@@ -282,8 +298,6 @@ export function SessionReplay({
             disabled={!ready}
             onChange={(e) => seek(Number(e.target.value))}
             onPointerDown={startScrub}
-            onPointerUp={endScrub}
-            onPointerCancel={endScrub}
             className="bb-replay__range"
           />
           <span className="bb-replay__clock">
