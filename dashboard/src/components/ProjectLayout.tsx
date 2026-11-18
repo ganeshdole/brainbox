@@ -50,7 +50,7 @@ function MobileTab({ to, active, label }: { to: string; active: boolean; label: 
       to={to}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "rounded-full px-3 py-1.5 text-sm transition",
+        "shrink-0 rounded-full px-3 py-1.5 text-sm transition",
         active
           ? "bg-interactive text-emphasis"
           : "text-muted hover:bg-interactive-hover hover:text-emphasis",
@@ -195,10 +195,11 @@ export function ProjectLayout() {
       <div className="flex min-h-dvh min-w-0 flex-1 flex-col lg:min-h-0">
         <header className="sticky top-0 z-10 border-b border-default bg-background/90 backdrop-blur lg:hidden">
           <div className="flex items-center gap-2 px-4 py-2.5">
-            <div className="min-w-0 flex-1">
+            {/* the switcher keeps room to read the project; the tabs scroll */}
+            <div className="min-w-32 flex-1">
               <ProjectSwitcher current={project ?? null} projects={projects} onCreated={onCreated} />
             </div>
-            <nav className="flex shrink-0 gap-1">
+            <nav className="flex min-w-0 gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none]">
               <MobileTab to={base} active={isReports} label="Reports" />
               {project && has("features") && (
                 <MobileTab to={`${base}/features`} active={isFeatures} label="Features" />

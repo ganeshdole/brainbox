@@ -143,8 +143,10 @@ function ReportRow({ issue, projectLabel, triage }: { issue: Issue; projectLabel
         )}
       </span>
       {errorCount > 0 && (
+        // just the count on a phone, so a big one can't squeeze the title out
         <Chip error>
-          {errorCount} {errorCount === 1 ? "error" : "errors"}
+          {errorCount}
+          <span className="sr-only sm:not-sr-only">{errorCount === 1 ? "error" : "errors"}</span>
         </Chip>
       )}
       <span className="w-14 shrink-0 text-right font-mono text-[11px] text-muted">
