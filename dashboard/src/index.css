@@ -26,6 +26,26 @@
   --shadow-4xl: 0 32px 80px -16px rgba(0, 0, 0, 0.7);
 }
 
+/* Press feedback: pressable controls shrink a touch while held, then settle
+   back with a strong ease-out. Carries the colour transitions Tailwind's
+   `transition` would, so use it in its place. Tailwind's scale-* sets the CSS
+   `scale` property, not `transform`, so `scale` is what transitions here.
+   Wide targets set --press-scale nearer 1. Reduced motion keeps the colours
+   and drops the scale. */
+@utility press {
+  transition-property: color, background-color, border-color, text-decoration-color, box-shadow, opacity, scale;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+  &:active:not(:disabled) {
+    scale: var(--press-scale, 0.97);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    &:active:not(:disabled) {
+      scale: none;
+    }
+  }
+}
+
 @layer base {
   :root {
     color-scheme: light;
@@ -37,8 +57,18 @@
     border-color: var(--border-default);
   }
   html {
-    scroll-behavior: smooth;
     overflow-x: hidden;
+    /* Every control here has its own hover and :active state; the browser's
+       grey tap flash on top of them reads as a web page, not an app. */
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Taps fire at once, with no wait to see whether a double-tap zoom follows. */
+  a,
+  button,
+  label,
+  summary,
+  [role="button"] {
+    touch-action: manipulation;
   }
   body {
     background: var(--bg-background);
@@ -60,6 +90,17 @@
   select option {
     background-color: var(--bg-elevated);
     color: var(--text-emphasis);
+  }
+}
+
+/* iOS Safari zooms the page into any field under 16px and leaves it zoomed.
+   On touch screens fields get 16px; a mouse keeps the design's 14px. Outside
+   any layer, so it outranks the text-sm on each field. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"], [type="radio"], [type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
   }
 }
 

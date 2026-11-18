@@ -98,7 +98,7 @@ function ReportRow({ issue, projectLabel, triage }: { issue: Issue; projectLabel
         )}
         {(issue.session ?? issue.video) && (
           <span className="absolute inset-0 grid place-items-center">
-            <span className="grid size-6 place-items-center rounded-full bg-black-a9 text-white transition group-hover:scale-105">
+            <span className="grid size-6 place-items-center rounded-full bg-black-a9 text-white">
               <Play className="h-3 w-3" />
             </span>
           </span>
@@ -143,8 +143,10 @@ function ReportRow({ issue, projectLabel, triage }: { issue: Issue; projectLabel
         )}
       </span>
       {errorCount > 0 && (
+        // just the count on a phone, so a big one can't squeeze the title out
         <Chip error>
-          {errorCount} {errorCount === 1 ? "error" : "errors"}
+          {errorCount}{" "}
+          <span className="sr-only sm:not-sr-only">{errorCount === 1 ? "error" : "errors"}</span>
         </Chip>
       )}
       <span className="w-14 shrink-0 text-right font-mono text-[11px] text-muted">
@@ -231,7 +233,7 @@ function BulkBar({
         type="button"
         onClick={onClear}
         disabled={busy}
-        className="ml-auto disabled:opacity-50 rounded-md px-2 py-1 text-xs text-muted transition hover:bg-interactive-hover hover:text-emphasis"
+        className="ml-auto disabled:opacity-50 rounded-md px-2 py-1 text-xs text-muted press hover:bg-interactive-hover hover:text-emphasis"
       >
         Clear
       </button>
@@ -424,7 +426,7 @@ export function Reports() {
                     type="button"
                     onClick={() => setFilter(f.key)}
                     className={cn(
-                      "rounded-full px-3 py-1 text-xs transition",
+                      "rounded-full px-3 py-1 text-xs press",
                       filter === f.key
                         ? "bg-interactive text-emphasis"
                         : "text-muted hover:bg-interactive-hover hover:text-emphasis",
@@ -438,7 +440,7 @@ export function Reports() {
                   pill widths change, so the open menu doesn't jump around */}
               {!project && (
                 <DropdownMenu>
-                  <DropdownMenuTrigger className="rounded-full px-3 py-1 text-xs text-muted transition hover:bg-interactive-hover hover:text-emphasis data-[state=open]:bg-interactive data-[state=open]:text-emphasis">
+                  <DropdownMenuTrigger className="rounded-full px-3 py-1 text-xs text-muted press hover:bg-interactive-hover hover:text-emphasis data-[state=open]:bg-interactive data-[state=open]:text-emphasis">
                     Projects{" "}
                     <span className="font-mono">
                       {projects.length - hiddenProjects.size}/{projects.length}

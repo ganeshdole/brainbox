@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 import type { Replayer } from "@rrweb/replay";
 
@@ -83,6 +83,13 @@ export function SessionReplay({
   const error = failure?.load === load ? failure.message : null;
   const ready = readyFor === load;
   const [playing, setPlaying] = useState(false);
+  // Held on the scrubber: playback stands still under the thumb, so the frame
+  // follows the finger and the voice doesn't stutter through every position
+  // passed. The ref holds where the thumb is, read within the same gesture
+  // before a re-render.
+  const [scrubbing, setScrubbing] = useState(false);
+  const scrubRef = useRef<{ at: number } | null>(null);
+  const running = playing && !scrubbing;
   const [muted, setMuted] = useState(false);
   const [time, setTime] = useState(0);
   const [total, setTotal] = useState(0);
@@ -167,6 +174,8 @@ export function SessionReplay({
       }
       replayerRef.current = null;
       el.innerHTML = "";
+      scrubRef.current = null;
+      setScrubbing(false);
       setPlaying(false);
       setTime(0);
     };
@@ -174,7 +183,7 @@ export function SessionReplay({
 
   // progress clock while playing; keeps the voice track glued to the replay
   useEffect(() => {
-    if (!playing) return;
+    if (!running) return;
     const voice = audioRef.current;
     let raf = 0;
     const tick = () => {
@@ -191,11 +200,14 @@ export function SessionReplay({
       cancelAnimationFrame(raf);
       voice?.pause();
     };
-  }, [playing]);
+  }, [running]);
 
   const toggle = useCallback(() => {
     const r = replayerRef.current;
     if (!r) return;
+    // a press here (a second finger) settles any scrub still held
+    scrubRef.current = null;
+    setScrubbing(false);
     if (playing) {
       r.pause();
       setTime(r.getCurrentTime());
@@ -211,11 +223,51 @@ export function SessionReplay({
       const r = replayerRef.current;
       if (!r) return;
       setTime(ms);
-      if (playing) r.play(ms);
+      const scrub = scrubRef.current;
+      if (scrub) {
+        scrub.at = ms;
+        r.pause(ms);
+      } else if (playing) r.play(ms);
       else r.pause(ms);
     },
     [playing],
   );
+
+  const startScrub = useCallback(
+    (e: PointerEvent<HTMLInputElement>) => {
+      const r = replayerRef.current;
+      // the main button of the main pointer; a right-click is not a scrub
+      if (!r || scrubRef.current || e.button !== 0 || e.isPrimary === false) return;
+      scrubRef.current = { at: time };
+      setScrubbing(true);
+      if (playing) r.pause();
+    },
+    [playing, time],
+  );
+
+  // Let go, wherever that happens: off the bar, outside the window, or the
+  // window losing focus mid-drag. A playing replay plays on from where the
+  // thumb landed.
+  useEffect(() => {
+    if (!scrubbing) return;
+    const end = () => {
+      const scrub = scrubRef.current;
+      scrubRef.current = null;
+      setScrubbing(false);
+      const r = replayerRef.current;
+      if (!scrub || !r || !playing) return;
+      if (scrub.at >= total) setPlaying(false);
+      else r.play(scrub.at);
+    };
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    window.addEventListener("blur", end);
+    return () => {
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      window.removeEventListener("blur", end);
+    };
+  }, [scrubbing, playing, total]);
 
   const classes = className ? `bb-replay ${className}` : "bb-replay";
 
@@ -245,6 +297,7 @@ export function SessionReplay({
             value={Math.min(time, total)}
             disabled={!ready}
             onChange={(e) => seek(Number(e.target.value))}
+            onPointerDown={startScrub}
             className="bb-replay__range"
           />
           <span className="bb-replay__clock">

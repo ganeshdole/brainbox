@@ -32,3 +32,75 @@
     color-scheme: dark;
   }
 }
+
+/* ============================================================
+   MOTION + TOUCH - interaction polish only, no visual change at rest.
+   One strong ease-out for everything that enters or responds to a
+   press (cubic-bezier(0.23, 1, 0.32, 1)). Tailwind's `scale-*`
+   would set the `scale` property, so these do too, and transition
+   `scale`, not `transform`.
+   ============================================================ */
+
+@layer base {
+  .bb-root {
+    --bb-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    /* No grey flash over a tapped control on iOS and Android: each one
+       answers the press itself (`press`). Inherited, so set once. */
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* A tap fires at once instead of waiting out a double-tap zoom, and a
+     long press on a control doesn't select its label. Text the user
+     reads (error messages, ids) stays selectable. */
+  .bb-root :where(button, a) {
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+}
+
+/* Press feedback: the control dips as the finger or mouse lands, not when
+   it lifts. Not on a disabled control, and no movement under reduced motion
+   (its colours still answer). `press` for controls whose state a keyboard
+   shortcut can change (the drawing tools), so that change stays instant;
+   `press-colors` also eases hover and state colours for the rest. */
+@utility press {
+  transition: scale 160ms var(--bb-ease-out);
+  &:active:not(:disabled) {
+    scale: 0.97;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    &:active:not(:disabled) {
+      scale: none;
+    }
+  }
+}
+
+@utility press-colors {
+  @apply press;
+  transition:
+    scale 160ms var(--bb-ease-out),
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    opacity 150ms ease;
+}
+
+/* A panel or popover arriving: grows out of the corner it is pinned to
+   (pair with `originClass` or an `origin-*`), never from nothing. Entry
+   only, through @starting-style, so nothing waits on it; it plays each time
+   a panel mounts or comes back from `hidden`, so a panel that only changes
+   its words (App's single Result slot) stays put. Under reduced motion it
+   only fades. */
+@utility pop-in {
+  transition:
+    opacity 200ms var(--bb-ease-out),
+    scale 200ms var(--bb-ease-out);
+  @starting-style {
+    opacity: 0;
+    scale: 0.96;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    transition: opacity 200ms var(--bb-ease-out);
+  }
+}

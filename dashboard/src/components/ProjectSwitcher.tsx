@@ -80,7 +80,7 @@ export function ProjectSwitcher({
           if (open) close();
           else setOpen(true);
         }}
-        className="flex w-full min-w-0 items-center gap-2 rounded-lg border border-interactive bg-interactive px-2.5 py-2 text-left text-sm text-emphasis outline-none transition hover:bg-interactive-hover focus-visible:ring-[3px] focus-visible:ring-focus"
+        className="flex w-full min-w-0 items-center gap-2 rounded-lg border border-interactive bg-interactive px-2.5 py-2 text-left text-sm text-emphasis outline-none press [--press-scale:0.985] hover:bg-interactive-hover focus-visible:ring-[3px] focus-visible:ring-focus"
       >
         <span className="min-w-0 flex-1 truncate font-medium">
           {current?.name ?? "All projects"}
@@ -89,8 +89,10 @@ export function ProjectSwitcher({
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full z-20 mt-1 min-w-48 overflow-hidden rounded-xl border border-default bg-elevated shadow-3xl">
-          <ul role="listbox" className="max-h-64 overflow-y-auto py-1">
+        // Drops out of the trigger above it, like the other menus.
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 min-w-48 origin-top animate-in fade-in-0 zoom-in-95 overflow-hidden rounded-xl border border-default bg-elevated shadow-3xl ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:[--tw-enter-scale:1]">
+          {/* a long list scrolls itself, not the page behind it */}
+          <ul role="listbox" className="max-h-64 overflow-y-auto overscroll-contain py-1">
             {projects.length > 1 && (
               <li className="border-b border-default pb-1 mb-1">
                 <button
@@ -158,7 +160,7 @@ export function ProjectSwitcher({
                 <button
                   type="submit"
                   disabled={busy || !name.trim()}
-                  className="h-8 w-full rounded-md bg-brand text-sm font-medium text-on-brand transition hover:bg-brand-hover disabled:pointer-events-none disabled:opacity-50"
+                  className="h-8 w-full rounded-md bg-brand text-sm font-medium text-on-brand press hover:bg-brand-hover disabled:pointer-events-none disabled:opacity-50"
                 >
                   {busy ? "Creating…" : "Create project"}
                 </button>

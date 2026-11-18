@@ -14,6 +14,7 @@ import {
   useMultibandVolume,
   widgetCss,
 } from "./ui.ts";
+import { panelClass, type Position } from "./lib/position.ts";
 import { BRAINBOX_HOST_ID, BrainboxWidget, isBrainboxEvent } from "./index.ts";
 import { BrainboxProvider } from "@ganeshdole/brainbox-react";
 
@@ -254,3 +255,44 @@ describe("useMultibandVolume", () => {
     expect(levels).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
   });
 });
+
+describe("corner panels", () => {
+  const panels: Array<[string, (p: Position) => React.ReactNode]> = [
+    ["Chooser", (p) => <Chooser position={p} canRecord onScreenshot={() => {}} onRecord={() => {}} onCancel={() => {}} />],
+    ["Composer", (p) => <Composer position={p} onCancel={() => {}} onSubmit={() => {}} />],
+    [
+      "FeatureComposer",
+      (p) => (
+        <FeatureComposer
+          position={p}
+          onScreenshot={() => {}}
+          onRemoveScreenshot={() => {}}
+          onCancel={() => {}}
+          onSubmit={() => {}}
+        />
+      ),
+    ],
+    ["Result", (p) => <Result kind="loading" position={p} />],
+  ];
+
+  it.each(panels)("%s grows out of its corner and never outgrows the screen", (_, panel) => {
+    for (const p of ["bottom-right", "top-left"] as const) {
+      render(panel(p));
+      expect(container.firstElementChild?.className).toContain(panelClass(p));
+    }
+  });
+
+  it("wraps a long error beside an icon that keeps its size", () => {
+    const message =
+      "Upload failed: 413 at https://api.brainbox.sh/v1/ingest/projects/pk_live_8f3a9c2b7e1d4f6a0b5c3e9d7f2a1b8c/reports";
+    render(<Result kind="error" message={message} position="bottom-right" onClose={() => {}} />);
+    const line = container.querySelector("p");
+    const icon = line?.querySelector("svg");
+    const text = line?.querySelector("span");
+    expect(icon?.getAttribute("class")).toContain("shrink-0");
+    expect(text?.textContent).toBe(message);
+    expect(text?.className).toContain("min-w-0");
+    expect(text?.className).toContain("[overflow-wrap:anywhere]");
+  });
+});
+

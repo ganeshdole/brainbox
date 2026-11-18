@@ -47,7 +47,7 @@ export function UserMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label="Account menu"
-        className="flex w-full items-center gap-2.5 rounded-lg p-2 text-left outline-none transition hover:bg-interactive-hover focus-visible:ring-[3px] focus-visible:ring-focus data-[state=open]:bg-interactive"
+        className="flex w-full items-center gap-2.5 rounded-lg p-2 text-left outline-none press [--press-scale:0.985] hover:bg-interactive-hover focus-visible:ring-[3px] focus-visible:ring-focus data-[state=open]:bg-interactive"
       >
         <Avatar image={user?.image} initial={initial} className="size-8" />
         <span className="min-w-0 flex-1">
