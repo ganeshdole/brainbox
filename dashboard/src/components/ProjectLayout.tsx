@@ -50,7 +50,8 @@ function MobileTab({ to, active, label }: { to: string; active: boolean; label: 
       to={to}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "shrink-0 rounded-full px-3 py-1.5 text-sm transition",
+        // inset focus ring: the scrolling tab row would clip one drawn outside
+        "shrink-0 rounded-full px-3 py-1.5 text-sm transition focus-visible:outline-offset-[-2px]",
         active
           ? "bg-interactive text-emphasis"
           : "text-muted hover:bg-interactive-hover hover:text-emphasis",
