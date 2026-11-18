@@ -294,7 +294,7 @@ function FeaturesBoard({ projectId }: { projectId: string }) {
                     type="button"
                     onClick={() => setFilter(f.key)}
                     className={cn(
-                      "rounded-full px-3 py-1 text-xs transition",
+                      "rounded-full px-3 py-1 text-xs press",
                       filter === f.key
                         ? "bg-interactive text-emphasis"
                         : "text-muted hover:bg-interactive-hover hover:text-emphasis",

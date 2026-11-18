@@ -305,7 +305,7 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
     <article className="mx-auto w-full max-w-6xl">
       <header className="px-4 pt-6 sm:px-6">
         {back}
-        <h2 className="line-clamp-2 text-base font-medium tracking-tight text-emphasis">
+        <h2 className="line-clamp-2 text-base font-medium tracking-tight text-emphasis wrap-anywhere">
           {issueTitle(issue)}
         </h2>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs text-muted">
@@ -395,7 +395,8 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
           {/* short notes already read in full as the header title */}
           {issue.text && issue.text.trim().length > 140 && (
             <Figure label="Note">
-              <p className="rounded-xl border border-default bg-elevated p-4 text-sm leading-relaxed text-default">
+              {/* a pasted URL or stack trace has nowhere to break; break it anyway */}
+              <p className="rounded-xl border border-default bg-elevated p-4 text-sm leading-relaxed text-default wrap-anywhere">
                 {issue.text}
               </p>
             </Figure>
@@ -421,7 +422,7 @@ export function IssueDetailPane({ issueId, projectId }: { issueId: string; proje
                 {transcript.text && <CopyButton text={transcript.text} />}
               </div>
               {transcript.text ? (
-                <p className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded-xl border border-default bg-elevated p-4 text-sm leading-relaxed text-default">
+                <p className="max-h-80 overflow-y-auto overscroll-contain whitespace-pre-wrap wrap-anywhere rounded-xl border border-default bg-elevated p-4 text-sm leading-relaxed text-default">
                   {transcript.text}
                 </p>
               ) : (

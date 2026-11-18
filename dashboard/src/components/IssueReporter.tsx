@@ -119,7 +119,7 @@ function fillsHalfRow(tiles: ReportField[], index: number): boolean {
 }
 
 const ACTION =
-  "flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg border border-default bg-interactive text-xs text-default transition hover:bg-interactive-hover hover:text-emphasis";
+  "flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg border border-default bg-interactive text-xs text-default press hover:bg-interactive-hover hover:text-emphasis";
 
 function ActionLink({
   href,

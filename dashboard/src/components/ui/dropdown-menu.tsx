@@ -30,9 +30,12 @@ function DropdownMenuContent({
         sideOffset={sideOffset}
         className={cn(
           "z-50 min-w-56 overflow-hidden rounded-xl border border-default bg-elevated p-1 shadow-3xl",
+          // Grows out of its trigger (Radix measures the corner), on a strong
+          // ease-out; leaving is quicker than arriving. Reduced motion fades.
+          "origin-(--radix-dropdown-menu-content-transform-origin) ease-[cubic-bezier(0.23,1,0.32,1)]",
           "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
-          "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
-          "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+          "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:duration-100",
+          "motion-reduce:data-[state=open]:[--tw-enter-scale:1] motion-reduce:data-[state=closed]:[--tw-exit-scale:1]",
           className
         )}
         {...props}
@@ -49,7 +52,7 @@ function DropdownMenuItem({
     <DropdownMenuPrimitive.Item
       data-slot="dropdown-menu-item"
       className={cn(
-        "flex cursor-default select-none items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-default outline-none transition",
+        "flex cursor-default select-none items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-default outline-none",
         "focus:bg-interactive-hover focus:text-emphasis data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         "[&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted",
         className
@@ -68,7 +71,7 @@ function DropdownMenuCheckboxItem({
     <DropdownMenuPrimitive.CheckboxItem
       data-slot="dropdown-menu-checkbox-item"
       className={cn(
-        "relative flex cursor-default select-none items-center gap-2.5 rounded-lg py-1.5 pl-8 pr-2.5 text-sm text-default outline-none transition",
+        "relative flex cursor-default select-none items-center gap-2.5 rounded-lg py-1.5 pl-8 pr-2.5 text-sm text-default outline-none",
         "focus:bg-interactive-hover focus:text-emphasis data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className
       )}

@@ -91,7 +91,7 @@ export function DomainsEditor({
           <button
             type="submit"
             disabled={saving || !input.trim()}
-            className="flex items-center gap-1 rounded-full border border-default px-2.5 py-1 text-xs text-muted transition enabled:hover:bg-interactive-hover enabled:hover:text-emphasis disabled:opacity-50"
+            className="flex items-center gap-1 rounded-full border border-default px-2.5 py-1 text-xs text-muted press enabled:hover:bg-interactive-hover enabled:hover:text-emphasis disabled:opacity-50"
           >
             <Plus className="h-3 w-3" /> Add
           </button>
