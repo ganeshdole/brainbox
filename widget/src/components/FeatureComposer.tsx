@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { Importance } from "@ganeshdole/brainbox-core";
 import { Camera, ImageOff, Loader2, Send, X } from "./icons.tsx";
 import { VoiceNote, type VoiceNotePhase } from "./VoiceNote.tsx";
-import { posClass, type Position } from "../lib/position.ts";
+import { panelClass, type Position } from "../lib/position.ts";
 
 const IMPORTANCE: Array<{ value: Importance; label: string }> = [
   { value: "nice", label: "Nice to have" },
@@ -63,11 +63,11 @@ export function FeatureComposer({
 
   return (
     <div
-      className={`fixed ${posClass(position)} z-[2147483647] w-96 rounded-2xl border border-default bg-elevated p-4 shadow-3xl`}
+      className={`${panelClass(position)} w-96 rounded-2xl border border-default bg-elevated p-4 shadow-3xl`}
     >
       <div className="mb-3 flex items-center justify-between">
         <span className="text-sm font-medium text-emphasis">Suggest a feature</span>
-        <button onClick={onCancel} aria-label="Close" className="text-muted hover:text-emphasis">
+        <button onClick={onCancel} aria-label="Close" className="press-colors text-muted hover:text-emphasis">
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -80,7 +80,7 @@ export function FeatureComposer({
           onChange={(e) => setText(e.target.value)}
           placeholder="What are you trying to do, and what's in the way?"
           aria-label="Your idea"
-          className="h-24 w-full resize-none bg-transparent p-3 text-sm text-default outline-none placeholder:text-placeholder"
+          className="h-24 w-full resize-none bg-transparent p-3 text-sm text-default pointer-coarse:text-[16px] outline-none placeholder:text-placeholder"
         />
         <div className="border-t border-subtle">
           <VoiceNote
@@ -100,7 +100,7 @@ export function FeatureComposer({
             type="button"
             aria-pressed={importance === option.value}
             onClick={() => setImportance((v) => (v === option.value ? undefined : option.value))}
-            className={`flex-1 rounded-lg border px-2 py-1.5 text-xs transition ${
+            className={`press-colors flex-1 rounded-lg border px-2 py-1.5 text-xs ${
               importance === option.value
                 ? "border-interactive bg-interactive text-emphasis"
                 : "border-default text-default hover:bg-interactive-hover"
@@ -130,14 +130,17 @@ export function FeatureComposer({
             </span>
           )}
           <span className="flex-1 text-xs text-default">Screenshot attached</span>
-          <button onClick={onRemoveScreenshot} className="text-xs text-muted hover:text-emphasis">
+          <button
+            onClick={onRemoveScreenshot}
+            className="press-colors text-xs text-muted hover:text-emphasis"
+          >
             Remove
           </button>
         </div>
       ) : (
         <button
           onClick={onScreenshot}
-          className="mt-3 flex items-center gap-1.5 text-xs text-default hover:text-emphasis"
+          className="press-colors mt-3 flex items-center gap-1.5 text-xs text-default hover:text-emphasis"
         >
           <Camera className="h-3.5 w-3.5" /> Add a screenshot
         </button>
@@ -149,7 +152,7 @@ export function FeatureComposer({
           onSubmit(text, audio, importance);
         }}
         disabled={!canSend}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2 text-sm font-medium text-on-brand shadow-button hover:bg-brand-hover disabled:opacity-40"
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2 text-sm font-medium text-on-brand shadow-button press-colors hover:bg-brand-hover disabled:opacity-40"
       >
         <Send className="h-4 w-4" /> Send idea
       </button>

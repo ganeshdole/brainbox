@@ -244,8 +244,9 @@ export function MarkupOverlay({
           the top of the page is the header, nav and hero - very often the exact
           thing the user opened the widget to report - and a pill sitting over it
           hides what they came to mark up. `bottom-24` clears the toolbar, whose
-          height is fixed by its `h-9` controls. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-24 flex justify-center">
+          height is fixed by its `h-9` controls. Under 32rem the toolbar wraps
+          into two rows (see MarkupToolbar), so the pill climbs by one row and its gap: 8.875rem. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-[calc(6rem+env(safe-area-inset-bottom,0px))] flex justify-center max-[32rem]:bottom-[calc(8.875rem+env(safe-area-inset-bottom,0px))]">
         {capturePending ? (
           <span className="flex items-center gap-2 rounded-full bg-elevated px-3 py-1 text-xs text-default">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Freezing the page

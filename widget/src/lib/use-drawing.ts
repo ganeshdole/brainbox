@@ -25,7 +25,9 @@ export interface Drawing {
   draft: Mark | null;
   begin: (tool: DragTool, e: React.PointerEvent) => void;
   extend: (e: React.PointerEvent) => void;
-  finish: () => void;
+  /** Ends the stroke. Given the event, only the pointer that began it can
+   *  end it; called bare, it ends whatever is in progress. */
+  finish: (e?: React.PointerEvent) => void;
 }
 
 let seq = 0;
@@ -41,11 +43,19 @@ export const nextMarkId = () => `m${++seq}`;
  * animation frame. A fast drag fires far more pointer events than the display
  * refreshes, and re-rendering per sample is exactly what makes a drawing
  * surface feel like it's lagging behind the cursor.
+ *
+ * One pointer draws. On a phone a second finger (or a palm) landing mid-stroke
+ * would otherwise restart the mark where it touched, interleave its moves into
+ * the stroke so the line zigzags between the two, and end it when it lifts.
+ * The stroke belongs to the pointer that began it; the others are ignored.
  */
 export function useDrawing({ color, onCommit }: DrawingOptions): Drawing {
   const [draft, setDraft] = useState<Mark | null>(null);
   const live = useRef<Mark | null>(null);
   const origin = useRef<Point | null>(null);
+  /** The pointer drawing the stroke in progress, and its type. */
+  const pointer = useRef<number | null>(null);
+  const pointerType = useRef("");
   const frame = useRef(0);
 
   const schedule = useCallback(() => {
@@ -60,6 +70,20 @@ export function useDrawing({ color, onCommit }: DrawingOptions): Drawing {
 
   const begin = useCallback(
     (tool: DragTool, e: React.PointerEvent) => {
+      // Another pointer while a stroke is under way: a second finger, or a
+      // palm resting while a pen draws. A browser picks a primary pointer per
+      // type, so a new primary of the *same* type means the one drawing has
+      // lifted, and its pointerup went missing: that one may start over, so
+      // a lost event can't lock the surface.
+      if (
+        live.current &&
+        e.pointerId !== pointer.current &&
+        !(e.isPrimary && e.pointerType === pointerType.current)
+      ) {
+        return;
+      }
+      pointer.current = e.pointerId;
+      pointerType.current = e.pointerType;
       const p = { x: e.clientX, y: e.clientY };
       // Keeps a drag alive if the pointer leaves the window mid-stroke. Not
       // every pointer can be captured (synthetic events, some pens) and a
@@ -85,7 +109,7 @@ export function useDrawing({ color, onCommit }: DrawingOptions): Drawing {
     (e: React.PointerEvent) => {
       const from = origin.current;
       const d = live.current;
-      if (!from || !d) return;
+      if (!from || !d || e.pointerId !== pointer.current) return;
 
       if (d.kind === "pen") {
         // Coalesced events are the samples the browser took between frames.
@@ -106,7 +130,9 @@ export function useDrawing({ color, onCommit }: DrawingOptions): Drawing {
     [schedule],
   );
 
-  const finish = useCallback(() => {
+  const finish = useCallback((e?: React.PointerEvent) => {
+    if (e && live.current && e.pointerId !== pointer.current) return;
+    pointer.current = null;
     origin.current = null;
     cancelAnimationFrame(frame.current);
     frame.current = 0;

@@ -1,5 +1,5 @@
 import { Camera, Lightbulb, Video, X } from "./icons.tsx";
-import { posClass, type Position } from "../lib/position.ts";
+import { panelClass, type Position } from "../lib/position.ts";
 
 /** The first panel after opening: what kind of report this is. */
 export interface ChooserProps {
@@ -29,18 +29,18 @@ export function Chooser({
 }: ChooserProps) {
   return (
     <div
-      className={`fixed ${posClass(position)} z-[2147483647] w-72 rounded-2xl border border-default bg-elevated p-4 shadow-3xl`}
+      className={`${panelClass(position)} w-72 rounded-2xl border border-default bg-elevated p-4 shadow-3xl`}
     >
       <div className="mb-3 flex items-center justify-between">
         <span className="text-sm font-medium text-emphasis">Send feedback</span>
-        <button onClick={onCancel} aria-label="Close" className="text-muted hover:text-emphasis">
+        <button onClick={onCancel} aria-label="Close" className="press-colors text-muted hover:text-emphasis">
           <X className="h-4 w-4" />
         </button>
       </div>
 
       <button
         onClick={onScreenshot}
-        className="mb-2 flex w-full items-center gap-3 rounded-xl border border-default bg-interactive p-3 text-left hover:bg-interactive-hover"
+        className="mb-2 flex w-full items-center gap-3 rounded-xl border border-default bg-interactive p-3 text-left press-colors hover:bg-interactive-hover"
       >
         <Camera className="h-5 w-5 shrink-0 text-emphasis" />
         <span>
@@ -52,7 +52,7 @@ export function Chooser({
       {canRecord && (
         <button
           onClick={onRecord}
-          className="mb-2 flex w-full items-center gap-3 rounded-xl border border-default bg-interactive p-3 text-left hover:bg-interactive-hover"
+          className="mb-2 flex w-full items-center gap-3 rounded-xl border border-default bg-interactive p-3 text-left press-colors hover:bg-interactive-hover"
         >
           <Video className="h-5 w-5 shrink-0 text-emphasis" />
           <span>
@@ -65,7 +65,7 @@ export function Chooser({
       {onFeature && (
         <button
           onClick={onFeature}
-          className="flex w-full items-center gap-3 rounded-xl border border-default bg-interactive p-3 text-left hover:bg-interactive-hover"
+          className="flex w-full items-center gap-3 rounded-xl border border-default bg-interactive p-3 text-left press-colors hover:bg-interactive-hover"
         >
           <Lightbulb className="h-5 w-5 shrink-0 text-emphasis" />
           <span>

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Check, Loader2, X } from "./icons.tsx";
-import { posClass, type Position } from "../lib/position.ts";
+import { panelClass, type Position } from "../lib/position.ts";
 
 const SUCCESS_DISMISS_MS = 3000;
 
@@ -44,21 +44,23 @@ export function Result({
   }, [kind, onClose]);
   return (
     <div
-      className={`fixed ${posClass(position)} z-[2147483647] w-72 rounded-2xl border border-default bg-elevated p-4 shadow-3xl`}
+      className={`${panelClass(position)} w-72 rounded-2xl border border-default bg-elevated p-4 shadow-3xl`}
     >
       {kind === "loading" && (
-        <p className="flex items-center gap-2 text-sm text-default">
-          <Loader2 className="h-4 w-4 animate-spin" /> {message ?? "Sending…"}
+        <p className="flex items-start gap-2 text-sm text-default">
+          <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
+          <span className="min-w-0 [overflow-wrap:anywhere]">{message ?? "Sending…"}</span>
         </p>
       )}
 
       {kind === "success" && (
         <div>
-          <p className="flex items-center gap-2 text-sm text-success">
-            <Check className="h-4 w-4" /> {thanks}
+          <p className="flex items-start gap-2 text-sm text-success">
+            <Check className="mt-0.5 h-4 w-4 shrink-0" />
+            <span className="min-w-0 [overflow-wrap:anywhere]">{thanks}</span>
           </p>
           {id && <p className="mt-1 font-mono text-xs text-muted">#{id.slice(0, 8)}</p>}
-          <button onClick={onClose} className="mt-3 text-xs text-muted hover:text-emphasis">
+          <button onClick={onClose} className="press-colors mt-3 text-xs text-muted hover:text-emphasis">
             Close
           </button>
         </div>
@@ -66,16 +68,22 @@ export function Result({
 
       {kind === "error" && (
         <div>
-          <p className="flex items-center gap-2 text-sm text-error">
-            <X className="h-4 w-4" /> {message ?? "Something went wrong"}
+          {/* A server's message can carry an unbroken URL or id: it wraps
+              anywhere rather than running out of the panel, and the icon
+              keeps its size beside it. */}
+          <p className="flex items-start gap-2 text-sm text-error">
+            <X className="mt-0.5 h-4 w-4 shrink-0" />
+            <span className="min-w-0 [overflow-wrap:anywhere]">
+              {message ?? "Something went wrong"}
+            </span>
           </p>
           <div className="mt-3 flex gap-3">
             {onRetry && (
-              <button onClick={onRetry} className="text-xs text-emphasis hover:text-default">
+              <button onClick={onRetry} className="press-colors text-xs text-emphasis hover:text-default">
                 Try again
               </button>
             )}
-            <button onClick={onClose} className="text-xs text-muted hover:text-emphasis">
+            <button onClick={onClose} className="press-colors text-xs text-muted hover:text-emphasis">
               Dismiss
             </button>
           </div>

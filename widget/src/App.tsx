@@ -240,9 +240,6 @@ export function App({
           onMuteChange={step.recording.setMicMuted}
         />
       )}
-      {step.name === "stopping" && (
-        <Result kind="loading" message="Finishing the recording…" position={position} />
-      )}
       {kind === "bug" && showForm && (
         <div hidden={formHidden}>
           <Composer
@@ -273,8 +270,14 @@ export function App({
           />
         </div>
       )}
-      {step.name === "submitting" && <Result kind="loading" position={position} />}
-      {step.name === "done" && (
+      {/* One slot for every result, so "Sending…" turning into "Thanks" is
+          the same panel changing its words, not a second one popping in over
+          the corner the first just left. */}
+      {step.name === "stopping" ? (
+        <Result kind="loading" message="Finishing the recording…" position={position} />
+      ) : step.name === "submitting" ? (
+        <Result kind="loading" position={position} />
+      ) : step.name === "done" ? (
         <Result
           kind="success"
           id={step.issueId}
@@ -282,8 +285,7 @@ export function App({
           position={position}
           onClose={reset}
         />
-      )}
-      {step.name === "error" && (
+      ) : step.name === "error" ? (
         <Result
           kind="error"
           message={step.message}
@@ -291,7 +293,7 @@ export function App({
           onClose={reset}
           onRetry={step.retry ? retry : undefined}
         />
-      )}
+      ) : null}
     </>
   );
 }
