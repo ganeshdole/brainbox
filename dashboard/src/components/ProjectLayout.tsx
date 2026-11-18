@@ -213,7 +213,7 @@ export function ProjectLayout() {
               type="button"
               onClick={() => void logout()}
               aria-label="Sign out"
-              className="shrink-0 rounded-md p-1.5 text-muted transition hover:bg-interactive-hover hover:text-emphasis"
+              className="shrink-0 rounded-md p-1.5 text-muted press hover:bg-interactive-hover hover:text-emphasis"
             >
               <LogOut className="h-4 w-4" />
             </button>

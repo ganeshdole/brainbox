@@ -36,7 +36,7 @@ export function PriorityIcon({ priority, className }: { priority: IssuePriority;
 }
 
 const trigger =
-  "flex h-7 items-center gap-1.5 rounded-md border border-interactive bg-interactive px-2 text-xs text-emphasis transition hover:bg-interactive-hover data-[state=open]:bg-interactive-hover disabled:opacity-50";
+  "flex h-7 items-center gap-1.5 rounded-md border border-interactive bg-interactive px-2 text-xs text-emphasis press hover:bg-interactive-hover data-[state=open]:bg-interactive-hover disabled:opacity-50";
 
 /** Status picker. Closing goes through a reason, so "closed" is never bare. */
 export function StatusMenu({
