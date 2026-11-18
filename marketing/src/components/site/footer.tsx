@@ -70,7 +70,7 @@ export function Footer() {
           <button
             type="button"
             onClick={openWidget}
-            className="flex w-fit cursor-pointer items-center gap-3 rounded-xl border border-default py-3.5 pr-5 pl-3.5 text-left transition-colors outline-none hover:border-interactive hover:bg-interactive focus-visible:ring-[3px] focus-visible:ring-focus"
+            className="flex w-fit cursor-pointer items-center gap-3 rounded-xl border border-default py-3.5 pr-5 pl-3.5 text-left press outline-none [--press-scale:0.98] hover:border-interactive hover:bg-interactive focus-visible:ring-[3px] focus-visible:ring-focus"
           >
             <span className="grid size-10 place-items-center rounded-full bg-brand text-on-brand">
               <MessageSquarePlus className="size-[18px]" aria-hidden />

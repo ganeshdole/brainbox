@@ -62,7 +62,7 @@ export function Pricing() {
                 }}
                 onClick={() => setPeriod(p.value)}
                 className={cn(
-                  "h-8 rounded-md px-4 text-sm font-medium transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-focus",
+                  "h-8 rounded-md px-4 text-sm font-medium press outline-none focus-visible:ring-[3px] focus-visible:ring-focus",
                   period === p.value ? "bg-interactive-hover text-emphasis" : "text-gray-10 hover:text-emphasis"
                 )}
               >

@@ -218,7 +218,7 @@ export function HubPage({ hub }: { hub: Hub }) {
           <li key={item.href}>
             <a
               href={item.href}
-              className="block h-full rounded-xl border border-default p-6 transition-colors hover:border-interactive hover:bg-subtle"
+              className="block h-full rounded-xl border border-default p-6 press [--press-scale:0.98] hover:border-interactive hover:bg-subtle"
             >
               <span className="block text-[17px] font-[560] text-emphasis">{item.name}</span>
               <span className="mt-2 block text-[14px] leading-[1.55] text-gray-10">{item.summary}</span>

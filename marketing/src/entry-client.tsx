@@ -5,6 +5,10 @@ import "./index.css"
 import App from "./App.tsx"
 import { findPage } from "./pages.tsx"
 
+// iOS Safari applies :active (the press feedback on buttons and cards) only
+// once the page listens for touches.
+document.addEventListener("touchstart", () => {}, { passive: true })
+
 const root = document.getElementById("root")
 if (!root) throw new Error("Root element #root not found")
 
