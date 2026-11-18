@@ -1,4 +1,5 @@
 import { Plus } from "lucide-react"
+import { revealOnOpen } from "@/lib/motion"
 import { OVERAGE_CENTS_PER_TICKET, formatUsd } from "@/lib/pricing"
 import { Section, SectionHead } from "./section-head"
 
@@ -49,10 +50,12 @@ export function Faq() {
         <div className="border-b border-default">
           {questions.map(({ q, a }) => (
             <details key={q} className="group border-t border-default">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-6 py-5 text-[16px] font-[500] text-emphasis outline-none focus-visible:ring-[3px] focus-visible:ring-focus [&::-webkit-details-marker]:hidden">
+              <summary
+                onClick={(e) => revealOnOpen(e.currentTarget)}
+                className="group/q flex cursor-pointer list-none items-center justify-between gap-6 py-5 text-[16px] font-[500] text-emphasis outline-none focus-visible:ring-[3px] focus-visible:ring-focus [&::-webkit-details-marker]:hidden">
                 {q}
                 <Plus
-                  className="size-4 shrink-0 text-gray-10 transition-transform duration-200 group-open:rotate-45 motion-reduce:transition-none"
+                  className="size-4 shrink-0 text-gray-10 transition-[rotate,color] duration-200 ease-out group-open:rotate-45 group-hover/q:text-emphasis motion-reduce:transition-[color]"
                   aria-hidden
                 />
               </summary>

@@ -7,18 +7,19 @@ export function Hero() {
   return (
     <section id="top" className="pb-20 md:pb-24">
       <div className={`${CONTAINER} pt-16 md:pt-28`}>
-        <h1 className="text-[40px] leading-[1.06] font-[560] tracking-[-0.03em] text-emphasis sm:text-[52px] md:text-[64px] md:leading-[1.04]">
+        {/* The entrance: one wave of text, headline first (see .hero-enter in index.css). */}
+        <h1 className="hero-enter [--rise:12px] [--duration:640ms] text-[40px] leading-[1.06] font-[560] tracking-[-0.03em] text-emphasis sm:text-[52px] md:text-[64px] md:leading-[1.04]">
           <span className="text-gray-9">&ldquo;It&rsquo;s broken&rdquo;</span> isn&rsquo;t a bug report.
           <br />
           This is.
         </h1>
 
-        <p className="mt-6 max-w-[520px] text-pretty text-[17px] leading-[1.55] text-gray-10">
+        <p className="hero-enter [--delay:90ms] mt-6 max-w-[520px] text-pretty text-[17px] leading-[1.55] text-gray-10">
           Brainbox is a tiny widget in your app. Users point at what broke and say what happened.
           You get a ticket you can start on, in GitHub or Azure DevOps.
         </p>
 
-        <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
+        <div className="hero-enter [--delay:160ms] [--rise:6px] mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
           <Button asChild className="rounded-lg px-[18px]">
             <a href="/#pricing">Get started</a>
           </Button>
@@ -31,6 +32,8 @@ export function Hero() {
         </div>
       </div>
 
+      {/* Not in the entrance: Chrome counts the screenshot for Largest Contentful
+          Paint only once it is fully visible; fading it in moved LCP from ~50ms to ~980ms. */}
       <div className={`${CONTAINER} mt-14 md:mt-16`}>
         <div className="overflow-hidden rounded-xl border border-default bg-background md:[mask-image:linear-gradient(to_bottom,#000_86%,transparent)]">
           <Shot
