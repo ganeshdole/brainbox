@@ -68,14 +68,21 @@ export function MarkupToolbar({
     // Centred with flex rather than `left-1/2 -translate-x-1/2`: transforms are
     // the thing that breaks first inside a shadow root (see `shadowCss`), and a
     // centring rule that can silently no-op isn't worth the risk.
-    <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center">
+    // On a phone the bar is wider than the screen, so under 32rem it breaks
+    // into two rows (drawing, then undo and Next) instead of pushing Cancel
+    // and Next off either edge, and drops its dividers, which would otherwise
+    // start or end a row. Always two rows there, never one or three: the hint
+    // above it (MarkupOverlay) climbs by exactly one row. Lifted by
+    // the safe area, so it clears the home indicator where the page draws
+    // under it.
+    <div className="pointer-events-none absolute inset-x-0 bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] flex justify-center">
       {/* The toolbar sits inside the drawing surface, so without this a press on
           any button is also a press on the canvas - with Text armed that plants
           a caret over the toolbar itself. The colour picker's own dismiss
           listener is capture-phase on `window`, so it still fires. */}
       <div
         onPointerDown={(e) => e.stopPropagation()}
-        className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-default bg-elevated p-1.5 shadow-3xl"
+        className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-default bg-elevated p-1.5 shadow-3xl max-[32rem]:max-w-[calc(100%-1rem)] max-[32rem]:flex-wrap max-[32rem]:justify-center"
       >
         {/* Leaving is a corner action, not something competing with the tools -
             so it's an icon on the far left, opposite the one button that moves
@@ -94,7 +101,9 @@ export function MarkupToolbar({
             aria-label={label}
             aria-pressed={t === tool}
             onClick={() => onTool(t)}
-            className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
+            // No colour transition: the tool also changes from the keyboard
+            // (v, r, a, p, t), and a shortcut should land at once.
+            className={`press flex h-9 w-9 items-center justify-center rounded-xl ${
               t === tool
                 ? "bg-brand text-on-brand"
                 : "text-default hover:bg-interactive-hover hover:text-emphasis"
@@ -115,7 +124,7 @@ export function MarkupToolbar({
             aria-label="Colour"
             aria-expanded={pickerOpen}
             onClick={() => setPickerOpen((o) => !o)}
-            className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-interactive-hover"
+            className="press flex h-9 w-9 items-center justify-center rounded-xl hover:bg-interactive-hover"
           >
             <span
               className="h-5 w-5 rounded-full border border-default"
@@ -124,7 +133,8 @@ export function MarkupToolbar({
           </button>
 
           {pickerOpen && (
-            <div className="absolute bottom-11 right-0 flex items-center gap-1 rounded-xl border border-default bg-elevated p-1.5 shadow-3xl">
+            // Grows out of the swatch that opened it (above, right-aligned).
+            <div className="pop-in absolute bottom-11 right-0 flex origin-bottom-right items-center gap-1 rounded-xl border border-default bg-elevated p-1.5 shadow-3xl">
               {MARK_COLORS.map((c) => (
                 <button
                   key={c}
@@ -136,7 +146,7 @@ export function MarkupToolbar({
                     onColor(c);
                     setPickerOpen(false);
                   }}
-                  className={`flex h-7 w-7 items-center justify-center rounded-lg hover:bg-interactive-hover ${
+                  className={`press flex h-7 w-7 items-center justify-center rounded-lg hover:bg-interactive-hover ${
                     c === color ? "bg-interactive" : ""
                   }`}
                 >
@@ -149,6 +159,9 @@ export function MarkupToolbar({
             </div>
           )}
         </div>
+
+        {/* The row break under 32rem: a full-width, zero-height flex item. */}
+        <span aria-hidden="true" className="hidden basis-full max-[32rem]:block" />
 
         <IconButton label="Undo (⌘Z)" disabled={!canUndo} onClick={onUndo}>
           <Undo2 className="h-4 w-4" />
@@ -167,7 +180,7 @@ export function MarkupToolbar({
         <button
           type="button"
           onClick={onDone}
-          className="flex h-9 items-center gap-1.5 rounded-xl bg-brand px-4 text-sm font-medium text-on-brand shadow-button hover:bg-brand-hover"
+          className="press-colors flex h-9 items-center gap-1.5 rounded-xl bg-brand px-4 text-sm font-medium text-on-brand shadow-button hover:bg-brand-hover"
         >
           Next
         </button>
@@ -176,7 +189,7 @@ export function MarkupToolbar({
   );
 }
 
-const Divider = () => <span className="mx-1 h-6 w-px shrink-0 bg-subtle" />;
+const Divider = () => <span className="mx-1 h-6 w-px shrink-0 bg-subtle max-[32rem]:hidden" />;
 
 function IconButton({
   label,
@@ -196,7 +209,7 @@ function IconButton({
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="flex h-9 w-9 items-center justify-center rounded-xl text-default hover:bg-interactive-hover hover:text-emphasis disabled:opacity-30 disabled:hover:bg-transparent"
+      className="press flex h-9 w-9 items-center justify-center rounded-xl text-default hover:bg-interactive-hover hover:text-emphasis disabled:opacity-30 disabled:hover:bg-transparent"
     >
       {children}
     </button>

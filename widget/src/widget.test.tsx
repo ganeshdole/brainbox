@@ -447,6 +447,37 @@ describe("BrainboxWidget flow", () => {
     expect(shadow()?.textContent).toContain("Thanks! Your idea was sent.");
   });
 
+  it("turns the sending panel into the sent one, rather than popping a new one in", async () => {
+    let finish: (id: string) => void = () => {};
+    const slow: Transport = {
+      send: () => new Promise((resolve) => (finish = (id) => resolve({ id }))),
+    };
+    act(() => {
+      root.render(
+        <BrainboxProvider transport={slow}>
+          <HostStart modes={["feature"]} label="Idea" />
+          <BrainboxWidget trigger="manual" />
+        </BrainboxProvider>,
+      );
+    });
+    act(() => hostClick("Idea"));
+    await uiReady();
+    act(() => typeInto(shadow()!.querySelector("textarea")!, "Dark mode"));
+    await act(async () => findButton("Send idea")?.click());
+    const panel = () =>
+      Array.from(shadow()?.querySelectorAll(".pop-in") ?? []).find(
+        (el) => !el.closest("[hidden]"),
+      );
+    const sending = panel();
+    expect(sending?.textContent).toContain("Sending");
+
+    finish("f3");
+    await settle();
+    // the same element: its entrance doesn't play a second time
+    expect(panel()).toBe(sending);
+    expect(sending?.textContent).toContain("Thanks! Your idea was sent.");
+  });
+
   it("stays closed when a send the host closed over finishes late", async () => {
     let finish: (id: string) => void = () => {};
     const slow: Transport = {

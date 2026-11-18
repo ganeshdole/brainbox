@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ImageOff, Loader2, Pencil, Play, Send, X } from "./icons.tsx";
 import { VoiceNote, type VoiceNotePhase } from "./VoiceNote.tsx";
-import { posClass, type Position } from "../lib/position.ts";
+import { panelClass, type Position } from "../lib/position.ts";
 
 /** The bug report's last step: the capture, and what the user says about it. */
 export interface ComposerProps {
@@ -58,11 +58,11 @@ export function Composer({
 
   return (
     <div
-      className={`fixed ${posClass(position)} z-[2147483647] w-96 rounded-2xl border border-default bg-elevated p-4 shadow-3xl`}
+      className={`${panelClass(position)} w-96 rounded-2xl border border-default bg-elevated p-4 shadow-3xl`}
     >
       <div className="mb-3 flex items-center justify-between">
         <span className="text-sm font-medium text-emphasis">Send feedback</span>
-        <button onClick={onCancel} aria-label="Close" className="text-muted hover:text-emphasis">
+        <button onClick={onCancel} aria-label="Close" className="press-colors text-muted hover:text-emphasis">
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -121,7 +121,7 @@ export function Composer({
               autoFocus
               onChange={(e) => setText(e.target.value)}
               placeholder={voiceDone ? "Anything to add?" : "Describe what went wrong"}
-              className="h-20 w-full resize-none bg-transparent p-3 text-sm text-default outline-none placeholder:text-placeholder"
+              className="h-20 w-full resize-none bg-transparent p-3 text-sm text-default pointer-coarse:text-[16px] outline-none placeholder:text-placeholder"
             />
           </div>
         )}
@@ -130,7 +130,7 @@ export function Composer({
       {!typing && (
         <button
           onClick={() => setTyping(true)}
-          className="mt-2 flex items-center gap-1.5 text-xs text-default hover:text-emphasis"
+          className="press-colors mt-2 flex items-center gap-1.5 text-xs text-default hover:text-emphasis"
         >
           <Pencil className="h-3 w-3" /> Prefer to type?
         </button>
@@ -142,7 +142,7 @@ export function Composer({
           onSubmit(text, audio);
         }}
         disabled={!canSend}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2 text-sm font-medium text-on-brand shadow-button hover:bg-brand-hover disabled:opacity-40"
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2 text-sm font-medium text-on-brand shadow-button press-colors hover:bg-brand-hover disabled:opacity-40"
       >
         <Send className="h-4 w-4" /> Send
       </button>

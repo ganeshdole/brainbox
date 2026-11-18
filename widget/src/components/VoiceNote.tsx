@@ -212,7 +212,7 @@ export function VoiceNote({
         }
         disabled={phase === "stopping"}
         aria-label={live ? "Stop recording" : label}
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-60 ${
+        className={`press-colors flex h-9 w-9 shrink-0 items-center justify-center rounded-full disabled:opacity-60 ${
           live
             ? "bg-error text-error ring-2 ring-error"
             : "bg-brand text-on-brand shadow-button hover:bg-brand-hover"
@@ -259,7 +259,7 @@ export function VoiceNote({
         <button
           onClick={discard}
           aria-label="Delete voice note"
-          className="shrink-0 text-muted hover:text-error"
+          className="press-colors shrink-0 text-muted hover:text-error"
         >
           <Trash2 className="h-4 w-4" />
         </button>

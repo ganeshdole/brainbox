@@ -24,14 +24,21 @@ export const BarRow = memo(function BarRow({ levels, dimFrom }: BarRowProps) {
   );
 });
 
-/** Memoised per bar: a talking user repaints this row ~30x a second. */
+/** Memoised per bar: a talking user repaints this row ~30x a second. Each bar
+ *  is full height and scaled down about its middle, so a level change is a
+ *  composited `transform`, not a `height` that re-lays out the row inside a
+ *  host page that may be busy doing its own work. */
 const Bar = memo(function Bar({ height, dim }: { height: number; dim: boolean }) {
   return (
     <span
       // Fixed 2px and barely rounded. Stretched-to-fill bars end up wide enough
       // that `rounded-full` turns every quiet sample into a dot.
-      className="w-[2px] shrink-0 rounded-[1px] transition-[height,opacity] duration-75"
-      style={{ height: `${height}%`, background: "var(--text-emphasis)", opacity: dim ? 0.25 : 1 }}
+      className="h-full w-[2px] shrink-0 rounded-[1px] transition-[transform,opacity] duration-75"
+      style={{
+        transform: `scaleY(${height / 100})`,
+        background: "var(--text-emphasis)",
+        opacity: dim ? 0.25 : 1,
+      }}
     />
   );
 });
