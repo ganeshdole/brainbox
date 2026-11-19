@@ -1,5 +1,6 @@
 packages:
   - "marketing"
+  - "video"
   - "widget"
   - "dashboard"
   - "backend"

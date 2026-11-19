@@ -12,7 +12,7 @@ domain vocabulary (Customer vs End-user, Host app, Capture flow, Project key, th
 Account → Project → Issue hierarchy) lives in `CONTEXT.md`. Read it before
 touching product logic - it is canon, describing how the system is meant to work.
 
-Ten surfaces, one workspace package each:
+Eleven surfaces, one workspace package each:
 
 - `packages/core/` - the capture engine (`@ganeshdole/brainbox-core`). Plain TypeScript, no
   React: screenshots, marks, session recording, console-error capture, and the
@@ -45,6 +45,9 @@ Ten surfaces, one workspace package each:
   integrations, comparisons and templates are data in `src/content/`.
 - `packages/shared/` - cross-surface types (`@ganeshdole/brainbox-shared`). Pure types, no
   runtime.
+- `video/` - the launch film and the Instagram Reels (`@ganeshdole/brainbox-video`).
+  Remotion; the storyboard is data in `src/timeline.ts` (film) and
+  `src/reels/` (Reels), the stage mirrors the widget and the ticket.
 
 Package-specific rules live in nested `AGENTS.md` files. Read the one for the
 surface you're editing.
