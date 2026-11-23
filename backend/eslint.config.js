@@ -3,7 +3,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", "drizzle", "convex/_generated"] },
+  { ignores: ["dist", "drizzle", "convex/_generated", ".worker-assets", ".wrangler"] },
   js.configs.recommended,
   tseslint.configs.recommended,
   {
@@ -35,6 +35,7 @@ export default tseslint.config(
       "src/app.ts",
       "src/index.ts",
       "src/azure.ts",
+      "src/worker.ts",
       "src/store/index.ts",
       "src/storage/index.ts",
       "src/email/index.ts",

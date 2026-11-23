@@ -71,6 +71,12 @@ the env-built one in `src/app.ts`.
   and `host.json` clears the `/api` route prefix, so the backend folder is the
   function app. `runtime/azure-http.ts` converts requests and responses; Azure
   needs cookies in a separate field, so keep that path covered by its tests.
+- `src/worker.ts` - Cloudflare Workers (`wrangler.jsonc`). It builds its own
+  store and storage: a Postgres connection per request through Hyperdrive (a
+  Worker can't share a socket between requests), held in an
+  `AsyncLocalStorage`, and the R2 binding (`storage/r2-bucket.ts`).
+  `runtime/workers.ts` closes the connection only once background work is done.
+  Nothing `createApp` reaches may need a native module: the Worker bundles it.
 
 Work that outlives the response (transcription, delivery) goes through
 `runInBackground(c, task)`, never a bare `void promise`: serverless hosts freeze
@@ -158,6 +164,9 @@ other store stops being tested. `!` is allowed in test files.
   `TEST_STORE=convex` runs it against local Convex.
 - `pnpm -F @ganeshdole/brainbox-backend db:generate` then `db:migrate` - after a schema
   change. `db:seed` loads dev data.
+- `pnpm -F @ganeshdole/brainbox-backend dev:worker` - run the Workers entry
+  locally under wrangler (secrets in a git-ignored `.dev.vars`).
+  `deploy:worker` builds and deploys it.
 - `func start` in `backend/` after a build - run under the Azure Functions host
   locally (Azure Functions Core Tools; settings in a git-ignored
   `local.settings.json`).

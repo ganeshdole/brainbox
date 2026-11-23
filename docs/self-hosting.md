@@ -8,7 +8,7 @@ refuses to start if a chosen option is missing its settings.
 |---|---|---|
 | Database | `postgres` (default), `convex`, `custom` | `DATABASE_DRIVER` |
 | Uploaded files | `local` (development only), `s3`, `r2`, `convex`, `custom` | `STORAGE_DRIVER` |
-| Host | Node server (Docker), Azure Functions | which entry you deploy |
+| Host | Node server (Docker), Azure Functions, Cloudflare Workers | which entry you deploy |
 
 The two drivers are independent, so any database goes with any file store.
 `postgres` is any Postgres: your own, Docker, Supabase, Neon, AWS RDS. `s3` is
@@ -23,6 +23,7 @@ built from parts is the better way to bring one (see the last section).
 | Everything on AWS | `postgres` on RDS, `s3` with the keys left empty so the instance's IAM role is used |
 | Everything on Convex | `DATABASE_DRIVER=convex`, `STORAGE_DRIVER=convex` |
 | Postgres with Cloudflare R2 | `DATABASE_DRIVER=postgres`, `STORAGE_DRIVER=r2` |
+| Everything on Cloudflare | the Workers entry: Postgres through Hyperdrive, files in an R2 binding (below) |
 | MongoDB, or anything else not listed | your own `Store` in a backend built from parts |
 
 Why it is built this way: [ADR 0007](adr/0007-pluggable-stores-and-runtimes.md).
@@ -175,8 +176,7 @@ static dashboard behind Caddy. See its header comment for the settings it reads.
    BRAINBOX_SERVER_SECRET=<the same string as step 1>
    ```
 
-3. **Deploy from Linux** (CI or WSL), so the image library `sharp` installs its
-   Linux binary:
+3. **Deploy:**
 
    ```sh
    pnpm -F @ganeshdole/brainbox-backend build
@@ -204,6 +204,47 @@ finish, because Azure may freeze the instance once it has responded. A
 transcription is given up on after three minutes (`options.transcriptionTimeoutMs`
 for a backend built from parts): the transcript is marked failed and the
 ticket is sent without it.
+
+## Cloudflare Workers with Postgres and R2
+
+`backend/src/worker.ts` is a Workers entry, configured by
+`backend/wrangler.jsonc` (brainbox.sh's own deployment: change the names,
+IDs and hostnames for yours). One Worker serves the dashboard and `widget.js`
+as static assets and the API on the same origin, the way `deploy/Caddyfile`
+splits them. It reaches Postgres through Hyperdrive, with a connection per
+request (a Worker may not share one between requests), and keeps files in an
+R2 bucket through a binding, so there are no storage keys to manage; files are
+served through the access-checked `/api/files/` route.
+
+1. **Postgres.** Any Postgres that Hyperdrive can reach, such as Neon. Use its
+   direct connection string, not a pooled one: Hyperdrive pools. Migrate it
+   with `DATABASE_URL=<that string> pnpm -F @ganeshdole/brainbox-backend db:migrate`.
+2. **Hyperdrive and R2.** From `backend/`:
+
+   ```sh
+   npx wrangler hyperdrive create brainbox --connection-string="<the same string>"
+   npx wrangler r2 bucket create brainbox-files
+   ```
+
+   Put the Hyperdrive ID in `wrangler.jsonc`.
+3. **Settings.** `wrangler.jsonc` sets `DATABASE_DRIVER=custom` and
+   `STORAGE_DRIVER=custom` (the entry builds both) and the three URLs. Every
+   other setting is a Worker secret: put them in a git-ignored JSON file and
+   pass it to the first deploy, `npx wrangler deploy --secrets-file <file>`,
+   or use `wrangler secret put` later. Vars and secrets reach the code as
+   `process.env`, so `backend/src/env.ts` reads them as on any host.
+4. **Deploy.** `pnpm -F @ganeshdole/brainbox-backend deploy:worker` builds the
+   dashboard and the widget, gathers them in `backend/.worker-assets`, and
+   deploys. The `routes` in `wrangler.jsonc` attach the hostnames as custom
+   domains, which needs the zone on the same Cloudflare account and no other
+   DNS record on those names.
+
+The screenshot crop is plain JavaScript and takes about a second of CPU on a
+large shot, so use the Workers Paid plan: Free stops a request at 10 ms.
+Run it locally with `pnpm -F @ganeshdole/brainbox-backend dev:worker`, with
+the secrets in a git-ignored `backend/.dev.vars` and
+`CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` set to a local
+Postgres.
 
 ## Pointing the widget at your install
 

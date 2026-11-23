@@ -126,8 +126,9 @@ function lazy<T extends object>(get: () => T): T {
   });
 }
 
-/** A full store whose modules resolve through `get()` on each call. */
-function lazyStore(get: () => FullStore): FullStore {
+/** A full store whose modules resolve through `get()` on each call: how an
+ *  entry gives each request its own store (the Workers entry, `src/worker.ts`). */
+export function lazyStore(get: () => FullStore): FullStore {
   const modules = Object.fromEntries(STORE_MODULES.map((name) => [name, lazy(() => get()[name])]));
   return {
     ...modules,

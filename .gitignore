@@ -15,6 +15,7 @@ dist-ssr
 # local preview / screenshot scratch
 .preview
 .wrangler
+.worker-assets
 .dev.vars
 .env
 .env.test
