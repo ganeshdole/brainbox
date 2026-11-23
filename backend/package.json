@@ -18,6 +18,8 @@
     "dev": "tsx watch --env-file=.env src/index.ts",
     "build": "tsup",
     "start": "node dist/index.js",
+    "dev:worker": "tsx scripts/worker-assets.ts && wrangler dev",
+    "deploy:worker": "pnpm -F \"@ganeshdole/brainbox-dashboard...\" -F \"@ganeshdole/brainbox-widget...\" build && tsx scripts/worker-assets.ts && wrangler deploy",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
@@ -44,10 +46,10 @@
     "convex": "^1.46.0",
     "convex-helpers": "^0.1.128",
     "drizzle-orm": "^0.45.2",
+    "fast-png": "8.0.0",
     "hono": "^4.12.27",
     "postgres": "^3.4.9",
     "resend": "^6.17.2",
-    "sharp": "^0.35.2",
     "standardwebhooks": "^1.0.0",
     "zod": "^4.4.3"
   },
@@ -61,6 +63,7 @@
     "tsx": "^4.22.4",
     "typescript": "catalog:",
     "typescript-eslint": "^8.60.1",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "wrangler": "4.158.0"
   }
 }

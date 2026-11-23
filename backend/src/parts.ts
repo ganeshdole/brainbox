@@ -21,6 +21,7 @@ export { createMemoryStore } from "./store/memory.ts";
 export { readStored, type Storage } from "./storage/types.ts";
 export { LocalStorage, type LocalStorageOptions } from "./storage/local.ts";
 export { S3Storage, type S3Options } from "./storage/s3.ts";
+export { R2BucketStorage, type R2BucketLike, type R2BucketStorageOptions } from "./storage/r2-bucket.ts";
 export { ConvexStorage } from "./storage/convex.ts";
 
 // Email.

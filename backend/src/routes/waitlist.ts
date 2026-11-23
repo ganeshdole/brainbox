@@ -38,7 +38,7 @@ function rateLimited(hits: Hits, ip: string, now: number): boolean {
 
 function clientIp(c: { req: { header: (name: string) => string | undefined } }): string {
   const fwd = c.req.header("x-forwarded-for");
-  return fwd?.split(",")[0]?.trim() || c.req.header("cf-connecting-ip") || "unknown";
+  return c.req.header("cf-connecting-ip") || fwd?.split(",")[0]?.trim() || "unknown";
 }
 
 /** The marketing site's early-access signup. One per app, each with its own

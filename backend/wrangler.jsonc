@@ -1,0 +1,50 @@
+// Cloudflare Workers deployment of brainbox.sh's app and API (src/worker.ts):
+// the dashboard and widget.js as static assets, the API on the same origin,
+// Postgres through Hyperdrive, files in R2. `pnpm deploy:worker` builds and
+// deploys it. Settings beyond the ones below are Worker secrets
+// (`wrangler secret put` / `wrangler secret bulk`); see docs/self-hosting.md.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "brainbox",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "assets": {
+    "directory": "./.worker-assets",
+    "not_found_handling": "single-page-application",
+    // The API's paths, as deploy/Caddyfile routes them; everything else is
+    // the dashboard (or widget.js) straight from the assets.
+    "run_worker_first": [
+      "/api/*",
+      "/ingest",
+      "/ingest/*",
+      "/health",
+      "/health/*",
+      "/waitlist",
+      "/waitlist/*",
+      "/webhooks/*",
+      "/f/*",
+      "/auth-error",
+    ],
+  },
+
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "072c9e7d28bf42aeadd6f802cff37505" }],
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "brainbox-files" }],
+
+  "routes": [
+    { "pattern": "app.brainbox.sh", "custom_domain": true },
+    { "pattern": "api.brainbox.sh", "custom_domain": true },
+  ],
+
+  "vars": {
+    // src/worker.ts builds the store (Hyperdrive) and the storage (R2) itself.
+    "DATABASE_DRIVER": "custom",
+    "STORAGE_DRIVER": "custom",
+    "PUBLIC_API_URL": "https://app.brainbox.sh",
+    "AUTH_URL": "https://app.brainbox.sh/api/auth",
+    "DASHBOARD_ORIGIN": "https://app.brainbox.sh",
+  },
+
+  "observability": { "enabled": true },
+}
